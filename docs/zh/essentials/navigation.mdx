@@ -1,0 +1,596 @@
+---
+title: '导航配置'
+description: 'MCPHub 文档的导航结构配置指南'
+---
+
+## 基础导航
+
+MCPHub 文档的导航在 `docs.json` 文件中配置。基本导航结构包含组和页面：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "快速开始",
+      "pages": ["zh/index", "zh/quickstart"]
+    },
+    {
+      "group": "开发指南",
+      "pages": [
+        "zh/development/getting-started",
+        "zh/development/api-integration",
+        "zh/development/testing"
+      ]
+    },
+    {
+      "group": "配置管理",
+      "pages": [
+        "zh/configuration/environment-variables",
+        "zh/configuration/mcp-settings",
+        "zh/configuration/docker-setup",
+        "zh/configuration/nginx"
+      ]
+    }
+  ]
+}
+```
+
+## 标签导航
+
+当您的文档有多个主要部分时，可以使用标签来组织内容。
+
+```json docs.json
+{
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "指南",
+        "groups": [
+          {
+            "group": "基础",
+            "pages": ["basics/introduction"]
+          }
+        ]
+      },
+      {
+        "tab": "API 参考",
+        "groups": [
+          {
+            "group": "端点",
+            "pages": ["api/users", "api/products"]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## 页面引用
+
+### 文件路径引用
+
+最常见的方式是通过文件路径引用页面（不包含 `.mdx` 扩展名）：
+
+```json
+{
+  "pages": ["quickstart", "advanced/configuration"]
+}
+```
+
+### 外部链接
+
+您也可以在导航中包含外部链接：
+
+```json
+{
+  "pages": [
+    "introduction",
+    {
+      "page": "GitHub",
+      "href": "https://github.com"
+    }
+  ]
+}
+```
+
+## 分组
+
+### 基本分组
+
+每个组都有一个名称和页面列表：
+
+```json
+{
+  "group": "API 基础",
+  "pages": ["api/authentication", "api/errors", "api/rate-limits"]
+}
+```
+
+### 分组版本控制
+
+您可以为组指定版本：
+
+```json
+{
+  "group": "API v2",
+  "version": "v2.0",
+  "pages": ["api/v2/users"]
+}
+```
+
+## 全局导航元素
+
+### 锚点
+
+在所有页面上显示的持久链接：
+
+```json docs.json
+{
+  "navigation": {
+    "global": {
+      "anchors": [
+        {
+          "anchor": "API 参考",
+          "href": "/api-reference",
+          "icon": "square-terminal"
+        },
+        {
+          "anchor": "社区",
+          "href": "https://community.example.com",
+          "icon": "discord"
+        }
+      ]
+    }
+  }
+}
+```
+
+### 导航栏
+
+配置顶部导航栏的链接：
+
+```json docs.json
+{
+  "navbar": {
+    "links": [
+      {
+        "label": "支持",
+        "href": "mailto:support@example.com"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "仪表板",
+      "href": "https://dashboard.example.com"
+    }
+  }
+}
+```
+
+## 分层导航结构
+
+### 多级导航
+
+MCPHub 文档支持多级分层导航：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "核心功能",
+      "pages": [
+        {
+          "group": "服务器管理",
+          "pages": [
+            "zh/features/server-management",
+            "zh/features/server-health",
+            "zh/features/server-scaling"
+          ]
+        },
+        {
+          "group": "智能路由",
+          "pages": [
+            "zh/features/smart-routing",
+            "zh/features/load-balancing",
+            "zh/features/failover"
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 条件导航
+
+根据用户权限或版本显示不同的导航项：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "API 参考",
+      "pages": [
+        "zh/api-reference/introduction",
+        "zh/api-reference/authentication",
+        {
+          "group": "端点",
+          "pages": [
+            "zh/api-reference/endpoint/get",
+            "zh/api-reference/endpoint/create",
+            "zh/api-reference/endpoint/delete",
+            "zh/api-reference/endpoint/webhook"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "企业功能",
+      "icon": "crown",
+      "version": "enterprise",
+      "pages": ["zh/enterprise/sso", "zh/enterprise/audit-logs", "zh/enterprise/compliance"]
+    }
+  ]
+}
+```
+
+## 标签导航
+
+对于多产品或多语言文档，使用标签组织内容：
+
+```json title="docs.json"
+{
+  "tabs": [
+    {
+      "name": "文档",
+      "url": "https://docs.mcphub.io"
+    },
+    {
+      "name": "API",
+      "url": "https://api.mcphub.io"
+    },
+    {
+      "name": "SDK",
+      "url": "https://sdk.mcphub.io"
+    }
+  ],
+  "navigation": {
+    "文档": [
+      {
+        "group": "开始使用",
+        "pages": ["zh/index", "zh/quickstart"]
+      }
+    ],
+    "API": [
+      {
+        "group": "API 参考",
+        "pages": ["zh/api-reference/introduction", "zh/api-reference/authentication"]
+      }
+    ]
+  }
+}
+```
+
+## 导航图标
+
+为导航项添加图标以提高可读性：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "快速开始",
+      "icon": "rocket",
+      "pages": ["zh/index", "zh/quickstart"]
+    },
+    {
+      "group": "配置",
+      "icon": "gear",
+      "pages": ["zh/configuration/environment-variables", "zh/configuration/mcp-settings"]
+    },
+    {
+      "group": "监控",
+      "icon": "chart-line",
+      "pages": ["zh/features/monitoring", "zh/features/analytics"]
+    }
+  ]
+}
+```
+
+### 支持的图标
+
+MCPHub 文档支持以下图标库的图标：
+
+- **Heroicons**: `hero-icon-name`
+- **Font Awesome**: `fa-icon-name`
+- **Feather**: `feather-icon-name`
+- **Lucide**: `lucide-icon-name`
+
+常用图标示例：
+
+| 功能 | 图标 | 代码          |
+| ---- | ---- | ------------- |
+| 首页 | 🏠   | `"home"`      |
+| 设置 | ⚙️   | `"gear"`      |
+| API  | 🔌   | `"plug"`      |
+| 安全 | 🔒   | `"lock"`      |
+| 监控 | 📊   | `"chart-bar"` |
+| 文档 | 📖   | `"book"`      |
+| 开发 | 💻   | `"code"`      |
+
+## 外部链接
+
+在导航中包含外部资源链接：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "资源",
+      "pages": [
+        {
+          "name": "GitHub 仓库",
+          "url": "https://github.com/mcphub/mcphub",
+          "icon": "github"
+        },
+        {
+          "name": "Discord 社区",
+          "url": "https://discord.gg/mcphub",
+          "icon": "discord"
+        },
+        {
+          "name": "状态页面",
+          "url": "https://status.mcphub.io",
+          "icon": "status"
+        }
+      ]
+    }
+  ]
+}
+```
+
+## 导航排序
+
+### 自动排序
+
+默认情况下，导航项按字母顺序排列。可以通过文件名前缀控制排序：
+
+```
+zh/
+├── 01-index.mdx
+├── 02-quickstart.mdx
+├── development/
+│   ├── 01-getting-started.mdx
+│   ├── 02-api-integration.mdx
+│   └── 03-testing.mdx
+└── configuration/
+    ├── 01-environment-variables.mdx
+    ├── 02-mcp-settings.mdx
+    └── 03-docker-setup.mdx
+```
+
+### 手动排序
+
+在 `docs.json` 中明确指定顺序：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "核心概念",
+      "pages": [
+        "zh/concepts/introduction",
+        "zh/concepts/architecture",
+        "zh/concepts/mcp-protocol",
+        "zh/concepts/routing"
+      ]
+    }
+  ]
+}
+```
+
+## 隐藏导航项
+
+### 草稿页面
+
+使用 `draft: true` 隐藏未完成的页面：
+
+```yaml title="draft-page.mdx"
+---
+title: '开发中的功能'
+description: '此功能正在开发中'
+draft: true
+---
+```
+
+### 条件显示
+
+根据用户角色或环境显示导航：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "管理功能",
+      "hidden": "user",
+      "pages": ["zh/admin/user-management", "zh/admin/system-settings"]
+    }
+  ]
+}
+```
+
+## 导航元数据
+
+### 页面元数据
+
+在页面头部添加导航相关的元数据：
+
+```yaml title="page.mdx"
+---
+title: '服务器管理'
+description: 'MCPHub 服务器管理功能详解'
+icon: 'server'
+order: 1
+hidden: false
+version: '2.0+'
+tags: ['管理', '服务器', '配置']
+---
+```
+
+### 组元数据
+
+为导航组添加描述和图标：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "API 参考",
+      "icon": "api",
+      "description": "完整的 API 接口文档",
+      "version": "v2",
+      "pages": ["zh/api-reference/introduction"]
+    }
+  ]
+}
+```
+
+## 搜索优化
+
+### 搜索关键词
+
+为页面添加搜索关键词：
+
+```yaml title="page.mdx"
+---
+title: 'Docker 部署'
+description: '使用 Docker 部署 MCPHub'
+keywords: ['docker', '部署', '容器', '生产环境']
+searchable: true
+---
+```
+
+### 搜索权重
+
+控制页面在搜索结果中的权重：
+
+```yaml title="important-page.mdx"
+---
+title: '快速开始'
+description: '5 分钟快速部署 MCPHub'
+searchWeight: 10
+featured: true
+---
+```
+
+## 面包屑导航
+
+自动生成面包屑导航：
+
+```json title="docs.json"
+{
+  "breadcrumbs": {
+    "enabled": true,
+    "separator": "›",
+    "home": "首页"
+  },
+  "navigation": [
+    {
+      "group": "配置管理",
+      "pages": ["zh/configuration/environment-variables"]
+    }
+  ]
+}
+```
+
+显示效果：`首页 › 配置管理 › 环境变量`
+
+## 导航最佳实践
+
+### 1. 逻辑分组
+
+按功能和用户需求逻辑分组：
+
+```json
+{
+  "navigation": [
+    {
+      "group": "新手指南",
+      "pages": ["introduction", "quickstart", "first-server"]
+    },
+    {
+      "group": "进阶配置",
+      "pages": ["advanced-routing", "scaling", "monitoring"]
+    },
+    {
+      "group": "参考文档",
+      "pages": ["api-reference", "cli-reference", "troubleshooting"]
+    }
+  ]
+}
+```
+
+### 2. 渐进式学习路径
+
+设计符合学习曲线的导航结构：
+
+1. **入门** → 快速开始、基础概念
+2. **实践** → 配置、部署、集成
+3. **进阶** → 优化、监控、故障排除
+4. **参考** → API 文档、CLI 手册
+
+### 3. 移动端友好
+
+确保导航在移动设备上的可用性：
+
+```json title="docs.json"
+{
+  "navigation": [
+    {
+      "group": "快速开始",
+      "collapsed": false,
+      "pages": ["zh/index", "zh/quickstart"]
+    },
+    {
+      "group": "详细文档",
+      "collapsed": true,
+      "pages": ["zh/advanced/..."]
+    }
+  ]
+}
+```
+
+### 4. 国际化支持
+
+为多语言文档配置导航：
+
+```json title="docs.json"
+{
+  "i18n": {
+    "defaultLocale": "zh",
+    "locales": ["zh", "en"]
+  },
+  "navigation": {
+    "zh": [
+      {
+        "group": "快速开始",
+        "pages": ["zh/index", "zh/quickstart"]
+      }
+    ],
+    "en": [
+      {
+        "group": "Getting Started",
+        "pages": ["en/index", "en/quickstart"]
+      }
+    ]
+  }
+}
+```
+
+### 5. 性能优化
+
+- 使用懒加载减少初始加载时间
+- 合理设置导航深度（建议不超过 3 层）
+- 避免过多的外部链接
+- 定期清理无效的导航项

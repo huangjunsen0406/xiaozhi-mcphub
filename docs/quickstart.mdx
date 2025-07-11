@@ -1,0 +1,228 @@
+---
+title: 'Quick Start Guide'
+description: 'Get MCPHub running in 5 minutes'
+---
+
+## Installation
+
+<Tabs>
+  <Tab title="Docker (Recommended)">
+    The fastest way to get started with MCPHub is using Docker:
+
+    ```bash
+    # Run with default configuration
+    docker run -p 3000:3000 samanhappy/mcphub
+    ```
+
+    Or mount your custom configuration:
+
+    ```bash
+    # Run with custom MCP settings
+    docker run -p 3000:3000 \
+      -v $(pwd)/mcp_settings.json:/app/mcp_settings.json \
+      samanhappy/mcphub
+    ```
+
+  </Tab>
+  <Tab title="Local Development">
+    For development or customization:
+
+    ```bash
+    # Clone the repository
+    git clone https://github.com/samanhappy/mcphub.git
+    cd mcphub
+
+    # Install dependencies
+    pnpm install
+
+    # Start development servers
+    pnpm dev
+    ```
+
+    This starts both backend (port 3001) and frontend (port 5173) in development mode.
+
+  </Tab>
+  <Tab title="npm Package">
+    Install MCPHub as a global package:
+
+    ```bash
+    # Install globally
+    npm install -g @samanhappy/mcphub
+
+    # Run MCPHub
+    mcphub
+    ```
+
+  </Tab>
+</Tabs>
+
+## Initial Setup
+
+### 1. Access the Dashboard
+
+Open your browser and navigate to:
+
+```
+http://localhost:3000
+```
+
+### 2. Login
+
+Use the default credentials:
+
+- **Username**: `admin`
+- **Password**: `admin123`
+
+<Warning>Change these default credentials immediately after first login for security.</Warning>
+
+### 3. Configure Your First MCP Server
+
+1. Click **"Add Server"** in the dashboard
+2. Enter server details:
+   - **Name**: A unique identifier (e.g., `fetch`)
+   - **Command**: The executable command (`uvx`)
+   - **Args**: Command arguments (`["mcp-server-fetch"]`)
+   - **Environment**: Any required environment variables
+
+Example configuration for a fetch server:
+
+```json
+{
+  "name": "fetch",
+  "command": "uvx",
+  "args": ["mcp-server-fetch"],
+  "env": {}
+}
+```
+
+## Basic Usage
+
+### Connecting AI Clients
+
+Once your servers are configured, connect your AI clients using MCPHub endpoints:
+
+<Tabs>
+  <Tab title="All Servers">
+    Access all configured MCP servers: ``` http://localhost:3000/mcp ```
+  </Tab>
+  <Tab title="Specific Group">
+    Access servers in a specific group: ``` http://localhost:3000/mcp/{group - name}
+    ```
+  </Tab>
+  <Tab title="Individual Server">
+    Access a single server: ``` http://localhost:3000/mcp/{server - name}
+    ```
+  </Tab>
+  <Tab title="Smart Routing">
+    Use AI-powered tool discovery: ``` http://localhost:3000/mcp/$smart ```
+    <Info>Smart routing requires PostgreSQL with pgvector and an OpenAI API key.</Info>
+  </Tab>
+</Tabs>
+
+### Example: Adding Popular MCP Servers
+
+Here are some popular MCP servers you can add:
+
+<AccordionGroup>
+  <Accordion title="Web Fetch Server">
+    ```json
+    {
+      "name": "fetch",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Playwright Browser Automation">
+    ```json
+    {
+      "name": "playwright",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--headless"]
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Amap Maps (with API key)">
+    ```json
+    {
+      "name": "amap",
+      "command": "npx",
+      "args": ["-y", "@amap/amap-maps-mcp-server"],
+      "env": {
+        "AMAP_MAPS_API_KEY": "your-api-key-here"
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Slack Integration">
+    ```json
+    {
+      "name": "slack",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "your-bot-token",
+        "SLACK_TEAM_ID": "your-team-id"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Verification
+
+Test your setup by making a simple request:
+
+```bash
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+  }'
+```
+
+You should receive a list of available tools from your configured MCP servers.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Server Management" icon="server" href="/features/server-management">
+    Learn advanced server configuration and management
+  </Card>
+  <Card title="Group Management" icon="users" href="/features/group-management">
+    Organize servers into logical groups
+  </Card>
+  <Card title="Smart Routing" icon="route" href="/features/smart-routing">
+    Set up AI-powered tool discovery
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Server won't start">
+    - Check if the MCP server command is accessible in your PATH - Verify environment variables are
+    correctly set - Check MCPHub logs for detailed error messages
+  </Accordion>
+
+  <Accordion title="Can't connect from AI client">
+    - Ensure MCPHub is running on the correct port - Check firewall settings - Verify the endpoint
+    URL format
+  </Accordion>
+
+  <Accordion title="Authentication issues">
+    - Verify credentials are correct - Check if JWT token is valid - Try clearing browser cache and
+    cookies
+  </Accordion>
+</AccordionGroup>
+
+Need more help? Join our [Discord community](https://discord.gg/qMKNsn5Q) for support!
