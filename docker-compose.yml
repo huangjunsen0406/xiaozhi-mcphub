@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  mcphub:
+    image: samanhappy/mcphub
+    container_name: mcphub
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./mcp_settings.json:/app/mcp_settings.json
+      - ./data:/app/data
+    restart: unless-stopped

@@ -1,0 +1,66 @@
+{
+  "mcpServers": {
+    "amap": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@amap/amap-maps-mcp-server"
+      ],
+      "env": {
+        "AMAP_MAPS_API_KEY": "ce2a3951c9f3b82dea64ce37eeac4bdd"
+      },
+      "tools": {
+        "amap-maps_text_search": {
+          "enabled": false
+        },
+        "amap-maps_regeocode": {
+          "enabled": true
+        }
+      }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--headless"
+      ],
+      "enabled": true
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ],
+      "enabled": true
+    },
+    "slack": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-slack"
+      ],
+      "env": {
+        "SLACK_BOT_TOKEN": "your-bot-token",
+        "SLACK_TEAM_ID": "your-team-id"
+      },
+      "enabled": true
+    }
+  },
+  "users": [
+    {
+      "username": "admin",
+      "password": "$2b$10$Vt7krIvjNgyN67LXqly0uOcTpN0LI55cYRbcKC71pUDAP0nJ7RPa.",
+      "isAdmin": true
+    }
+  ],
+  "xiaozhi": {
+    "enabled": true,
+    "webSocketUrl": "wss://api.xiaozhi.me/mcp/?token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE0MDEzNiwiYWdlbnRJZCI6MTkwNjExLCJlbmRwb2ludElkIjoiYWdlbnRfMTkwNjExIiwicHVycG9zZSI6Im1jcC1lbmRwb2ludCIsImlhdCI6MTc1MjIxODQ5OH0.47OZfbn0AXsx5suKs8MeSRACp6TD_HG47Y13OvXEQVPuiN5f0jxLH2QLeX445wIfWWLpEkhtQxrn4T45jPKBTg",
+    "reconnect": {
+      "maxAttempts": 10,
+      "initialDelay": 2000,
+      "maxDelay": 60000,
+      "backoffMultiplier": 2
+    }
+  }
+}
