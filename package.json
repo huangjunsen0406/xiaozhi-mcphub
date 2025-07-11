@@ -114,7 +114,7 @@
     "jest-environment-node": "^30.0.0",
     "jest-mock-extended": "4.0.0-beta1",
     "lucide-react": "^0.486.0",
-    "next": "^15.2.4",
+    "next": "^15.3.5",
     "postcss": "^8.5.3",
     "prettier": "^3.0.3",
     "react": "^19.1.0",
