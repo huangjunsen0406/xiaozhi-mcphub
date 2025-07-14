@@ -82,15 +82,13 @@ export const initUpstreamServers = async (): Promise<void> => {
       await xiaozhiClientService.initialize();
       console.log('小智客户端服务已启动');
       
-      // 等待一秒后通知小智工具列表可用
-      setTimeout(async () => {
-        try {
-          await xiaozhiClientService.notifyToolsChanged();
-          console.log('已通知小智初始工具列表');
-        } catch (error) {
-          console.error('通知小智初始工具列表失败:', error);
-        }
-      }, 1000);
+      // 在所有服务器稳定后，立即通知小智工具列表可用
+      try {
+        await xiaozhiClientService.notifyToolsChanged();
+        console.log('已通知小智初始工具列表');
+      } catch (error) {
+        console.error('通知小智初始工具列表失败:', error);
+      }
     } else {
       console.log('小智客户端服务未启用');
     }
@@ -119,7 +117,43 @@ export const deleteMcpServer = (sessionId: string): void => {
 };
 
 export const notifyToolChanged = async () => {
+  console.log('工具状态发生变化，开始重新注册所有工具...');
   await registerAllTools(false);
+  
+  // 等待所有 MCP 服务器状态稳定
+  const maxWaitTime = 15000; // 最多等待15秒
+  const checkInterval = 500; // 每500ms检查一次
+  let waited = 0;
+  
+  console.log('等待所有 MCP 服务器状态稳定...');
+  while (waited < maxWaitTime) {
+    // 检查是否所有服务器都处于稳定状态（connected 或 disconnected）
+    const allStable = serverInfos.every(
+      (server) => server.status === 'connected' || server.status === 'disconnected'
+    );
+    
+    if (allStable) {
+      const connectedServers = serverInfos.filter(server => server.status === 'connected');
+      const totalTools = connectedServers.reduce((sum, server) => sum + (server.tools?.length || 0), 0);
+      console.log(`所有 MCP 服务器状态已稳定！连接的服务器: ${connectedServers.length}, 总工具数: ${totalTools}`);
+      break;
+    }
+    
+    // 显示当前正在连接的服务器
+    const connectingServers = serverInfos.filter(server => server.status === 'connecting');
+    if (connectingServers.length > 0) {
+      console.log(`等待服务器连接中: ${connectingServers.map(s => s.name).join(', ')}`);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
+    waited += checkInterval;
+  }
+  
+  if (waited >= maxWaitTime) {
+    console.warn('等待 MCP 服务器状态稳定超时，继续执行小智重连');
+  }
+
+  // 通知其他MCP客户端工具列表变化
   Object.values(servers).forEach((server) => {
     server
       .sendToolListChanged()
@@ -131,11 +165,11 @@ export const notifyToolChanged = async () => {
       });
   });
 
-  // 强制重连小智客户端以确保获取最新工具列表
+  // 在所有服务器状态稳定后，重连小智客户端
   try {
     const { xiaozhiClientService } = await import('./xiaozhiClientService.js');
     if (xiaozhiClientService.isEnabled()) {
-      console.log('工具状态已改变，重连小智客户端以同步最新工具列表...');
+      console.log('MCP服务器状态已稳定，重连小智客户端以同步最新工具列表...');
       
       // 先断开连接
       await xiaozhiClientService.disconnect();
@@ -782,8 +816,9 @@ export const toggleServerStatus = async (
 
 export const handleListToolsRequest = async (_: any, extra: any) => {
   const sessionId = extra.sessionId || '';
-  const group = getGroup(sessionId);
-  console.log(`Handling ListToolsRequest for group: ${group}`);
+  // 首先尝试从extra参数获取group，如果没有再从sessionId查找
+  const group = extra.group || getGroup(sessionId);
+  console.log(`Handling ListToolsRequest for group: ${group}, sessionId: ${sessionId}`);
 
   // Special handling for $smart group to return special tools
   if (group === '$smart') {

@@ -3,6 +3,7 @@ import { WebSocketClientTransport } from '../clients/websocket.js';
 import { loadSettings } from '../config/index.js';
 import { handleListToolsRequest, handleCallToolRequest } from './mcpService.js';
 import { XiaozhiConfig } from '../types/index.js';
+import { getSmartRoutingConfig } from '../utils/smartRouting.js';
 
 export class XiaozhiClientService {
   private client: Client | null = null;
@@ -16,7 +17,7 @@ export class XiaozhiClientService {
 
   private loadConfig(): void {
     const settings = loadSettings();
-    this.config = settings.xiaozhi as XiaozhiConfig;
+    this.config = settings.xiaozhi || null;
   }
 
   // 重新加载配置并根据需要重新连接
@@ -167,10 +168,18 @@ export class XiaozhiClientService {
       return;
     }
 
-    // 处理ListTools请求
+    // 处理ListTools请求 - 支持智能路由
     if (message.method === 'tools/list') {
       try {
-        const response = await handleListToolsRequest(message.params || {}, { sessionId: 'xiaozhi' });
+        const smartRoutingConfig = getSmartRoutingConfig();
+        
+        // 根据智能路由配置决定传递的group参数
+        const extraParams = smartRoutingConfig.enabled 
+          ? { sessionId: 'xiaozhi', group: '$smart' }  // 智能路由开启 → 使用$smart组
+          : { sessionId: 'xiaozhi' };                  // 智能路由关闭 → 正常组逻辑
+        
+        console.log(`小智请求工具列表 - 智能路由${smartRoutingConfig.enabled ? '已开启' : '未开启'}`);
+        const response = await handleListToolsRequest(message.params || {}, extraParams);
         await this.sendResponse(message.id, response);
       } catch (error) {
         await this.sendError(message.id, -32603, `工具列表获取失败: ${error}`);
@@ -178,11 +187,26 @@ export class XiaozhiClientService {
       return;
     }
 
-    // 处理CallTool请求
+    // 处理CallTool请求 - 支持智能路由
     if (message.method === 'tools/call') {
       try {
-        const response = await handleCallToolRequest(message, { sessionId: 'xiaozhi' });
-        await this.sendResponse(message.id, response);
+        const smartRoutingConfig = getSmartRoutingConfig();
+        
+        // 检查是否是智能路由工具调用
+        const toolName = message.params?.name;
+        const isSmartRoutingTool = toolName === 'search_tools' || toolName === 'call_tool';
+        
+        if (smartRoutingConfig.enabled && isSmartRoutingTool) {
+          console.log(`小智调用智能路由工具: ${toolName}`);
+          // 对于智能路由工具，设置特殊的group为$smart
+          const response = await handleCallToolRequest(message, { sessionId: 'xiaozhi-smart', group: '$smart' });
+          await this.sendResponse(message.id, response);
+        } else {
+          // 普通工具调用
+          console.log(`小智调用普通工具: ${toolName}`);
+          const response = await handleCallToolRequest(message, { sessionId: 'xiaozhi' });
+          await this.sendResponse(message.id, response);
+        }
       } catch (error) {
         await this.sendError(message.id, -32603, `工具调用失败: ${error}`);
       }
@@ -192,6 +216,8 @@ export class XiaozhiClientService {
     // 其他消息类型
     console.warn('未处理的消息类型:', message.method);
   }
+
+
 
   private async sendResponse(id: any, result: any): Promise<void> {
     if (!this.transport) {
