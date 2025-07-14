@@ -168,6 +168,10 @@ CREATE EXTENSION vector;
 
 ## 结语
 
-借助 xiaozhi-mcphub 的智能路由功能，AI 助手能够更高效地处理复杂任务，显著减少不必要的 token 消耗，同时提升工具调用的准确性与灵活性。作为面向未来的 AI 工具发现与调用基础设施，智能路由不仅使 AI 更聪明地选择和组合工具，还为多 Agent 协同提供了清晰、可控且可扩展的底层能力支撑。
+借助 MCPHub 的智能路由功能，AI 助手能够更高效地处理复杂任务，显著减少不必要的 token 消耗，同时提升工具调用的准确性与灵活性。作为面向未来的 AI 工具发现与调用基础设施，智能路由不仅使 AI 更聪明地选择和组合工具，还为多 Agent 协同提供了清晰、可控且可扩展的底层能力支撑。
 
-> xiaozhi-mcphub 基于 [MCPHub](https://github.com/samanhappy/mcphub) 开发，专为小智AI平台优化。项目地址：[https://github.com/huangjunsen0406/xiaozhi-mcphub](https://github.com/huangjunsen0406/xiaozhi-mcphub)。
+> MCPHub 只是我一时兴起开发的小项目，没想到收获了这么多关注，非常感谢大家的支持！目前 MCPHub 还有不少地方需要优化和完善，我也专门建了个交流群，感兴趣的可以添加下面的微信。
+
+![微信](../assets/wexin.png)
+
+> 同时，欢迎大家一起参与建设！项目地址为：[https://github.com/samanhappy/mcphub](https://github.com/samanhappy/mcphub)。
