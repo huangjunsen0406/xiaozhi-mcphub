@@ -30,9 +30,14 @@ jobs:
         run: corepack enable
         continue-on-error: true
 
-      # 备选方案：如果 corepack 失败，直接安装 pnpm
+      # 确保 pnpm 可用 (如果已存在则跳过)
       - name: Install pnpm
         run: npm install -g pnpm@10.11.0
+        continue-on-error: true
+
+      # 验证 pnpm 版本
+      - name: Verify pnpm version
+        run: pnpm --version
 
       # 如果缓存没有命中，安装依赖
       - name: Install dependencies
