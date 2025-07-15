@@ -102,7 +102,7 @@ docker run -d \
   -p 3000:3000 \
   -e NODE_ENV=production \
   -e JWT_SECRET=your-secret-key \
-  xiaozhi-mcphub:latest
+  huangjunsen/xiaozhi-mcphub:latest
 ```
 
 ## 启动 XIAOZHI-MCPHUB

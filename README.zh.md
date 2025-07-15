@@ -94,10 +94,10 @@
 docker run -p 3000:3000 \
   -v ./mcp_settings.json:/app/mcp_settings.json \
   -v ./data:/app/data \
-  huangjunsen0406/xiaozhi-mcphub
+  huangjunsen/xiaozhi-mcphub
 
 # 使用默认配置
-docker run -p 3000:3000 huangjunsen0406/xiaozhi-mcphub
+docker run -p 3000:3000 huangjunsen/xiaozhi-mcphub
 ```
 
 ### 访问控制台

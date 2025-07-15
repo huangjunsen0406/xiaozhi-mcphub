@@ -8,14 +8,14 @@
 
 ```bash
 # 拉取最新镜像
-docker pull huangjunsen0406/xiaozhi-mcphub:latest
+docker pull huangjunsen/xiaozhi-mcphub:latest
 
 # 使用默认配置运行
 docker run -d \
   --name xiaozhi-mcphub \
   -p 3000:3000 \
   -v $(pwd)/mcp_settings.json:/app/mcp_settings.json \
-  huangjunsen0406/xiaozhi-mcphub:latest
+  huangjunsen/xiaozhi-mcphub:latest
 ```
 
 ### 从源码构建
@@ -47,7 +47,7 @@ version: '3.8'
 
 services:
   xiaozhi-mcphub:
-    image: huangjunsen0406/xiaozhi-mcphub:latest
+    image: huangjunsen/xiaozhi-mcphub:latest
     # 本地开发时使用：
     # build: .
     container_name: xiaozhi-mcphub
@@ -126,7 +126,7 @@ services:
       - mcphub-network
 
   xiaozhi-mcphub:
-    image: huangjunsen0406/xiaozhi-mcphub:latest
+    image: huangjunsen/xiaozhi-mcphub:latest
     container_name: xiaozhi-mcphub-app
     expose:
       - '3000'
@@ -410,7 +410,7 @@ version: '3.8'
 
 services:
   xiaozhi-mcphub:
-    image: huangjunsen0406/xiaozhi-mcphub:latest
+    image: huangjunsen/xiaozhi-mcphub:latest
     environment:
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - DATABASE_PASSWORD_FILE=/run/secrets/db_password

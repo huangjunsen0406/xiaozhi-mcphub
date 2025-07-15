@@ -66,7 +66,7 @@
 version: '3.8'
 services:
   xiaozhi-mcphub:
-    image: xiaozhi-mcphub:latest
+    image: huangjunsen/xiaozhi-mcphub:latest
     ports:
       - "3000:3000"
     environment:

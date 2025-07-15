@@ -414,7 +414,7 @@ docker run -d \
   -v ./mcp_settings.json:/app/mcp_settings.json \
   -e XIAOZHI_ENABLED=true \
   -e XIAOZHI_API_KEY=your-api-key \
-  huangjunsen0406/xiaozhi-mcphub:latest
+  huangjunsen/xiaozhi-mcphub:latest
 
 # 更新 Nginx 配置以指向容器
 sudo nano /etc/nginx/sites-available/xiaozhi-mcphub
