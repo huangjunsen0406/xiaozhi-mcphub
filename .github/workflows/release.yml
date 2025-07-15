@@ -46,20 +46,21 @@ jobs:
       - name: Create distribution package
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          mkdir -p dist-package
+          PACKAGE_DIR="xiaozhi-mcphub-v$VERSION"
+          mkdir -p "$PACKAGE_DIR"
           
           # 复制构建产物
-          cp -r dist dist-package/
-          cp -r frontend/dist dist-package/frontend-dist
+          cp -r dist "$PACKAGE_DIR/"
+          cp -r frontend/dist "$PACKAGE_DIR/frontend-dist"
           
           # 复制必要文件
-          cp package.json pnpm-lock.yaml dist-package/
-          cp README.md README.zh.md LICENSE dist-package/
-          cp docker-compose.yml Dockerfile entrypoint.sh dist-package/
-          cp nginx.conf.example mcp_settings.json servers.json dist-package/
+          cp package.json pnpm-lock.yaml "$PACKAGE_DIR/"
+          cp README.md README.zh.md LICENSE "$PACKAGE_DIR/"
+          cp docker-compose.yml Dockerfile entrypoint.sh "$PACKAGE_DIR/"
+          cp nginx.conf.example mcp_settings.json servers.json "$PACKAGE_DIR/"
           
           # 创建安装脚本
-          cat > dist-package/install.sh << 'EOF'
+          cat > "$PACKAGE_DIR/install.sh" << 'EOF'
           #!/bin/bash
           echo "小智 MCP Hub v$VERSION 安装脚本"
           echo "请确保已安装 Node.js 20+ 和 pnpm"
@@ -68,11 +69,11 @@ jobs:
           echo "2. 启动服务: pnpm start"
           echo "3. 或使用 Docker: docker-compose up -d"
           EOF
-          chmod +x dist-package/install.sh
+          chmod +x "$PACKAGE_DIR/install.sh"
           
-          # 打包
-          tar -czf xiaozhi-mcphub-v$VERSION.tar.gz -C dist-package .
-          zip -r xiaozhi-mcphub-v$VERSION.zip dist-package/
+          # 打包（保持目录结构）
+          tar -czf xiaozhi-mcphub-v$VERSION.tar.gz "$PACKAGE_DIR"
+          zip -r xiaozhi-mcphub-v$VERSION.zip "$PACKAGE_DIR"
 
       - name: Generate changelog
         id: changelog
