@@ -20,7 +20,8 @@ export default defineConfig({
           { text: 'Docker 设置', link: '/configuration/docker-setup' },
           { text: '环境变量', link: '/configuration/environment-variables' },
           { text: 'MCP 设置', link: '/configuration/mcp-settings' },
-          { text: 'Nginx 配置', link: '/configuration/nginx' }
+          { text: 'Nginx 配置', link: '/configuration/nginx' },
+          { text: '小智接入 配置', link: '/configuration/xiaozhi' }
         ]
       },
       {
