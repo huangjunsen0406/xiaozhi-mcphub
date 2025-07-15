@@ -12,6 +12,13 @@ jobs:
   build-and-deploy:
     # 服务器环境：最新版 Ubuntu，也可以自定义版本
     runs-on: ubuntu-latest
+    
+    # 添加权限设置
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      
     steps:
       # 拉取代码
       - name: Checkout
@@ -47,11 +54,17 @@ jobs:
       - name: Build
         run: cd documents && pnpm docs:build
 
-      # 部署到 GitHub Pages
-      - name: Deploy
-        uses: crazy-max/ghaction-github-pages@v2
-        env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # ACCESS_TOKEN 是创建的 Secret 名称，替换为你自己创建的名称
+      # 配置 GitHub Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      # 上传构建产物
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          target-branch: gh-pages # 部署到 gh-pages 分支，master 分支存放的是项目源码，而 gh-pages 分支则用来存放生成的静态文件
-          build_dir: documents/docs/.vitepress/dist # vuepress 生成的静态文件存放的地方
+          path: documents/docs/.vitepress/dist
+
+      # 部署到 GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
