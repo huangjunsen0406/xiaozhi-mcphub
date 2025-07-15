@@ -4,7 +4,7 @@
 
 MCP 服务器市场是 XIAOZHI-MCPHUB 的核心功能之一，提供丰富的预构建 MCP 服务器集合，让您轻松发现、安装和管理各种功能强大的工具和服务。
 
-![MCP 服务器市场界面](../../assets/market.zh.png)
+![MCP 服务器市场界面](../images/market.zh.png)
 
 ## 市场特性
 
