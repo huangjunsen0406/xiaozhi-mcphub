@@ -8,13 +8,140 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  wait-for-docker:
     runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Docker build to complete
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'build (base)'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
+          allowed-conclusions: success,failure,cancelled
+
+  build-assets:
+    runs-on: ubuntu-latest
+    needs: wait-for-docker
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Release
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Create distribution package
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          mkdir -p dist-package
+          
+          # 复制构建产物
+          cp -r dist dist-package/
+          cp -r frontend/dist dist-package/frontend-dist
+          
+          # 复制必要文件
+          cp package.json pnpm-lock.yaml dist-package/
+          cp README.md README.zh.md LICENSE dist-package/
+          cp docker-compose.yml Dockerfile entrypoint.sh dist-package/
+          cp nginx.conf.example mcp_settings.json servers.json dist-package/
+          
+          # 创建安装脚本
+          cat > dist-package/install.sh << 'EOF'
+          #!/bin/bash
+          echo "小智 MCP Hub v$VERSION 安装脚本"
+          echo "请确保已安装 Node.js 20+ 和 pnpm"
+          echo ""
+          echo "1. 安装依赖: pnpm install --prod"
+          echo "2. 启动服务: pnpm start"
+          echo "3. 或使用 Docker: docker-compose up -d"
+          EOF
+          chmod +x dist-package/install.sh
+          
+          # 打包
+          tar -czf xiaozhi-mcphub-v$VERSION.tar.gz -C dist-package .
+          zip -r xiaozhi-mcphub-v$VERSION.zip dist-package/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          
+          # 获取上一个版本标签
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          # 生成更新日志
+          if [ -n "$PREV_TAG" ]; then
+            echo "## 🚀 What's Changed" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))" $PREV_TAG..HEAD >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          else
+            echo "## 🚀 Initial Release" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "小智 MCP Hub 首次发布！" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          # 添加 Docker 镜像信息
+          echo "## 🐳 Docker Images" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "- **Base版本**: \`huangjunsen/xiaozhi-mcphub:$VERSION\`" >> CHANGELOG.md
+          echo "- **Full版本**: \`huangjunsen/xiaozhi-mcphub:$VERSION-full\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "支持架构: \`linux/amd64\`, \`linux/arm64\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          # 添加快速开始
+          echo "## 🚀 Quick Start" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "\`\`\`bash" >> CHANGELOG.md
+          echo "# Docker 方式启动" >> CHANGELOG.md
+          echo "docker run -d -p 3000:3000 huangjunsen/xiaozhi-mcphub:$VERSION" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "# 或下载源码包部署" >> CHANGELOG.md
+          echo "wget https://github.com/${{ github.repository }}/releases/download/v$VERSION/xiaozhi-mcphub-v$VERSION.tar.gz" >> CHANGELOG.md
+          echo "tar -xzf xiaozhi-mcphub-v$VERSION.tar.gz" >> CHANGELOG.md
+          echo "cd xiaozhi-mcphub-v$VERSION" >> CHANGELOG.md
+          echo "./install.sh" >> CHANGELOG.md
+          echo "\`\`\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          # 添加文档链接
+          echo "## 📚 Documentation" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "- [中文文档](./README.zh.md)" >> CHANGELOG.md
+          echo "- [English Docs](./README.md)" >> CHANGELOG.md
+          echo "- [配置指南](./documents/docs/configuration/)" >> CHANGELOG.md
+          
+          # 将内容保存到输出
+          {
+            echo 'CHANGELOG<<EOF'
+            cat CHANGELOG.md
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          name: "小智 MCP Hub v${{ github.ref_name }}"
+          body: ${{ steps.changelog.outputs.CHANGELOG }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            xiaozhi-mcphub-v*.tar.gz
+            xiaozhi-mcphub-v*.zip
+          generate_release_notes: false
