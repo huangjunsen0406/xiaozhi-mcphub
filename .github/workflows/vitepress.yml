@@ -15,19 +15,24 @@ jobs:
     steps:
       # 拉取代码
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with: 
           fetch-depth: 0
 
       # 设置 Node.js 版本
       - name: Setup Node.js environment
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
-          node-version: "18.20.3"
+          node-version: "20.x"
           
       # 启用 corepack 来管理包管理器版本
       - name: Enable corepack
         run: corepack enable
+        continue-on-error: true
+
+      # 备选方案：如果 corepack 失败，直接安装 pnpm
+      - name: Install pnpm
+        run: npm install -g pnpm@10.11.0
 
       # 如果缓存没有命中，安装依赖
       - name: Install dependencies
