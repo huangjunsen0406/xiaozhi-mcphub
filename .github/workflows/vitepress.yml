@@ -24,17 +24,18 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: "18.20.3"
-      # 安装yarn
-      - name: Install yarn
-        run: npm i yarn -g
+          
+      # 启用 corepack 来管理包管理器版本
+      - name: Enable corepack
+        run: corepack enable
 
       # 如果缓存没有命中，安装依赖
       - name: Install dependencies
-        run: cd documents && yarn install
+        run: cd documents && pnpm install
 
       # 生成静态文件
       - name: Build
-        run: cd documents && yarn docs:build
+        run: cd documents && pnpm docs:build
 
       # 部署到 GitHub Pages
       - name: Deploy
