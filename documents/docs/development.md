@@ -187,10 +187,10 @@ pm2 logs xiaozhi-mcphub-dev
 
 访问以下 URL 验证服务是否正常启动：
 
-- **主页**: http://localhost:3000
-- **健康检查**: http://localhost:3000/health
-- **API 文档**: http://localhost:3000/api/docs
-- **管理界面**: http://localhost:3000/admin
+- **主页**: `http://localhost:3000`
+- **健康检查**: `http://localhost:3000/health（开发环境）`
+- **API 文档**: `http://localhost:3000/api/docs（开发环境）`
+- **管理界面**: `http://localhost:3000/admin（开发环境）`
 
 ## 开发工作流
 
@@ -412,10 +412,6 @@ npm run build
 
 ### 架构设计
 了解 XIAOZHI-MCPHUB 的整体架构和设计模式
-
-### API 开发
-学习如何开发和设计 RESTful API
-[查看 API 参考](/api-reference/introduction)
 
 ### 性能优化
 掌握性能分析和优化技巧

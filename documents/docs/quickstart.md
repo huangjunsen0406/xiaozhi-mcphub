@@ -1,6 +1,6 @@
 # 快速开始
 
-本指南将帮助您在 5 分钟内完成 XIAOZHI-MCPHUB 的部署和配置，并连接您的第一个 MCP 服务器。
+本指南将帮助您在 5 分钟内完成 xiaozhi-mcphub 的部署和配置，开始使用小智AI平台专用的MCP桥接系统。
 
 ## 前提条件
 
@@ -14,13 +14,16 @@
 
 ### 软件依赖
 - **Node.js**: 18.0+ 版本
+- **pnpm**: 10.11.0+ 版本（必需的包管理器）
+- **Python**: 3.13+ 版本（用于 MCP 服务器开发）
 - **Docker**: 最新版本（可选，用于容器化部署）
 - **Git**: 用于代码管理
 
 检查版本：
 ```bash
 node --version  # 应该 >= 18.0.0
-npm --version   # 应该 >= 8.0.0
+pnpm --version  # 应该 >= 10.11.0
+python3 --version # 应该 >= 3.13.0
 docker --version # 可选
 ```
 
@@ -36,7 +39,7 @@ git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
 cd xiaozhi-mcphub
 
 # 安装依赖
-npm install
+pnpm install
 ```
 
 #### 配置环境
@@ -52,16 +55,29 @@ cp .env.example .env
 # 服务器配置
 PORT=3000
 NODE_ENV=development
+HOST=0.0.0.0
 
-# 数据库配置
-DATABASE_URL=postgresql://user:password@localhost:5432/mcphub
+# 数据库配置（使用 PostgreSQL + pgvector）
+DATABASE_URL=postgresql://username:password@localhost:5432/xiaozhi_mcphub
+REDIS_URL=redis://localhost:6379
 
-# JWT 密钥（请更改为安全的随机字符串）
-JWT_SECRET=your-super-secret-jwt-key-change-me
+# JWT 认证配置
+JWT_SECRET=your-super-secret-key-for-xiaozhi
+JWT_EXPIRES_IN=24h
 
-# 管理员账户
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=admin123
+# 小智平台集成配置
+XIAOZHI_ENABLED=true
+XIAOZHI_WEBSOCKET_URL=wss://api.xiaozhi.ai/ws
+XIAOZHI_API_KEY=your-xiaozhi-api-key
+XIAOZHI_CLIENT_ID=your-xiaozhi-client-id
+
+# MCP 服务器配置
+MCP_SERVERS_PATH=./mcp_settings.json
+MCP_LOG_LEVEL=info
+
+# 日志配置
+LOG_LEVEL=info
+LOG_FILE_ENABLED=true
 ```
 
 ### 方式二：使用 Docker
@@ -91,179 +107,238 @@ docker run -d \
 
 ## 启动 XIAOZHI-MCPHUB
 
+### 配置 MCP 服务器
+
+创建或编辑 `mcp_settings.json` 文件：
+
+```json
+{
+  "mcpServers": {
+    "amap": {
+      "command": "python",
+      "args": ["-m", "mcp_amap"],
+      "env": {
+        "AMAP_MAPS_API_KEY": "your-amap-api-key"
+      },
+      "xiaozhi_compatible": true
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "xiaozhi_compatible": true
+    }
+  },
+  "xiaozhi": {
+    "autoConnect": true,
+    "reconnectInterval": 5000,
+    "maxReconnectAttempts": 10
+  }
+}
+```
+
 ### 开发模式启动
 
 ```bash
-# 初始化数据库
-npm run db:setup
-
-# 启动开发服务器
-npm run dev
+# 同时启动后端和前端
+pnpm dev
 ```
+
+这将启动：
+- 后端服务器：`http://localhost:3000`
+- 前端开发服务器：`http://localhost:5173`
 
 ### 生产模式启动
 
 ```bash
-# 构建应用
-npm run build
+# 构建完整项目
+pnpm build
 
 # 启动生产服务器
-npm start
+pnpm start
 ```
 
-> **注意**: 开发模式下，XIAOZHI-MCPHUB 会在 `http://localhost:3000` 启动，并具有热重载功能。
+> **注意**: 开发模式下，后端在 `http://localhost:3000`，前端在 `http://localhost:5173`，均具有热重载功能。
 
 ## 首次访问和配置
 
-### 1. 访问管理界面
+### 1. 访问前端界面
 
-打开浏览器，访问 `http://localhost:3000`，您将看到 XIAOZHI-MCPHUB 的欢迎页面。
+打开浏览器，访问：
+- **前端界面**: `http://localhost:5173`（开发模式）
+- **API 端点**: `http://localhost:3000`（后端服务）
 
-### 2. 登录管理员账户
+### 2. 验证小智平台连接
 
-使用您在 `.env` 文件中设置的管理员凭据登录：
-
-- **邮箱**: `admin@example.com`
-- **密码**: `admin123`
-
-> **警告**: 首次登录后，请立即更改默认密码以确保安全！
-
-### 3. 完成初始配置
-
-登录后，系统会引导您完成初始配置：
-
-1. **更改管理员密码**
-2. **设置组织信息**
-3. **配置基本设置**
-
-## 添加您的第一个 MCP 服务器
-
-### 1. 准备 MCP 服务器
-
-如果您还没有 MCP 服务器，可以使用我们的示例服务器进行测试：
+检查小智平台连接状态：
 
 ```bash
-# 克隆示例服务器
-git clone https://github.com/huangjunsen0406/example-mcp-server.git
-cd example-mcp-server
-
-# 安装依赖并启动
-npm install
-npm start
+curl -X GET http://localhost:3000/api/xiaozhi/status
 ```
 
-示例服务器将在 `http://localhost:3001` 启动。
+### 3. 测试 MCP 服务器
 
-### 2. 在 XIAOZHI-MCPHUB 中添加服务器
-
-在 XIAOZHI-MCPHUB 管理界面中：
-
-1. 点击 **"添加服务器"** 按钮
-2. 填写服务器信息：
-   ```
-   名称: Example MCP Server
-   端点: http://localhost:3001
-   描述: 示例 MCP 服务器用于测试
-   ```
-3. 选择功能类型（如：chat、completion、analysis）
-4. 点击 **"测试连接"** 验证服务器可达性
-5. 点击 **"保存"** 完成添加
-
-### 3. 验证服务器状态
-
-添加成功后，您应该能在服务器列表中看到新添加的服务器，状态显示为 **"活跃"**（绿色）。
-
-## 测试路由功能
-
-### 发送测试请求
-
-使用 cURL 或其他 HTTP 客户端测试路由功能：
+验证 MCP 服务器是否正常启动：
 
 ```bash
-# 发送聊天请求
-curl -X POST http://localhost:3000/api/chat \
+# 查看已连接的 MCP 服务器列表
+curl -X GET http://localhost:3000/api/mcp/servers
+
+# 查看可用工具
+curl -X GET http://localhost:3000/api/mcp/tools
+```
+
+
+## 测试工具调用功能
+
+### 调用 MCP 工具
+
+使用 cURL 测试 MCP 工具调用：
+
+```bash
+# 调用高德地图工具（如果已配置）
+curl -X POST http://localhost:3000/api/mcp/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "messages": [
-      {
-        "role": "user",
-        "content": "Hello, this is a test message!"
-      }
-    ]
+    "serverId": "amap",
+    "toolName": "search_poi",
+    "arguments": {
+      "keywords": "北京天安门",
+      "city": "北京"
+    }
   }'
 ```
 
-### 查看请求日志
+### 测试小智平台同步
 
-在 XIAOZHI-MCPHUB 管理界面的 **"监控"** 页面中，您可以实时查看：
+验证工具同步到小智平台：
 
-- 请求数量和响应时间
-- 服务器健康状态
-- 错误日志和统计
+```bash
+# 手动触发工具同步
+curl -X POST http://localhost:3000/api/xiaozhi/sync-tools
+
+# 查看同步状态
+curl -X GET http://localhost:3000/api/xiaozhi/sync-status
+```
+
+### 查看系统日志
+
+在开发环境中查看实时日志：
+
+```bash
+# 查看后端日志
+tail -f logs/app.log
+
+# 查看小智平台连接日志
+tail -f logs/xiaozhi.log
+
+# 查看 MCP 服务器日志
+tail -f logs/mcp-servers.log
+```
 
 ## 后续步骤
 
-恭喜！您已经成功部署了 XIAOZHI-MCPHUB 并添加了第一个 MCP 服务器。接下来您可以：
+恭喜！您已经成功部署了 xiaozhi-mcphub 并配置了小智AI平台集成。接下来您可以：
 
-### 配置负载均衡
-学习如何配置智能路由和负载均衡策略
+### 配置更多 MCP 服务器
+添加更多中国本土服务和国际化工具
+[查看 MCP 设置指南](/configuration/mcp-settings)
+
+### 智能路由配置
+配置基于性能的智能工具路由
 [查看智能路由功能](/features/smart-routing)
 
-### 添加更多服务器
-了解服务器管理的高级功能
-[查看服务器管理](/features/server-management)
-
-### 设置监控告警
-配置性能监控和告警通知
-[查看监控功能](/features/monitoring)
-
-### API 集成
-将 XIAOZHI-MCPHUB 集成到您的应用程序中
-[查看 API 参考](/api-reference/introduction)
+### 开发自定义功能
+学习如何扩展和自定义系统功能
+[查看开发指南](/development/getting-started)
 
 ## 常见问题
 
-### 无法连接到 MCP 服务器
+### MCP 服务器启动失败
 
 **可能原因**：
-- 服务器地址错误或服务器未启动
-- 防火墙阻止连接
+- Python 环境配置问题
+- MCP 服务器依赖缺失
+- 环境变量配置错误
+
+**解决方案**：
+```bash
+# 检查 Python 环境
+python3 --version
+pip3 list | grep mcp
+
+# 手动安装 MCP 服务器
+pip3 install mcp-server-fetch
+uvx mcp-server-fetch
+
+# 检查配置文件
+node -e "console.log(JSON.parse(require('fs').readFileSync('mcp_settings.json', 'utf8')))"
+```
+
+### 小智平台连接失败
+
+**可能原因**：
+- API 密钥无效
+- WebSocket 连接被阻止
 - 网络配置问题
 
 **解决方案**：
-1. 验证服务器是否正在运行：`curl http://localhost:3001/health`
-2. 检查防火墙设置
-3. 确认网络连接正常
+```bash
+# 测试 API 密钥
+curl -H "Authorization: Bearer $XIAOZHI_API_KEY" \
+     https://api.xiaozhi.ai/health
 
-### 服务器状态显示为离线
+# 测试 WebSocket 连接
+wscat -c wss://api.xiaozhi.ai/ws
+
+# 检查环境变量
+echo $XIAOZHI_API_KEY
+echo $XIAOZHI_CLIENT_ID
+```
+
+### 前端无法访问后端
 
 **可能原因**：
-- 健康检查失败
-- 服务器响应超时
-- 服务器崩溃或重启
-
-**解决方案**：
-1. 检查服务器日志
-2. 调整健康检查间隔
-3. 重启服务器进程
-
-### 忘记管理员密码
+- 端口冲突
+- CORS 配置问题
+- 前端配置错误
 
 **解决方案**：
 ```bash
-# 重置管理员密码
-npm run reset-admin-password
+# 检查端口占用
+lsof -i :3000
+lsof -i :5173
+
+# 使用不同端口启动
+PORT=3001 pnpm backend:dev
+
+# 检查前端环境变量
+cd frontend && cat .env
 ```
-或者删除数据库文件重新初始化：
+
+### 数据库连接问题
+
+**解决方案**：
 ```bash
-rm data/mcphub.db
-npm run db:setup
+# 检查 PostgreSQL 状态
+pg_ctl status
+
+# 创建数据库
+createdb xiaozhi_mcphub
+
+# 或使用 Docker 启动数据库
+docker run --name xiaozhi-postgres \
+  -e POSTGRES_DB=xiaozhi_mcphub \
+  -e POSTGRES_USER=username \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 -d postgres:15
 ```
 
 ## 获取帮助
 
 如果您在设置过程中遇到问题：
 
-- 📖 查看 [完整文档](/development/getting-started)
-- 🐛 在 [GitHub](https://github.com/huangjunsen0406/xiaozhi-mcphub/issues) 上报告问题
-- 📧 发送邮件寻求技术支持 
+- 📖 查看 [开发指南](/development/getting-started) 获取详细配置说明
+- 🔧 查看 [配置指南](/configuration/environment-variables) 了解环境变量
+- 🏗️ 查看 [MCP 设置](/configuration/mcp-settings) 了解服务器配置
+- 🐛 在 [GitHub Issues](https://github.com/huangjunsen0406/xiaozhi-mcphub/issues) 上报告问题
+- 💬 查看小智AI平台文档获取集成帮助 

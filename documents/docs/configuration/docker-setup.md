@@ -215,7 +215,7 @@ networks:
 
 为 Docker Compose 创建 `.env` 文件：
 
-```env
+```bash
 # 应用程序
 NODE_ENV=production
 JWT_SECRET=your-super-secret-jwt-key-change-this

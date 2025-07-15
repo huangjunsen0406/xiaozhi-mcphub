@@ -49,7 +49,7 @@ cp .env.example .env
 
 配置以下环境变量：
 
-```env
+```bash
 # 服务器配置
 PORT=3000
 NODE_ENV=development
@@ -96,7 +96,7 @@ cp .env.example .env
 
 配置前端环境变量：
 
-```env
+```bash
 VITE_API_BASE_URL=http://localhost:3000
 VITE_XIAOZHI_ENABLED=true
 VITE_WEBSOCKET_URL=ws://localhost:3000
@@ -207,6 +207,30 @@ cd frontend
 npm run dev
 ```
 
+### 后台模式启动
+
+使用 PM2 启动后端服务（适用于生产环境或长期开发）：
+
+```bash
+# 安装 PM2（如果尚未安装）
+npm install -g pm2
+
+# 启动后端服务
+pm2 start src/index.ts --name xiaozhi-mcphub-dev --interpreter tsx
+
+# 查看进程状态
+pm2 status
+
+# 查看日志
+pm2 logs xiaozhi-mcphub-dev
+
+# 停止服务
+pm2 stop xiaozhi-mcphub-dev
+
+# 重启服务
+pm2 restart xiaozhi-mcphub-dev
+```
+
 ### 构建项目
 
 构建完整项目：
@@ -284,7 +308,31 @@ pnpm test:coverage
 
 ### 调试
 
-#### 后端调试
+### VS Code 调试配置
+
+创建 `.vscode/launch.json` 文件以支持集成调试：
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug XIAOZHI-MCPHUB",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/index.ts",
+      "runtimeArgs": ["-r", "tsx/cjs"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}
+```
+
+### 后端调试
 
 使用 Node.js 检查器调试后端：
 
@@ -293,6 +341,20 @@ pnpm backend:debug
 ```
 
 然后将调试器连接到 `http://localhost:9229`。
+
+### 日志调试
+
+使用内置的日志系统进行调试：
+
+```typescript
+import { logger } from '@/utils/logger';
+
+// 不同级别的日志
+logger.debug('调试信息', { data });
+logger.info('信息日志', { userId });
+logger.warn('警告信息', { error });
+logger.error('错误信息', { error, stack });
+```
 
 #### 小智平台连接调试
 
@@ -385,6 +447,9 @@ lsof -i :5173
 
 # 杀死占用进程
 kill -9 <PID>
+
+# 或者使用不同端口启动
+PORT=3001 pnpm backend:dev
 ```
 
 **数据库连接失败**：
@@ -427,17 +492,78 @@ npm install
 rm -rf .vite
 ```
 
+**TypeScript 编译错误**：
+```bash
+# 清理构建缓存
+pnpm clean
+
+# 重新安装类型定义
+npm install @types/node @types/express
+
+# 重新构建
+pnpm build
+```
+
+**依赖管理问题**：
+```bash
+# 清理 pnpm 缓存
+pnpm store prune
+
+# 重新安装所有依赖
+rm -rf node_modules pnpm-lock.yaml
+pnpm install
+
+# 更新依赖到最新版本
+pnpm update
+```
+
 ### 获取帮助
 
-- 查看[贡献指南](/development/contributing)
-- 阅读[架构文档](/development/architecture)
 - 在 GitHub 上提交 issue 报告问题：[https://github.com/huangjunsen0406/xiaozhi-mcphub/issues](https://github.com/huangjunsen0406/xiaozhi-mcphub/issues)
 - 查看小智AI平台文档获取集成指导
 
+## 进阶开发主题
+
+### 架构设计模式
+
+了解 xiaozhi-mcphub 采用的设计模式：
+
+- **控制器层**：处理 HTTP 请求和 WebSocket 连接
+- **服务层**：实现核心业务逻辑
+- **数据访问层**：数据库操作和缓存管理
+- **中间件层**：认证、日志、错误处理
+
+### 性能优化技巧
+
+```bash
+# 性能分析
+npm run analyze
+
+# 内存使用情况
+node --inspect src/index.ts
+
+# 性能监控（开发环境）
+NODE_ENV=development DEBUG=performance pnpm dev
+```
+
+### 扩展开发
+
+#### 添加新的 MCP 服务器
+1. 在 `mcp_settings.json` 中添加配置
+2. 设置 `xiaozhi_compatible: true`
+3. 配置必要的环境变量
+4. 测试集成
+5. 更新文档
+
+#### 开发小智平台集成功能
+1. 实现 WebSocket 消息处理
+2. 添加工具同步逻辑
+3. 处理重连和错误恢复
+4. 实现智能路由
+5. 添加监控和日志
+
 ## 下一步
 
-- 阅读[架构概述](/development/architecture)了解系统设计
-- 了解[贡献指南](/development/contributing)参与项目开发
 - 探索[配置选项](/configuration/environment-variables)进行高级配置
 - 查看[MCP 设置](/configuration/mcp-settings)了解服务器管理
 - 学习[Docker 部署](/configuration/docker-setup)进行容器化开发
