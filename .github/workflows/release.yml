@@ -123,10 +123,8 @@ jobs:
           # 添加文档链接
           echo "## 📚 Documentation" >> CHANGELOG.md
           echo "" >> CHANGELOG.md
-          echo "- [中文文档](./README.zh.md)" >> CHANGELOG.md
-          echo "- [English Docs](./README.md)" >> CHANGELOG.md
-          echo "- [配置指南](./documents/docs/configuration/)" >> CHANGELOG.md
-          
+          echo "- [📖 在线文档 (GitHub Pages)](https://huangjunsen0406.github.io/xiaozhi-mcphub/)" >> CHANGELOG.md
+
           # 将内容保存到输出
           {
             echo 'CHANGELOG<<EOF'
@@ -137,7 +135,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "小智 MCP Hub v${{ github.ref_name }}"
+          name: "${{ github.ref_name }}"
           body: ${{ steps.changelog.outputs.CHANGELOG }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
