@@ -237,7 +237,21 @@ const SettingsPage: React.FC = () => {
     setTempXiaozhiUrl(value);
   };
 
+  /**
+   * 检查URL格式是否有效
+   */
+  const isValidUrl = (url: string): boolean => {
+    if (!url.trim()) return true; // 空URL视为有效（未填写状态）
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const saveXiaozhiUrl = async () => {
+    // 直接保存用户输入的URL，不做修改
     const success = await updateXiaozhiConfig('webSocketUrl', tempXiaozhiUrl);
     
     // 如果保存成功且小智客户端已启用，则重启连接以使用新URL
@@ -447,22 +461,35 @@ const SettingsPage: React.FC = () => {
                 </h3>
                 <p className="text-sm text-gray-500">{t('settings.xiaozhiWebSocketUrlDescription')}</p>
               </div>
-              <div className="flex gap-3 items-center">
-                <input
-                  type="text"
-                  value={tempXiaozhiUrl}
-                  onChange={(e) => handleXiaozhiUrlChange(e.target.value)}
-                  placeholder={t('settings.xiaozhiWebSocketUrlPlaceholder')}
-                  className="block flex-1 px-3 py-2 mt-1 w-full rounded-md border border-gray-300 shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
-                  disabled={loading}
-                />
-                <button
-                  onClick={saveXiaozhiUrl}
-                  disabled={loading}
-                  className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
-                >
-                  {t('common.save')}
-                </button>
+              <div className="space-y-2">
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="text"
+                    value={tempXiaozhiUrl}
+                    onChange={(e) => handleXiaozhiUrlChange(e.target.value)}
+                    placeholder={t('settings.xiaozhiWebSocketUrlPlaceholder')}
+                    className="block flex-1 px-3 py-2 mt-1 w-full rounded-md border border-gray-300 shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                    disabled={loading}
+                  />
+                  <button
+                    onClick={saveXiaozhiUrl}
+                    disabled={loading}
+                    className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
+                  >
+                    {t('common.save')}
+                  </button>
+                </div>
+                {tempXiaozhiUrl.trim() && !isValidUrl(tempXiaozhiUrl) && (
+                  <div className="text-xs text-red-600">
+                    ⚠️ URL格式不正确
+                  </div>
+                )}
+                <div className="text-xs text-gray-500 mt-1">
+                  支持的URL格式示例:
+                  <br />• wss://api.xiaozhi.me/mcp?token=... (官方)
+                  <br />• wss://your-domain.com/mcp_endpoint/mcp?token=... (自部署)
+                  <br />• 填什么就用什么，不会自动修改您的输入
+                </div>
               </div>
             </div>
           </div>
