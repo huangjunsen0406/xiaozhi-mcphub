@@ -26,7 +26,7 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN mkdir -p $PNPM_HOME && \
   pnpm add -g @amap/amap-maps-mcp-server @playwright/mcp@latest tavily-mcp@latest @modelcontextprotocol/server-github @modelcontextprotocol/server-slack
 
-ARG INSTALL_EXT=false
+ARG INSTALL_EXT=true
 RUN if [ "$INSTALL_EXT" = "true" ]; then \
   ARCH=$(uname -m); \
   if [ "$ARCH" = "x86_64" ]; then \
