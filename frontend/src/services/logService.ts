@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { apiGet, apiDelete } from '../utils/fetchInterceptor';
+import { getToken } from './authService'; // Import getToken function
 import { getApiUrl } from '../utils/runtime';
-import { getToken } from '../utils/interceptors';
 
 export interface LogEntry {
   timestamp: number;
@@ -14,13 +13,21 @@ export interface LogEntry {
 // Fetch all logs
 export const fetchLogs = async (): Promise<LogEntry[]> => {
   try {
-    const response = await apiGet<{ success: boolean; data: LogEntry[]; error?: string }>('/logs');
+    // Get authentication token
+    const token = getToken();
+    const response = await fetch(getApiUrl('/logs'), {
+      headers: {
+        'x-auth-token': token || '',
+      },
+    });
 
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to fetch logs');
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch logs');
     }
 
-    return response.data;
+    return result.data;
   } catch (error) {
     console.error('Error fetching logs:', error);
     throw error;
@@ -30,10 +37,19 @@ export const fetchLogs = async (): Promise<LogEntry[]> => {
 // Clear all logs
 export const clearLogs = async (): Promise<void> => {
   try {
-    const response = await apiDelete<{ success: boolean; error?: string }>('/logs');
+    // Get authentication token
+    const token = getToken();
+    const response = await fetch(getApiUrl('/logs'), {
+      method: 'DELETE',
+      headers: {
+        'x-auth-token': token || '',
+      },
+    });
 
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to clear logs');
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to clear logs');
     }
   } catch (error) {
     console.error('Error clearing logs:', error);

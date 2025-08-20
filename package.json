@@ -1,11 +1,11 @@
 {
-  "name": "@samanhappy/mcphub",
-  "version": "dev",
-  "description": "A hub server for mcp servers",
+  "name": "@huangjunsen0406/xiaozhi-mcphub",
+  "version": "1.0.0",
+  "description": "MCPHub enhanced with Xiaozhi AI platform integration - 为小智AI平台优化的MCP工具桥接系统",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "mcphub": "bin/cli.js"
+    "xiaozhi-mcphub": "bin/cli.js"
   },
   "files": [
     "dist",
@@ -14,7 +14,8 @@
     "servers.json",
     "frontend/dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "pnpm backend:build && pnpm frontend:build",
@@ -34,22 +35,37 @@
     "frontend:preview": "cd frontend && vite preview",
     "dev": "concurrently \"pnpm backend:dev\" \"pnpm frontend:dev\"",
     "debug": "concurrently \"pnpm backend:debug\" \"pnpm frontend:dev\"",
-    "prepublishOnly": "npm run build && node scripts/verify-dist.js"
+    "prepublishOnly": "npm run build && node scripts/verify-dist.js",
+    "docs:dev": "cd docs && mintlify dev",
+    "docs:build": "cd docs && mintlify build"
   },
   "keywords": [
     "typescript",
     "server",
     "mcp",
-    "model context protocol"
+    "model context protocol",
+    "ai-bridge",
+    "xiaozhi",
+    "ai-platform",
+    "tool-bridge"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "huangjunsen0406 <huangjunsen0406@gmail.com>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/huangjunsen0406/xiaozhi-mcphub",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/huangjunsen0406/xiaozhi-mcphub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/huangjunsen0406/xiaozhi-mcphub/issues"
+  },
   "dependencies": {
     "@apidevtools/swagger-parser": "^11.0.1",
-    "@modelcontextprotocol/sdk": "^1.17.2",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "@types/adm-zip": "^0.5.7",
     "@types/multer": "^1.4.13",
     "@types/pg": "^8.15.2",
+    "@types/ws": "^8.18.1",
     "adm-zip": "^0.5.16",
     "axios": "^1.10.0",
     "bcryptjs": "^3.0.2",
@@ -57,7 +73,6 @@
     "dotenv-expand": "^12.0.2",
     "express": "^4.21.2",
     "express-validator": "^7.2.1",
-    "i18next-fs-backend": "^2.6.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
     "openai": "^4.103.0",
@@ -67,15 +82,13 @@
     "postgres": "^3.4.7",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.24",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-slot": "^1.1.2",
     "@shadcn/ui": "^0.0.4",
-    "@swc/core": "^1.13.0",
-    "@swc/jest": "^0.2.39",
-    "@tailwindcss/line-clamp": "^0.4.4",
     "@tailwindcss/postcss": "^4.1.3",
     "@tailwindcss/vite": "^4.1.7",
     "@types/bcryptjs": "^3.0.0",
@@ -122,5 +135,5 @@
   "engines": {
     "node": "^18.0.0 || >=20.0.0"
   },
-  "packageManager": "pnpm@10.12.4+sha256.cadfd9e6c9fcc2cb76fe7c0779a5250b632898aea5f53d833a73690c77a778d9"
+  "packageManager": "pnpm@10.11.0+sha256.a69e9cb077da419d47d18f1dd52e207245b29cac6e076acedbeb8be3b1a67bd7"
 }

@@ -1,5 +1,4 @@
-import { apiGet, fetchWithInterceptors } from '../utils/fetchInterceptor';
-import { getBasePath } from '../utils/runtime';
+import { getApiUrl, getBasePath } from '../utils/runtime';
 
 export interface SystemConfig {
   routing?: {
@@ -26,7 +25,6 @@ export interface PublicConfigResponse {
   success: boolean;
   data?: {
     skipAuth?: boolean;
-    permissions?: any;
   };
   message?: string;
 }
@@ -42,10 +40,10 @@ export interface SystemConfigResponse {
 /**
  * Get public configuration (skipAuth setting) without authentication
  */
-export const getPublicConfig = async (): Promise<{ skipAuth: boolean; permissions?: any }> => {
+export const getPublicConfig = async (): Promise<{ skipAuth: boolean }> => {
   try {
     const basePath = getBasePath();
-    const response = await fetchWithInterceptors(`${basePath}/public-config`, {
+    const response = await fetch(`${basePath}/public-config`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -54,7 +52,7 @@ export const getPublicConfig = async (): Promise<{ skipAuth: boolean; permission
 
     if (response.ok) {
       const data: PublicConfigResponse = await response.json();
-      return { skipAuth: data.data?.skipAuth === true, permissions: data.data?.permissions || {} };
+      return { skipAuth: data.data?.skipAuth === true };
     }
 
     return { skipAuth: false };
@@ -71,10 +69,16 @@ export const getPublicConfig = async (): Promise<{ skipAuth: boolean; permission
  */
 export const getSystemConfigPublic = async (): Promise<SystemConfig | null> => {
   try {
-    const response = await apiGet<SystemConfigResponse>('/settings');
+    const response = await fetch(getApiUrl('/settings'), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-    if (response.success) {
-      return response.data?.systemConfig || null;
+    if (response.ok) {
+      const data: SystemConfigResponse = await response.json();
+      return data.data?.systemConfig || null;
     }
 
     return null;

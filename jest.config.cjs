@@ -12,7 +12,6 @@ module.exports = {
       'ts-jest',
       {
         useESM: true,
-        tsconfig: './tsconfig.test.json',
       },
     ],
   },
@@ -38,10 +37,8 @@ module.exports = {
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^(\\.{1,2}/.*)\\.js$': '$1',
   },
-  transformIgnorePatterns: ['node_modules/(?!(@modelcontextprotocol|other-esm-packages)/)'],
   extensionsToTreatAsEsm: ['.ts'],
-  testTimeout: 30000,
+  testTimeout: 10000,
   verbose: true,
 };

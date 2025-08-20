@@ -2,13 +2,18 @@ import { Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import AdmZip from 'adm-zip';
 import { ApiResponse } from '../types/index.js';
+
+// Get the directory name in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'data/uploads/dxt');
+    const uploadDir = path.join(__dirname, '../../data/uploads/dxt');
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -31,7 +36,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 500 * 1024 * 1024, // 500MB limit
+    fileSize: 100 * 1024 * 1024, // 100MB limit
   },
 });
 
@@ -40,7 +45,7 @@ export const uploadMiddleware = upload.single('dxtFile');
 // Clean up old DXT server files when installing a new version
 const cleanupOldDxtServer = (serverName: string): void => {
   try {
-    const uploadDir = path.join(process.cwd(), 'data/uploads/dxt');
+    const uploadDir = path.join(__dirname, '../../data/uploads/dxt');
     const serverPattern = `server-${serverName}`;
 
     if (fs.existsSync(uploadDir)) {
@@ -108,9 +113,6 @@ export const uploadDxtFile = async (req: Request, res: Response): Promise<void> 
 
       // Clean up any existing version of this server
       cleanupOldDxtServer(manifest.name);
-      if (!fs.existsSync(finalExtractDir)) {
-        fs.mkdirSync(finalExtractDir, { recursive: true });
-      }
 
       // Move the temporary directory to the final location
       fs.renameSync(tempExtractDir, finalExtractDir);

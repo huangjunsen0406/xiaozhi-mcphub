@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -9,17 +9,10 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/Dashboard';
 import ServersPage from './pages/ServersPage';
 import GroupsPage from './pages/GroupsPage';
-import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
 import MarketPage from './pages/MarketPage';
 import LogsPage from './pages/LogsPage';
 import { getBasePath } from './utils/runtime';
-
-// Helper component to redirect cloud server routes to market
-const CloudRedirect: React.FC = () => {
-  const { serverName } = useParams<{ serverName: string }>();
-  return <Navigate to={`/market/${serverName}?tab=cloud`} replace />;
-};
 
 function App() {
   const basename = getBasePath();
@@ -38,15 +31,8 @@ function App() {
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/servers" element={<ServersPage />} />
                   <Route path="/groups" element={<GroupsPage />} />
-                  <Route path="/users" element={<UsersPage />} />
                   <Route path="/market" element={<MarketPage />} />
                   <Route path="/market/:serverName" element={<MarketPage />} />
-                  {/* Legacy cloud routes redirect to market with cloud tab */}
-                  <Route path="/cloud" element={<Navigate to="/market?tab=cloud" replace />} />
-                  <Route
-                    path="/cloud/:serverName"
-                    element={<CloudRedirect />}
-                  />
                   <Route path="/logs" element={<LogsPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>

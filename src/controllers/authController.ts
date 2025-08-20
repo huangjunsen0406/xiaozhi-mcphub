@@ -1,33 +1,18 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { validationResult } from 'express-validator';
-import {
-  findUserByUsername,
-  verifyPassword,
-  createUser,
-  updateUserPassword,
-} from '../models/User.js';
-import { getDataService } from '../services/services.js';
-import { DataService } from '../services/dataService.js';
-import { JWT_SECRET } from '../config/jwt.js';
+import { findUserByUsername, verifyPassword, createUser, updateUserPassword } from '../models/User.js';
 
-const dataService: DataService = getDataService();
-
+// Default secret key - in production, use an environment variable
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 const TOKEN_EXPIRY = '24h';
 
 // Login user
 export const login = async (req: Request, res: Response): Promise<void> => {
-  // Get translation function from request
-  const t = (req as any).t;
-
   // Validate request
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    res.status(400).json({
-      success: false,
-      message: t('api.errors.validation_failed'),
-      errors: errors.array(),
-    });
+    res.status(400).json({ success: false, errors: errors.array() });
     return;
   }
 
@@ -36,23 +21,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     // Find user by username
     const user = findUserByUsername(username);
-
+    
     if (!user) {
-      res.status(401).json({
-        success: false,
-        message: t('api.errors.invalid_credentials'),
-      });
+      res.status(401).json({ success: false, message: 'Invalid credentials' });
       return;
     }
 
     // Verify password
     const isPasswordValid = await verifyPassword(password, user.password);
-
+    
     if (!isPasswordValid) {
-      res.status(401).json({
-        success: false,
-        message: t('api.errors.invalid_credentials'),
-      });
+      res.status(401).json({ success: false, message: 'Invalid credentials' });
       return;
     }
 
@@ -60,45 +39,38 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const payload = {
       user: {
         username: user.username,
-        isAdmin: user.isAdmin || false,
-      },
+        isAdmin: user.isAdmin || false
+      }
     };
 
-    jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY }, (err, token) => {
-      if (err) throw err;
-      res.json({
-        success: true,
-        message: t('api.success.login_successful'),
-        token,
-        user: {
-          username: user.username,
-          isAdmin: user.isAdmin,
-          permissions: dataService.getPermissions(user),
-        },
-      });
-    });
+    jwt.sign(
+      payload,
+      JWT_SECRET,
+      { expiresIn: TOKEN_EXPIRY },
+      (err, token) => {
+        if (err) throw err;
+        res.json({ 
+          success: true, 
+          token,
+          user: {
+            username: user.username,
+            isAdmin: user.isAdmin
+          }
+        });
+      }
+    );
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: t('api.errors.server_error'),
-    });
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
 // Register new user
 export const register = async (req: Request, res: Response): Promise<void> => {
-  // Get translation function from request
-  const t = (req as any).t;
-
   // Validate request
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    res.status(400).json({
-      success: false,
-      message: t('api.errors.validation_failed'),
-      errors: errors.array(),
-    });
+    res.status(400).json({ success: false, errors: errors.array() });
     return;
   }
 
@@ -107,7 +79,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     // Create new user
     const newUser = await createUser({ username, password, isAdmin });
-
+    
     if (!newUser) {
       res.status(400).json({ success: false, message: 'User already exists' });
       return;
@@ -117,22 +89,26 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const payload = {
       user: {
         username: newUser.username,
-        isAdmin: newUser.isAdmin || false,
-      },
+        isAdmin: newUser.isAdmin || false
+      }
     };
 
-    jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY }, (err, token) => {
-      if (err) throw err;
-      res.json({
-        success: true,
-        token,
-        user: {
-          username: newUser.username,
-          isAdmin: newUser.isAdmin,
-          permissions: dataService.getPermissions(newUser),
-        },
-      });
-    });
+    jwt.sign(
+      payload,
+      JWT_SECRET,
+      { expiresIn: TOKEN_EXPIRY },
+      (err, token) => {
+        if (err) throw err;
+        res.json({ 
+          success: true, 
+          token,
+          user: {
+            username: newUser.username,
+            isAdmin: newUser.isAdmin
+          }
+        });
+      }
+    );
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -144,14 +120,13 @@ export const getCurrentUser = (req: Request, res: Response): void => {
   try {
     // User is already attached to request by auth middleware
     const user = (req as any).user;
-
-    res.json({
-      success: true,
+    
+    res.json({ 
+      success: true, 
       user: {
         username: user.username,
-        isAdmin: user.isAdmin,
-        permissions: dataService.getPermissions(user),
-      },
+        isAdmin: user.isAdmin
+      }
     });
   } catch (error) {
     console.error('Get current user error:', error);
@@ -174,7 +149,7 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
   try {
     // Find user by username
     const user = findUserByUsername(username);
-
+    
     if (!user) {
       res.status(404).json({ success: false, message: 'User not found' });
       return;
@@ -182,7 +157,7 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
 
     // Verify current password
     const isPasswordValid = await verifyPassword(currentPassword, user.password);
-
+    
     if (!isPasswordValid) {
       res.status(401).json({ success: false, message: 'Current password is incorrect' });
       return;
@@ -190,7 +165,7 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
 
     // Update the password
     const updated = await updateUserPassword(username, newPassword);
-
+    
     if (!updated) {
       res.status(500).json({ success: false, message: 'Failed to update password' });
       return;

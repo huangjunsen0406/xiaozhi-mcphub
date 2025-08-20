@@ -1,7 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { auth } from './auth.js';
-import { userContextMiddleware } from './userContext.js';
-import { i18nMiddleware } from './i18n.js';
 import { initializeDefaultUser } from '../models/User.js';
 import config from '../config/index.js';
 
@@ -19,9 +17,6 @@ export const errorHandler = (
 };
 
 export const initMiddlewares = (app: express.Application): void => {
-  // Apply i18n middleware first to detect language for all requests
-  app.use(i18nMiddleware);
-
   // Serve static files from the dynamically determined frontend path
   // Note: Static files will be handled by the server directly, not here
 
@@ -32,13 +27,7 @@ export const initMiddlewares = (app: express.Application): void => {
     if (
       req.path !== `${basePath}/sse` &&
       !req.path.startsWith(`${basePath}/sse/`) &&
-      req.path !== `${basePath}/messages` &&
-      !req.path.match(
-        new RegExp(`^${basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[^/]+/messages$`),
-      ) &&
-      !req.path.match(
-        new RegExp(`^${basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[^/]+/sse(/.*)?$`),
-      )
+      req.path !== `${basePath}/messages`
     ) {
       express.json()(req, res, next);
     } else {
@@ -53,19 +42,11 @@ export const initMiddlewares = (app: express.Application): void => {
 
   // Protect API routes with authentication middleware, but exclude auth endpoints
   app.use(`${config.basePath}/api`, (req, res, next) => {
-    // Skip authentication for login endpoint
-    if (req.path === '/auth/login') {
+    // Skip authentication for login and register endpoints
+    if (req.path === '/auth/login' || req.path === '/auth/register') {
       next();
     } else {
-      // Apply authentication middleware first
-      auth(req, res, (err) => {
-        if (err) {
-          next(err);
-        } else {
-          // Apply user context middleware after successful authentication
-          userContextMiddleware(req, res, next);
-        }
-      });
+      auth(req, res, next);
     }
   });
 

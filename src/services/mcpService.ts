@@ -1,23 +1,16 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListPromptsRequestSchema,
-  GetPromptRequestSchema,
-  ServerCapabilities,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { ServerInfo, ServerConfig, Tool } from '../types/index.js';
+import { ServerInfo, ServerConfig, ToolInfo } from '../types/index.js';
 import { loadSettings, saveSettings, expandEnvVars, replaceEnvVars } from '../config/index.js';
 import config from '../config/index.js';
 import { getGroup } from './sseService.js';
-import { getServersInGroup, getServerConfigInGroup } from './groupService.js';
+import { getServersInGroup } from './groupService.js';
 import { saveToolsAsVectorEmbeddings, searchToolsByVector } from './vectorSearchService.js';
 import { OpenAPIClient } from '../clients/openapi.js';
-import { getDataService } from './services.js';
 
 const servers: { [sessionId: string]: Server } = {};
 
@@ -55,6 +48,53 @@ const setupKeepAlive = (serverInfo: ServerInfo, serverConfig: ServerConfig): voi
 
 export const initUpstreamServers = async (): Promise<void> => {
   await registerAllTools(true);
+  
+  // 等待所有 MCP 服务器完全初始化
+  const maxWaitTime = 30000; // 最多等待30秒
+  const checkInterval = 1000; // 每1秒检查一次
+  let waited = 0;
+  
+  console.log('等待所有 MCP 服务器完全初始化...');
+  while (waited < maxWaitTime) {
+    const allConnected = serverInfos.every(
+      (server) => server.status === 'connected' || server.status === 'disconnected'
+    );
+    
+    if (allConnected) {
+      const connectedServers = serverInfos.filter(server => server.status === 'connected');
+      const totalTools = connectedServers.reduce((sum, server) => sum + (server.tools?.length || 0), 0);
+      console.log(`所有 MCP 服务器初始化完成！连接的服务器: ${connectedServers.length}, 总工具数: ${totalTools}`);
+      break;
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
+    waited += checkInterval;
+  }
+  
+  if (waited >= maxWaitTime) {
+    console.warn('等待 MCP 服务器初始化超时，继续启动小智客户端');
+  }
+  
+  // 初始化小智客户端服务
+  try {
+    const { xiaozhiClientService } = await import('./xiaozhiClientService.js');
+    if (xiaozhiClientService.isEnabled()) {
+      await xiaozhiClientService.initialize();
+      console.log('小智客户端服务已启动');
+      
+      // 在所有服务器稳定后，立即通知小智工具列表可用
+      try {
+        await xiaozhiClientService.notifyToolsChanged();
+        console.log('已通知小智初始工具列表');
+      } catch (error) {
+        console.error('通知小智初始工具列表失败:', error);
+      }
+    } else {
+      console.log('小智客户端服务未启用');
+    }
+  } catch (error) {
+    console.error('小智客户端服务启动失败:', error);
+  }
 };
 
 export const getMcpServer = (sessionId?: string, group?: string): Server => {
@@ -76,8 +116,44 @@ export const deleteMcpServer = (sessionId: string): void => {
   delete servers[sessionId];
 };
 
-export const notifyToolChanged = async (name?: string) => {
-  await registerAllTools(false, name);
+export const notifyToolChanged = async () => {
+  console.log('工具状态发生变化，开始重新注册所有工具...');
+  await registerAllTools(false);
+  
+  // 等待所有 MCP 服务器状态稳定
+  const maxWaitTime = 15000; // 最多等待15秒
+  const checkInterval = 500; // 每500ms检查一次
+  let waited = 0;
+  
+  console.log('等待所有 MCP 服务器状态稳定...');
+  while (waited < maxWaitTime) {
+    // 检查是否所有服务器都处于稳定状态（connected 或 disconnected）
+    const allStable = serverInfos.every(
+      (server) => server.status === 'connected' || server.status === 'disconnected'
+    );
+    
+    if (allStable) {
+      const connectedServers = serverInfos.filter(server => server.status === 'connected');
+      const totalTools = connectedServers.reduce((sum, server) => sum + (server.tools?.length || 0), 0);
+      console.log(`所有 MCP 服务器状态已稳定！连接的服务器: ${connectedServers.length}, 总工具数: ${totalTools}`);
+      break;
+    }
+    
+    // 显示当前正在连接的服务器
+    const connectingServers = serverInfos.filter(server => server.status === 'connecting');
+    if (connectingServers.length > 0) {
+      console.log(`等待服务器连接中: ${connectingServers.map(s => s.name).join(', ')}`);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
+    waited += checkInterval;
+  }
+  
+  if (waited >= maxWaitTime) {
+    console.warn('等待 MCP 服务器状态稳定超时，继续执行小智重连');
+  }
+
+  // 通知其他MCP客户端工具列表变化
   Object.values(servers).forEach((server) => {
     server
       .sendToolListChanged()
@@ -88,6 +164,35 @@ export const notifyToolChanged = async (name?: string) => {
         console.log('Tool list changed notification sent successfully');
       });
   });
+
+  // 在所有服务器状态稳定后，重连小智客户端
+  try {
+    const { xiaozhiClientService } = await import('./xiaozhiClientService.js');
+    if (xiaozhiClientService.isEnabled()) {
+      console.log('MCP服务器状态已稳定，重连小智客户端以同步最新工具列表...');
+      
+      // 先断开连接
+      await xiaozhiClientService.disconnect();
+      
+      // 等待一小段时间确保断开完成
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // 重新初始化连接
+      await xiaozhiClientService.initialize();
+      
+      // 连接成功后通知工具列表已更新
+      setTimeout(async () => {
+        try {
+          await xiaozhiClientService.notifyToolsChanged();
+          console.log('小智客户端已重连并同步最新工具列表');
+        } catch (error) {
+          console.error('重连后通知小智工具列表失败:', error);
+        }
+      }, 1000);
+    }
+  } catch (error) {
+    console.error('重连小智客户端失败:', error);
+  }
 };
 
 export const syncToolEmbedding = async (serverName: string, toolName: string) => {
@@ -105,49 +210,8 @@ export const syncToolEmbedding = async (serverName: string, toolName: string) =>
   saveToolsAsVectorEmbeddings(serverName, [tool]);
 };
 
-// Helper function to clean $schema field from inputSchema
-const cleanInputSchema = (schema: any): any => {
-  if (!schema || typeof schema !== 'object') {
-    return schema;
-  }
-
-  const cleanedSchema = { ...schema };
-  delete cleanedSchema.$schema;
-
-  return cleanedSchema;
-};
-
 // Store all server information
 let serverInfos: ServerInfo[] = [];
-
-// Returns true if all enabled servers are connected
-export const connected = (): boolean => {
-  return serverInfos
-    .filter((serverInfo) => serverInfo.enabled !== false)
-    .every((serverInfo) => serverInfo.status === 'connected');
-};
-
-// Global cleanup function to close all connections
-export const cleanupAllServers = (): void => {
-  for (const serverInfo of serverInfos) {
-    try {
-      if (serverInfo.client) {
-        serverInfo.client.close();
-      }
-      if (serverInfo.transport) {
-        serverInfo.transport.close();
-      }
-    } catch (error) {
-      console.warn(`Error closing server ${serverInfo.name}:`, error);
-    }
-  }
-  serverInfos = [];
-
-  // Clear session servers as well
-  Object.keys(servers).forEach((sessionId) => {
-    delete servers[sessionId];
-  });
-};
 
 // Helper function to create transport based on server configuration
 const createTransportFromConfig = (name: string, conf: ServerConfig): any => {
@@ -203,7 +267,7 @@ const createTransportFromConfig = (name: string, conf: ServerConfig): any => {
 
     transport = new StdioClientTransport({
       command: conf.command,
-      args: replaceEnvVars(conf.args) as string[],
+      args: conf.args,
       env: env,
       stderr: 'pipe',
     });
@@ -292,7 +356,7 @@ const callToolWithReconnect = async (
             serverInfo.tools = tools.tools.map((tool) => ({
               name: `${serverInfo.name}-${tool.name}`,
               description: tool.description || '',
-              inputSchema: cleanInputSchema(tool.inputSchema || {}),
+              inputSchema: tool.inputSchema || {},
             }));
 
             // Save tools as vector embeddings for search
@@ -331,10 +395,7 @@ const callToolWithReconnect = async (
 };
 
 // Initialize MCP server clients
-export const initializeClientsFromSettings = async (
-  isInit: boolean,
-  serverName?: string,
-): Promise<ServerInfo[]> => {
+export const initializeClientsFromSettings = async (isInit: boolean): Promise<ServerInfo[]> => {
   const settings = loadSettings();
   const existingServerInfos = serverInfos;
   serverInfos = [];
@@ -345,11 +406,9 @@ export const initializeClientsFromSettings = async (
       console.log(`Skipping disabled server: ${name}`);
       serverInfos.push({
         name,
-        owner: conf.owner,
         status: 'disconnected',
         error: null,
         tools: [],
-        prompts: [],
         createTime: Date.now(),
         enabled: false,
       });
@@ -360,7 +419,7 @@ export const initializeClientsFromSettings = async (
     const existingServer = existingServerInfos.find(
       (s) => s.name === name && s.status === 'connected',
     );
-    if (existingServer && (!serverName || serverName !== name)) {
+    if (existingServer) {
       serverInfos.push({
         ...existingServer,
         enabled: conf.enabled === undefined ? true : conf.enabled,
@@ -371,6 +430,7 @@ export const initializeClientsFromSettings = async (
 
     let transport;
     let openApiClient;
+
     if (conf.type === 'openapi') {
       // Handle OpenAPI type servers
       if (!conf.openapi?.url && !conf.openapi?.schema) {
@@ -379,11 +439,9 @@ export const initializeClientsFromSettings = async (
         );
         serverInfos.push({
           name,
-          owner: conf.owner,
           status: 'disconnected',
           error: 'Missing OpenAPI specification URL or schema',
           tools: [],
-          prompts: [],
           createTime: Date.now(),
         });
         continue;
@@ -392,11 +450,9 @@ export const initializeClientsFromSettings = async (
       // Create server info first and keep reference to it
       const serverInfo: ServerInfo = {
         name,
-        owner: conf.owner,
         status: 'connecting',
         error: null,
         tools: [],
-        prompts: [],
         createTime: Date.now(),
         enabled: conf.enabled === undefined ? true : conf.enabled,
       };
@@ -413,10 +469,10 @@ export const initializeClientsFromSettings = async (
 
         // Convert OpenAPI tools to MCP tool format
         const openApiTools = openApiClient.getTools();
-        const mcpTools: Tool[] = openApiTools.map((tool) => ({
+        const mcpTools: ToolInfo[] = openApiTools.map((tool) => ({
           name: `${name}-${tool.name}`,
           description: tool.description,
-          inputSchema: cleanInputSchema(tool.inputSchema),
+          inputSchema: tool.inputSchema,
         }));
 
         // Update server info with successful initialization
@@ -474,11 +530,9 @@ export const initializeClientsFromSettings = async (
     // Create server info first and keep reference to it
     const serverInfo: ServerInfo = {
       name,
-      owner: conf.owner,
       status: 'connecting',
       error: null,
       tools: [],
-      prompts: [],
       client,
       transport,
       options: requestOptions,
@@ -490,63 +544,32 @@ export const initializeClientsFromSettings = async (
       .connect(transport, initRequestOptions || requestOptions)
       .then(() => {
         console.log(`Successfully connected client for server: ${name}`);
-        const capabilities: ServerCapabilities | undefined = client.getServerCapabilities();
-        console.log(`Server capabilities: ${JSON.stringify(capabilities)}`);
+        client
+          .listTools({}, initRequestOptions || requestOptions)
+          .then((tools) => {
+            console.log(`Successfully listed ${tools.tools.length} tools for server: ${name}`);
 
-        let dataError: Error | null = null;
-        if (capabilities?.tools) {
-          client
-            .listTools({}, initRequestOptions || requestOptions)
-            .then((tools) => {
-              console.log(`Successfully listed ${tools.tools.length} tools for server: ${name}`);
-              serverInfo.tools = tools.tools.map((tool) => ({
-                name: `${name}-${tool.name}`,
-                description: tool.description || '',
-                inputSchema: cleanInputSchema(tool.inputSchema || {}),
-              }));
-              // Save tools as vector embeddings for search
-              saveToolsAsVectorEmbeddings(name, serverInfo.tools);
-            })
-            .catch((error) => {
-              console.error(
-                `Failed to list tools for server ${name} by error: ${error} with stack: ${error.stack}`,
-              );
-              dataError = error;
-            });
-        }
+            serverInfo.tools = tools.tools.map((tool) => ({
+              name: `${name}-${tool.name}`,
+              description: tool.description || '',
+              inputSchema: tool.inputSchema || {},
+            }));
+            serverInfo.status = 'connected';
+            serverInfo.error = null;
 
-        if (capabilities?.prompts) {
-          client
-            .listPrompts({}, initRequestOptions || requestOptions)
-            .then((prompts) => {
-              console.log(
-                `Successfully listed ${prompts.prompts.length} prompts for server: ${name}`,
-              );
-              serverInfo.prompts = prompts.prompts.map((prompt) => ({
-                name: `${name}-${prompt.name}`,
-                title: prompt.title,
-                description: prompt.description,
-                arguments: prompt.arguments,
-              }));
-            })
-            .catch((error) => {
-              console.error(
-                `Failed to list prompts for server ${name} by error: ${error} with stack: ${error.stack}`,
-              );
-              dataError = error;
-            });
-        }
+            // Set up keep-alive ping for SSE connections
+            setupKeepAlive(serverInfo, conf);
 
-        if (!dataError) {
-          serverInfo.status = 'connected';
-          serverInfo.error = null;
-
-          // Set up keep-alive ping for SSE connections
-          setupKeepAlive(serverInfo, conf);
-        } else {
-          serverInfo.status = 'disconnected';
-          serverInfo.error = `Failed to list data: ${dataError} `;
-        }
+            // Save tools as vector embeddings for search
+            saveToolsAsVectorEmbeddings(name, serverInfo.tools);
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to list tools for server ${name} by error: ${error} with stack: ${error.stack}`,
+            );
+            serverInfo.status = 'disconnected';
+            serverInfo.error = `Failed to list tools: ${error.stack} `;
+          });
       })
       .catch((error) => {
         console.error(
@@ -562,18 +585,14 @@ export const initializeClientsFromSettings = async (
 };
 
 // Register all MCP tools
-export const registerAllTools = async (isInit: boolean, serverName?: string): Promise<void> => {
-  await initializeClientsFromSettings(isInit, serverName);
+export const registerAllTools = async (isInit: boolean): Promise<void> => {
+  await initializeClientsFromSettings(isInit);
 };
 
 // Get all server information
 export const getServersInfo = (): Omit<ServerInfo, 'client' | 'transport'>[] => {
   const settings = loadSettings();
-  const dataService = getDataService();
-  const filterServerInfos: ServerInfo[] = dataService.filterData
-    ? dataService.filterData(serverInfos)
-    : serverInfos;
-  const infos = filterServerInfos.map(({ name, status, tools, prompts, createTime, error }) => {
+  const infos = serverInfos.map(({ name, status, tools, createTime, error }) => {
     const serverConfig = settings.mcpServers[name];
     const enabled = serverConfig ? serverConfig.enabled !== false : true;
 
@@ -587,21 +606,11 @@ export const getServersInfo = (): Omit<ServerInfo, 'client' | 'transport'>[] => 
       };
     });
 
-    const promptsWithEnabled = prompts.map((prompt) => {
-      const promptConfig = serverConfig?.prompts?.[prompt.name];
-      return {
-        ...prompt,
-        description: promptConfig?.description || prompt.description, // Use custom description if available
-        enabled: promptConfig?.enabled !== false, // Default to true if not explicitly disabled
-      };
-    });
-
     return {
       name,
       status,
       error,
       tools: toolsWithEnabled,
-      prompts: promptsWithEnabled,
       createTime,
       enabled,
     };
@@ -619,7 +628,7 @@ const getServerByName = (name: string): ServerInfo | undefined => {
 };
 
 // Filter tools by server configuration
-const filterToolsByConfig = (serverName: string, tools: Tool[]): Tool[] => {
+const filterToolsByConfig = (serverName: string, tools: ToolInfo[]): ToolInfo[] => {
   const settings = loadSettings();
   const serverConfig = settings.mcpServers[serverName];
 
@@ -807,8 +816,9 @@ export const toggleServerStatus = async (
 
 export const handleListToolsRequest = async (_: any, extra: any) => {
   const sessionId = extra.sessionId || '';
-  const group = getGroup(sessionId);
-  console.log(`Handling ListToolsRequest for group: ${group}`);
+  // 首先尝试从extra参数获取group，如果没有再从sessionId查找
+  const group = extra.group || getGroup(sessionId);
+  console.log(`Handling ListToolsRequest for group: ${group}, sessionId: ${sessionId}`);
 
   // Special handling for $smart group to return special tools
   if (group === '$smart') {
@@ -877,35 +887,21 @@ Available servers: ${serversList}`;
     };
   }
 
-  const allServerInfos = getDataService()
-    .filterData(serverInfos)
-    .filter((serverInfo) => {
-      if (serverInfo.enabled === false) return false;
-      if (!group) return true;
-      const serversInGroup = getServersInGroup(group);
-      if (!serversInGroup || serversInGroup.length === 0) return serverInfo.name === group;
-      return serversInGroup.includes(serverInfo.name);
-    });
+  const allServerInfos = serverInfos.filter((serverInfo) => {
+    if (serverInfo.enabled === false) return false;
+    if (!group) return true;
+    const serversInGroup = getServersInGroup(group);
+    if (!serversInGroup || serversInGroup.length === 0) return serverInfo.name === group;
+    return serversInGroup.includes(serverInfo.name);
+  });
 
   const allTools = [];
   for (const serverInfo of allServerInfos) {
     if (serverInfo.tools && serverInfo.tools.length > 0) {
-      // Filter tools based on server configuration
-      let enabledTools = filterToolsByConfig(serverInfo.name, serverInfo.tools);
+      // Filter tools based on server configuration and apply custom descriptions
+      const enabledTools = filterToolsByConfig(serverInfo.name, serverInfo.tools);
 
-      // If this is a group request, apply group-level tool filtering
-      if (group) {
-        const serverConfig = getServerConfigInGroup(group, serverInfo.name);
-        if (serverConfig && serverConfig.tools !== 'all' && Array.isArray(serverConfig.tools)) {
-          // Filter tools based on group configuration
-          const allowedToolNames = serverConfig.tools.map(
-            (toolName) => `${serverInfo.name}-${toolName}`,
-          );
-          enabledTools = enabledTools.filter((tool) => allowedToolNames.includes(tool.name));
-        }
-      }
-
-      // Apply custom descriptions from server configuration
+      // Apply custom descriptions from configuration
       const settings = loadSettings();
       const serverConfig = settings.mcpServers[serverInfo.name];
       const toolsWithCustomDescriptions = enabledTools.map((tool) => {
@@ -991,7 +987,7 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
           return {
             name: result.toolName,
             description: result.description || '',
-            inputSchema: cleanInputSchema(result.inputSchema || {}),
+            inputSchema: result.inputSchema || {},
           };
         })
         .filter((tool) => {
@@ -999,7 +995,7 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
           if (tool.name) {
             const serverName = searchResults.find((r) => r.toolName === tool.name)?.serverName;
             if (serverName) {
-              const enabledTools = filterToolsByConfig(serverName, [tool as Tool]);
+              const enabledTools = filterToolsByConfig(serverName, [tool as ToolInfo]);
               return enabledTools.length > 0;
             }
           }
@@ -1190,119 +1186,6 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
   }
 };
 
-export const handleGetPromptRequest = async (request: any, extra: any) => {
-  try {
-    const { name, arguments: promptArgs } = request.params;
-    let server: ServerInfo | undefined;
-    if (extra && extra.server) {
-      server = getServerByName(extra.server);
-    } else {
-      // Find the first server that has this tool
-      server = serverInfos.find(
-        (serverInfo) =>
-          serverInfo.status === 'connected' &&
-          serverInfo.enabled !== false &&
-          serverInfo.prompts.find((prompt) => prompt.name === name),
-      );
-    }
-    if (!server) {
-      throw new Error(`Server not found: ${name}`);
-    }
-
-    // Remove server prefix from prompt name if present
-    const cleanPromptName = name.startsWith(`${server.name}-`)
-      ? name.replace(`${server.name}-`, '')
-      : name;
-
-    const promptParams = {
-      name: cleanPromptName || '',
-      arguments: promptArgs,
-    };
-    // Log the final promptParams
-    console.log(`Calling getPrompt with params: ${JSON.stringify(promptParams)}`);
-    const prompt = await server.client?.getPrompt(promptParams);
-    console.log(`Received prompt: ${JSON.stringify(prompt)}`);
-    if (!prompt) {
-      throw new Error(`Prompt not found: ${cleanPromptName}`);
-    }
-
-    return prompt;
-  } catch (error) {
-    console.error(`Error handling GetPromptRequest: ${error}`);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Error: ${error}`,
-        },
-      ],
-      isError: true,
-    };
-  }
-};
-
-export const handleListPromptsRequest = async (_: any, extra: any) => {
-  const sessionId = extra.sessionId || '';
-  const group = getGroup(sessionId);
-  console.log(`Handling ListPromptsRequest for group: ${group}`);
-
-  const allServerInfos = getDataService()
-    .filterData(serverInfos)
-    .filter((serverInfo) => {
-      if (serverInfo.enabled === false) return false;
-      if (!group) return true;
-      const serversInGroup = getServersInGroup(group);
-      if (!serversInGroup || serversInGroup.length === 0) return serverInfo.name === group;
-      return serversInGroup.includes(serverInfo.name);
-    });
-
-  const allPrompts: any[] = [];
-  for (const serverInfo of allServerInfos) {
-    if (serverInfo.prompts && serverInfo.prompts.length > 0) {
-      // Filter prompts based on server configuration
-      const settings = loadSettings();
-      const serverConfig = settings.mcpServers[serverInfo.name];
-
-      let enabledPrompts = serverInfo.prompts;
-      if (serverConfig && serverConfig.prompts) {
-        enabledPrompts = serverInfo.prompts.filter((prompt: any) => {
-          const promptConfig = serverConfig.prompts?.[prompt.name];
-          // If prompt is not in config, it's enabled by default
-          return promptConfig?.enabled !== false;
-        });
-      }
-
-      // If this is a group request, apply group-level prompt filtering
-      if (group) {
-        const serverConfigInGroup = getServerConfigInGroup(group, serverInfo.name);
-        if (
-          serverConfigInGroup &&
-          serverConfigInGroup.tools !== 'all' &&
-          Array.isArray(serverConfigInGroup.tools)
-        ) {
-          // Note: Group config uses 'tools' field but we're filtering prompts here
-          // This might be a design decision to control access at the server level
-        }
-      }
-
-      // Apply custom descriptions from server configuration
-      const promptsWithCustomDescriptions = enabledPrompts.map((prompt: any) => {
-        const promptConfig = serverConfig?.prompts?.[prompt.name];
-        return {
-          ...prompt,
-          description: promptConfig?.description || prompt.description, // Use custom description if available
-        };
-      });
-
-      allPrompts.push(...promptsWithCustomDescriptions);
-    }
-  }
-
-  return {
-    prompts: allPrompts,
-  };
-};
-
 // Create McpServer instance
 export const createMcpServer = (name: string, version: string, group?: string): Server => {
   // Determine server name based on routing type
@@ -1321,13 +1204,8 @@ export const createMcpServer = (name: string, version: string, group?: string): 
   }
   // If no group, use default name (global routing)
 
-  const server = new Server(
-    { name: serverName, version },
-    { capabilities: { tools: {}, prompts: {}, resources: {} } },
-  );
+  const server = new Server({ name: serverName, version }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, handleListToolsRequest);
   server.setRequestHandler(CallToolRequestSchema, handleCallToolRequest);
-  server.setRequestHandler(GetPromptRequestSchema, handleGetPromptRequest);
-  server.setRequestHandler(ListPromptsRequestSchema, handleListPromptsRequest);
   return server;
 };

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Group, ApiResponse, IGroupServerConfig } from '@/types';
-import { apiGet, apiPost, apiPut, apiDelete } from '../utils/fetchInterceptor';
+import { Group, ApiResponse } from '@/types';
+import { getApiUrl } from '../utils/runtime';
 
 export const useGroupData = () => {
   const { t } = useTranslation();
@@ -13,7 +13,18 @@ export const useGroupData = () => {
   const fetchGroups = useCallback(async () => {
     try {
       setLoading(true);
-      const data: ApiResponse<Group[]> = await apiGet('/groups');
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl('/groups'), {
+        headers: {
+          'x-auth-token': token || '',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Status: ${response.status}`);
+      }
+
+      const data: ApiResponse<Group[]> = await response.json();
 
       if (data && data.success && Array.isArray(data.data)) {
         setGroups(data.data);
@@ -38,22 +49,27 @@ export const useGroupData = () => {
   }, []);
 
   // Create a new group with server associations
-  const createGroup = async (
-    name: string,
-    description?: string,
-    servers: string[] | IGroupServerConfig[] = [],
-  ) => {
+  const createGroup = async (name: string, description?: string, servers: string[] = []) => {
     try {
-      const result: ApiResponse<Group> = await apiPost('/groups', { name, description, servers });
-      console.log('Group created successfully:', result);
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl('/groups'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token || '',
+        },
+        body: JSON.stringify({ name, description, servers }),
+      });
 
-      if (!result || !result.success) {
-        setError(result?.message || t('groups.createError'));
-        return result;
+      const result: ApiResponse<Group> = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || t('groups.createError'));
+        return null;
       }
 
       triggerRefresh();
-      return result || null;
+      return result.data || null;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create group');
       return null;
@@ -63,17 +79,28 @@ export const useGroupData = () => {
   // Update an existing group with server associations
   const updateGroup = async (
     id: string,
-    data: { name?: string; description?: string; servers?: string[] | IGroupServerConfig[] },
+    data: { name?: string; description?: string; servers?: string[] },
   ) => {
     try {
-      const result: ApiResponse<Group> = await apiPut(`/groups/${id}`, data);
-      if (!result || !result.success) {
-        setError(result?.message || t('groups.updateError'));
-        return result;
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl(`/groups/${id}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token || '',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const result: ApiResponse<Group> = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || t('groups.updateError'));
+        return null;
       }
 
       triggerRefresh();
-      return result || null;
+      return result.data || null;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update group');
       return null;
@@ -81,14 +108,22 @@ export const useGroupData = () => {
   };
 
   // Update servers in a group (for batch updates)
-  const updateGroupServers = async (groupId: string, servers: string[] | IGroupServerConfig[]) => {
+  const updateGroupServers = async (groupId: string, servers: string[]) => {
     try {
-      const result: ApiResponse<Group> = await apiPut(`/groups/${groupId}/servers/batch`, {
-        servers,
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl(`/groups/${groupId}/servers/batch`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token || '',
+        },
+        body: JSON.stringify({ servers }),
       });
 
-      if (!result || !result.success) {
-        setError(result?.message || t('groups.updateError'));
+      const result: ApiResponse<Group> = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || t('groups.updateError'));
         return null;
       }
 
@@ -103,29 +138,46 @@ export const useGroupData = () => {
   // Delete a group
   const deleteGroup = async (id: string) => {
     try {
-      const result = await apiDelete(`/groups/${id}`);
-      if (!result || !result.success) {
-        setError(result?.message || t('groups.deleteError'));
-        return result;
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl(`/groups/${id}`), {
+        method: 'DELETE',
+        headers: {
+          'x-auth-token': token || '',
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || t('groups.deleteError'));
+        return false;
       }
 
       triggerRefresh();
-      return result;
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete group');
-      return null;
+      return false;
     }
   };
 
   // Add server to a group
   const addServerToGroup = async (groupId: string, serverName: string) => {
     try {
-      const result: ApiResponse<Group> = await apiPost(`/groups/${groupId}/servers`, {
-        serverName,
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl(`/groups/${groupId}/servers`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token || '',
+        },
+        body: JSON.stringify({ serverName }),
       });
 
-      if (!result || !result.success) {
-        setError(result?.message || t('groups.serverAddError'));
+      const result: ApiResponse<Group> = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || t('groups.serverAddError'));
         return null;
       }
 
@@ -140,12 +192,18 @@ export const useGroupData = () => {
   // Remove server from group
   const removeServerFromGroup = async (groupId: string, serverName: string) => {
     try {
-      const result: ApiResponse<Group> = await apiDelete(
-        `/groups/${groupId}/servers/${serverName}`,
-      );
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl(`/groups/${groupId}/servers/${serverName}`), {
+        method: 'DELETE',
+        headers: {
+          'x-auth-token': token || '',
+        },
+      });
 
-      if (!result || !result.success) {
-        setError(result?.message || t('groups.serverRemoveError'));
+      const result: ApiResponse<Group> = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || t('groups.serverRemoveError'));
         return null;
       }
 

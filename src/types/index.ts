@@ -17,14 +17,7 @@ export interface IGroup {
   id: string; // Unique UUID for the group
   name: string; // Display name of the group
   description?: string; // Optional description of the group
-  servers: string[] | IGroupServerConfig[]; // Array of server names or server configurations that belong to this group
-  owner?: string; // Owner of the group, defaults to 'admin' user
-}
-
-// Server configuration within a group - supports tool selection
-export interface IGroupServerConfig {
-  name: string; // Server name
-  tools?: string[] | 'all'; // Array of specific tool names to include, or 'all' for all tools (default: 'all')
+  servers: string[]; // Array of server names that belong to this group
 }
 
 // Market server types
@@ -81,77 +74,15 @@ export interface MarketServer {
   is_official?: boolean;
 }
 
-// Cloud Market Server types (for MCPRouter API)
-export interface CloudServer {
-  created_at: string;
-  updated_at: string;
-  name: string;
-  author_name: string;
-  title: string;
-  description: string;
-  content: string;
-  server_key: string;
-  config_name: string;
-  tools?: CloudTool[];
-}
-
-export interface CloudTool {
-  name: string;
-  description: string;
-  inputSchema: Record<string, any>;
-}
-
-// MCPRouter API Response types
-export interface MCPRouterResponse<T = any> {
-  code: number;
-  message: string;
-  data: T;
-}
-
-export interface MCPRouterListServersResponse {
-  servers: CloudServer[];
-}
-
-export interface MCPRouterListToolsResponse {
-  tools: CloudTool[];
-}
-
-export interface MCPRouterCallToolResponse {
-  content: Array<{
-    type: string;
-    text: string;
-  }>;
-  isError: boolean;
-}
-
-export interface SystemConfig {
-  routing?: {
-    enableGlobalRoute?: boolean; // Controls whether the /sse endpoint without group is enabled
-    enableGroupNameRoute?: boolean; // Controls whether group routing by name is allowed
-    enableBearerAuth?: boolean; // Controls whether bearer auth is enabled for group routes
-    bearerAuthKey?: string; // The bearer auth key to validate against
-    skipAuth?: boolean; // Controls whether authentication is required for frontend and API access
-  };
-  install?: {
-    pythonIndexUrl?: string; // Python package repository URL (UV_DEFAULT_INDEX)
-    npmRegistry?: string; // NPM registry URL (npm_config_registry)
-    baseUrl?: string; // Base URL for group card copy operations
-  };
-  smartRouting?: SmartRoutingConfig;
-  mcpRouter?: {
-    apiKey?: string; // MCPRouter API key for authentication
-    referer?: string; // Referer header for MCPRouter API requests
-    title?: string; // Title header for MCPRouter API requests
-    baseUrl?: string; // Base URL for MCPRouter API (default: https://api.mcprouter.to/v1)
-  };
-}
-
-export interface UserConfig {
-  routing?: {
-    enableGlobalRoute?: boolean; // Controls whether the /sse endpoint without group is enabled
-    enableGroupNameRoute?: boolean; // Controls whether group routing by name is allowed
-    enableBearerAuth?: boolean; // Controls whether bearer auth is enabled for group routes
-    bearerAuthKey?: string; // The bearer auth key to validate against
+// 小智客户端配置
+export interface XiaozhiConfig {
+  enabled: boolean;
+  webSocketUrl: string; // 完整的 WebSocket URL (包含token)
+  reconnect?: {
+    maxAttempts?: number;
+    initialDelay?: number;
+    maxDelay?: number;
+    backoffMultiplier?: number;
   };
 }
 
@@ -162,8 +93,22 @@ export interface McpSettings {
     [key: string]: ServerConfig; // Key-value pairs of server names and their configurations
   };
   groups?: IGroup[]; // Array of server groups
-  systemConfig?: SystemConfig; // System-wide configuration settings
-  userConfigs?: Record<string, UserConfig>; // User-specific configurations
+  xiaozhi?: XiaozhiConfig; // 小智客户端配置
+  systemConfig?: {
+    routing?: {
+      enableGlobalRoute?: boolean; // Controls whether the /sse endpoint without group is enabled
+      enableGroupNameRoute?: boolean; // Controls whether group routing by name is allowed
+      enableBearerAuth?: boolean; // Controls whether bearer auth is enabled for group routes
+      bearerAuthKey?: string; // The bearer auth key to validate against
+      skipAuth?: boolean; // Controls whether authentication is required for frontend and API access
+    };
+    install?: {
+      pythonIndexUrl?: string; // Python package repository URL (UV_DEFAULT_INDEX)
+      npmRegistry?: string; // NPM registry URL (npm_config_registry)
+    };
+    smartRouting?: SmartRoutingConfig;
+    // Add other system configuration sections here in the future
+  };
 }
 
 // Configuration details for an individual server
@@ -175,10 +120,8 @@ export interface ServerConfig {
   env?: Record<string, string>; // Environment variables
   headers?: Record<string, string>; // HTTP headers for SSE/streamable-http/openapi servers
   enabled?: boolean; // Flag to enable/disable the server
-  owner?: string; // Owner of the server, defaults to 'admin' user
   keepAliveInterval?: number; // Keep-alive ping interval in milliseconds (default: 60000ms for SSE servers)
   tools?: Record<string, { enabled: boolean; description?: string }>; // Tool-specific configurations with enable/disable state and custom descriptions
-  prompts?: Record<string, { enabled: boolean; description?: string }>; // Prompt-specific configurations with enable/disable state and custom descriptions
   options?: Partial<Pick<RequestOptions, 'timeout' | 'resetTimeoutOnProgress' | 'maxTotalTimeout'>>; // MCP request options configuration
   // OpenAPI specific configuration
   openapi?: {
@@ -224,11 +167,9 @@ export interface OpenAPISecurityConfig {
 // Information about a server's status and tools
 export interface ServerInfo {
   name: string; // Unique name of the server
-  owner?: string; // Owner of the server, defaults to 'admin' user
   status: 'connected' | 'connecting' | 'disconnected'; // Current connection status
   error: string | null; // Error message if any
-  tools: Tool[]; // List of tools available on the server
-  prompts: Prompt[]; // List of prompts available on the server
+  tools: ToolInfo[]; // List of tools available on the server
   client?: Client; // Client instance for communication (MCP clients)
   transport?: SSEClientTransport | StdioClientTransport | StreamableHTTPClientTransport; // Transport mechanism used
   openApiClient?: any; // OpenAPI client instance for openapi type servers
@@ -239,25 +180,11 @@ export interface ServerInfo {
 }
 
 // Details about a tool available on the server
-export interface Tool {
+export interface ToolInfo {
   name: string; // Name of the tool
   description: string; // Brief description of the tool
   inputSchema: Record<string, unknown>; // Input schema for the tool
   enabled?: boolean; // Whether the tool is enabled (optional, defaults to true)
-}
-
-export interface Prompt {
-  name: string; // Name of the prompt
-  title?: string; // Title of the prompt
-  description?: string; // Brief description of the prompt
-  arguments?: PromptArgument[]; // Input schema for the prompt
-}
-
-export interface PromptArgument {
-  name: string; // Name of the argument
-  title?: string; // Title of the argument
-  description?: string; // Brief description of the argument
-  required?: boolean; // Whether the argument is required
 }
 
 // Standardized API response structure

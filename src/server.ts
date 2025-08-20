@@ -1,11 +1,11 @@
 import express from 'express';
 import config from './config/index.js';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { initUpstreamServers, connected } from './services/mcpService.js';
+import { initUpstreamServers } from './services/mcpService.js';
 import { initMiddlewares } from './middlewares/index.js';
 import { initRoutes } from './routes/index.js';
-import { initI18n } from './utils/i18n.js';
 import {
   handleSseConnection,
   handleSseMessage,
@@ -13,10 +13,10 @@ import {
   handleMcpOtherRequest,
 } from './services/sseService.js';
 import { initializeDefaultUser } from './models/User.js';
-import { sseUserContextMiddleware } from './middlewares/userContext.js';
 
-// Get the current working directory (will be project root in most cases)
-const currentFileDir = process.cwd() + '/src';
+// Get the directory name in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class AppServer {
   private app: express.Application;
@@ -32,10 +32,6 @@ export class AppServer {
 
   async initialize(): Promise<void> {
     try {
-      // Initialize i18n before other components
-      await initI18n();
-      console.log('i18n initialized successfully');
-
       // Initialize default admin user if no users exist
       await initializeDefaultUser();
 
@@ -46,52 +42,11 @@ export class AppServer {
       initUpstreamServers()
         .then(() => {
           console.log('MCP server initialized successfully');
-
-          // Original routes (global and group-based)
-          this.app.get(`${this.basePath}/sse/:group?`, sseUserContextMiddleware, (req, res) =>
-            handleSseConnection(req, res),
-          );
-          this.app.post(`${this.basePath}/messages`, sseUserContextMiddleware, handleSseMessage);
-          this.app.post(
-            `${this.basePath}/mcp/:group?`,
-            sseUserContextMiddleware,
-            handleMcpPostRequest,
-          );
-          this.app.get(
-            `${this.basePath}/mcp/:group?`,
-            sseUserContextMiddleware,
-            handleMcpOtherRequest,
-          );
-          this.app.delete(
-            `${this.basePath}/mcp/:group?`,
-            sseUserContextMiddleware,
-            handleMcpOtherRequest,
-          );
-
-          // User-scoped routes with user context middleware
-          this.app.get(`${this.basePath}/:user/sse/:group?`, sseUserContextMiddleware, (req, res) =>
-            handleSseConnection(req, res),
-          );
-          this.app.post(
-            `${this.basePath}/:user/messages`,
-            sseUserContextMiddleware,
-            handleSseMessage,
-          );
-          this.app.post(
-            `${this.basePath}/:user/mcp/:group?`,
-            sseUserContextMiddleware,
-            handleMcpPostRequest,
-          );
-          this.app.get(
-            `${this.basePath}/:user/mcp/:group?`,
-            sseUserContextMiddleware,
-            handleMcpOtherRequest,
-          );
-          this.app.delete(
-            `${this.basePath}/:user/mcp/:group?`,
-            sseUserContextMiddleware,
-            handleMcpOtherRequest,
-          );
+          this.app.get(`${this.basePath}/sse/:group?`, (req, res) => handleSseConnection(req, res));
+          this.app.post(`${this.basePath}/messages`, handleSseMessage);
+          this.app.post(`${this.basePath}/mcp/:group?`, handleMcpPostRequest);
+          this.app.get(`${this.basePath}/mcp/:group?`, handleMcpOtherRequest);
+          this.app.delete(`${this.basePath}/mcp/:group?`, handleMcpOtherRequest);
         })
         .catch((error) => {
           console.error('Error initializing MCP server:', error);
@@ -135,7 +90,7 @@ export class AppServer {
       this.app.get(rootPath, (_req, res) => {
         res
           .status(404)
-          .send('Frontend not found. MCPHub API is running, but the UI is not available.');
+          .send('Frontend not found. xiaozhi-mcphub API is running, but the UI is not available.');
       });
     }
   }
@@ -144,17 +99,14 @@ export class AppServer {
     this.app.listen(this.port, () => {
       console.log(`Server is running on port ${this.port}`);
       if (this.frontendPath) {
-        console.log(`Open http://localhost:${this.port} in your browser to access MCPHub UI`);
+        console.log(`Open http://localhost:${this.port} in your browser to access xiaozhi-mcphub UI`);
       } else {
         console.log(
-          `MCPHub API is running on http://localhost:${this.port}, but the UI is not available`,
+          `xiaozhi-mcphub API is running on http://localhost:${this.port}, but the UI is not available`,
         );
+        console.log('Run `pnpm frontend:build` to build the UI');
       }
     });
-  }
-
-  connected(): boolean {
-    return connected();
   }
 
   getApp(): express.Application {
@@ -168,7 +120,7 @@ export class AppServer {
 
     if (debug) {
       console.log('DEBUG: Current directory:', process.cwd());
-      console.log('DEBUG: Script directory:', currentFileDir);
+      console.log('DEBUG: Script directory:', __dirname);
     }
 
     // First, find the package root directory
@@ -208,13 +160,13 @@ export class AppServer {
     // Possible locations for package.json
     const possibleRoots = [
       // Standard npm package location
-      path.resolve(currentFileDir, '..', '..'),
+      path.resolve(__dirname, '..', '..'),
       // Current working directory
       process.cwd(),
       // When running from dist directory
-      path.resolve(currentFileDir, '..'),
+      path.resolve(__dirname, '..'),
       // When installed via npx
-      path.resolve(currentFileDir, '..', '..', '..'),
+      path.resolve(__dirname, '..', '..', '..'),
     ];
 
     // Special handling for npx
@@ -232,7 +184,7 @@ export class AppServer {
       if (fs.existsSync(packageJsonPath)) {
         try {
           const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-          if (pkg.name === 'mcphub' || pkg.name === '@samanhappy/mcphub') {
+          if (pkg.name === 'xiaozhi-mcphub' || pkg.name === '@huangjunsen0406/xiaozhi-mcphub') {
             if (debug) {
               console.log(`DEBUG: Found package.json at ${packageJsonPath}`);
             }

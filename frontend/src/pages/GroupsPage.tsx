@@ -32,9 +32,9 @@ const GroupsPage: React.FC = () => {
   };
 
   const handleDeleteGroup = async (groupId: string) => {
-    const result = await deleteGroup(groupId);
-    if (!result || !result.success) {
-      setGroupError(result?.message || t('groups.deleteError'));
+    const success = await deleteGroup(groupId);
+    if (!success) {
+      setGroupError(t('groups.deleteError'));
     }
   };
 

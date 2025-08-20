@@ -4,8 +4,6 @@ import App from './App';
 import './index.css';
 // Import the i18n configuration
 import './i18n';
-// Setup fetch interceptors
-import './utils/setupInterceptors';
 import { loadRuntimeConfig } from './utils/runtime';
 
 // Load runtime configuration before starting the app
@@ -32,7 +30,7 @@ async function initializeApp() {
     window.__MCPHUB_CONFIG__ = {
       basePath: '',
       version: 'dev',
-      name: 'mcphub',
+      name: 'xiaozhi-mcphub',
     };
 
     ReactDOM.createRoot(document.getElementById('root')!).render(

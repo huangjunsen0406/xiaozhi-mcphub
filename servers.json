@@ -49025,7 +49025,7 @@
       "STRIPE_SECRET_KEY": {
         "description": "Your Stripe secret API key required for authenticating requests to the Stripe API.",
         "required": true,
-        "example": "sk_test_4eC39HqLyjWDarjtT1zdp7dc"
+        "example": "YOUR_STRIPE_API_KEY"
       }
     },
     "tools": [
@@ -74609,7 +74609,7 @@
       "DESCOPE_MANAGEMENT_KEY": {
         "description": "Your Descope Management Key",
         "required": true,
-        "example": "sk_test_4eC39HqLyjEDERyCzKZQz9fgo"
+        "example": "YOUR_STRIPE_API_KEY"
       }
     }
   },
