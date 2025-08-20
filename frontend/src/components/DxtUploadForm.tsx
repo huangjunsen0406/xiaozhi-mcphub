@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { apiPost, apiGet, apiPut, fetchWithInterceptors } from '@/utils/fetchInterceptor';
 import { getApiUrl } from '@/utils/runtime';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 
@@ -82,8 +81,12 @@ const DxtUploadForm: React.FC<DxtUploadFormProps> = ({ onSuccess, onCancel }) =>
       const formData = new FormData();
       formData.append('dxtFile', selectedFile);
 
-      const response = await fetchWithInterceptors(getApiUrl('/dxt/upload'), {
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl('/dxt/upload'), {
         method: 'POST',
+        headers: {
+          'x-auth-token': token || '',
+        },
         body: formData,
       });
 
@@ -116,11 +119,19 @@ const DxtUploadForm: React.FC<DxtUploadFormProps> = ({ onSuccess, onCancel }) =>
       // Convert DXT manifest to MCPHub stdio server configuration
       const serverConfig = convertDxtToMcpConfig(manifestData, extractDir, serverName);
 
+      const token = localStorage.getItem('mcphub_token');
+
       // First, check if server exists
       if (!forceOverride) {
-        const checkResult = await apiGet('/servers');
+        const checkResponse = await fetch(getApiUrl('/servers'), {
+          method: 'GET',
+          headers: {
+            'x-auth-token': token || '',
+          },
+        });
 
-        if (checkResult.success) {
+        if (checkResponse.ok) {
+          const checkResult = await checkResponse.json();
           const existingServer = checkResult.data?.find((server: any) => server.name === serverName);
 
           if (existingServer) {
@@ -134,17 +145,25 @@ const DxtUploadForm: React.FC<DxtUploadFormProps> = ({ onSuccess, onCancel }) =>
       }
 
       // Install or override the server
-      let result;
-      if (forceOverride) {
-        result = await apiPut(`/servers/${encodeURIComponent(serverName)}`, {
+      const method = forceOverride ? 'PUT' : 'POST';
+      const url = forceOverride ? getApiUrl(`/servers/${encodeURIComponent(serverName)}`) : getApiUrl('/servers');
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token || '',
+        },
+        body: JSON.stringify({
           name: serverName,
           config: serverConfig,
-        });
-      } else {
-        result = await apiPost('/servers', {
-          name: serverName,
-          config: serverConfig,
-        });
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || `HTTP error! Status: ${response.status}`);
       }
 
       if (result.success) {

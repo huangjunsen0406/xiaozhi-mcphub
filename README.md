@@ -1,32 +1,58 @@
-# MCPHub: The Unified Hub for Model Context Protocol (MCP) Servers
+# xiaozhi-mcphub: Intelligent MCP Tool Bridge for Xiaozhi AI Platform
 
-English | [中文版](README.zh.md)
+[English] | [中文版](README.zh.md)
 
-MCPHub makes it easy to manage and scale multiple MCP (Model Context Protocol) servers by organizing them into flexible Streamable HTTP (SSE) endpoints—supporting access to all servers, individual servers, or logical server groups.
+**xiaozhi-mcphub** is an intelligent MCP (Model Context Protocol) tool bridge that seamlessly connects Xiaozhi AI platform with powerful tool ecosystems. Built upon the excellent [MCPHub](https://github.com/samanhappy/mcphub) foundation, xiaozhi-mcphub adds enhanced Xiaozhi platform integration and intelligent tool synchronization.
 
 ![Dashboard Preview](assets/dashboard.png)
 
-## 🌐 Live Demo & Docs
+## 🚀 Key Features
 
-- **Documentation**: [docs.mcphubx.com](https://docs.mcphubx.com/)
-- **Demo Environment**: [demo.mcphubx.com](https://demo.mcphubx.com/)
+### 🤖 **Xiaozhi AI Platform Integration** *(New!)*
+- **Native Xiaozhi Connection**: WebSocket connection with automatic tool synchronization
+- **Real-time Tool Updates**: Intelligent reconnection when tool states change
+- **Protocol Bridge**: Seamless MCP protocol translation for Xiaozhi platform
+- **Tool Discovery**: Smart routing with vector-based tool search
 
-## 🚀 Features
+### 🛠️ **Enhanced MCP Management** *(Based on MCPHub)*
+- **Broadened MCP Server Support**: Seamlessly integrate any MCP server with minimal configuration
+- **Centralized Dashboard**: Monitor real-time status and performance metrics from one sleek web UI
+- **Flexible Protocol Handling**: Full compatibility with stdio, SSE, and HTTP MCP protocols
+- **Hot-Swappable Configuration**: Add, remove, or update MCP servers on the fly — no downtime required
+- **Group-Based Access Control**: Organize servers into customizable groups for streamlined permissions management
+- **Secure Authentication**: Built-in user management with role-based access powered by JWT and bcrypt
+- **Docker-Ready**: Deploy instantly with our containerized setup
 
-- **Broadened MCP Server Support**: Seamlessly integrate any MCP server with minimal configuration.
-- **Centralized Dashboard**: Monitor real-time status and performance metrics from one sleek web UI.
-- **Flexible Protocol Handling**: Full compatibility with both stdio and SSE MCP protocols.
-- **Hot-Swappable Configuration**: Add, remove, or update MCP servers on the fly — no downtime required.
-- **Group-Based Access Control**: Organize servers into customizable groups for streamlined permissions management.
-- **Secure Authentication**: Built-in user management with role-based access powered by JWT and bcrypt.
-- **Docker-Ready**: Deploy instantly with our containerized setup.
+## 🎯 What Makes xiaozhi-mcphub Special
+
+Unlike the original MCPHub which focuses on server management, **xiaozhi-mcphub** is specifically optimized for Xiaozhi AI platform integration:
+
+✅ **Automatic Tool Synchronization** - Tools are automatically synced to Xiaozhi when enabled/disabled  
+✅ **Intelligent Reconnection** - Smart reconnection logic ensures Xiaozhi always has the latest tool state  
+✅ **Xiaozhi-First Design** - WebSocket-based architecture optimized for Xiaozhi platform communication  
+✅ **Enhanced Logging** - Detailed logs for Xiaozhi platform interactions and tool usage  
 
 ## 🔧 Quick Start
 
-### Configuration
+### Xiaozhi Integration Setup
 
-Create a `mcp_settings.json` file to customize your server settings:
+1. **Configure Xiaozhi Connection**:
+```json
+{
+  "xiaozhi": {
+    "enabled": true,
+    "webSocketUrl": "wss://api.xiaozhi.me/mcp/?token=your-jwt-token",
+    "reconnect": {
+      "maxAttempts": 10,
+      "initialDelay": 2000,
+      "maxDelay": 60000,
+      "backoffMultiplier": 2
+    }
+  }
+}
+```
 
+2. **Add to mcp_settings.json**:
 ```json
 {
   "mcpServers": {
@@ -38,7 +64,7 @@ Create a `mcp_settings.json` file to customize your server settings:
       }
     },
     "playwright": {
-      "command": "npx",
+      "command": "npx", 
       "args": ["@playwright/mcp@latest", "--headless"]
     },
     "fetch": {
@@ -53,183 +79,108 @@ Create a `mcp_settings.json` file to customize your server settings:
         "SLACK_TEAM_ID": "your-team-id"
       }
     }
+  },
+  "xiaozhi": {
+    "enabled": true,
+    "webSocketUrl": "wss://api.xiaozhi.me/mcp/?token=your-jwt-token"
   }
 }
 ```
 
 ### Docker Deployment
 
-**Recommended**: Mount your custom config:
-
 ```bash
-docker run -p 3000:3000 -v ./mcp_settings.json:/app/mcp_settings.json -v ./data:/app/data samanhappy/mcphub
-```
+# With custom configuration
+docker run -p 3000:3000 \
+  -v ./mcp_settings.json:/app/mcp_settings.json \
+  -v ./data:/app/data \
+  huangjunsen/xiaozhi-mcphub
 
-or run with default settings:
-
-```bash
-docker run -p 3000:3000 samanhappy/mcphub
+# With default settings
+docker run -p 3000:3000 huangjunsen/xiaozhi-mcphub
 ```
 
 ### Access the Dashboard
 
-Open `http://localhost:3000` and log in with your credentials.
+Open `http://localhost:3000` and log in with default credentials: `admin` / `admin123`
 
-> **Note**: Default credentials are `admin` / `admin123`.
+**New Xiaozhi Platform Features**:
+- 🔌 Xiaozhi connection status and management
+- ⚡ Real-time tool synchronization monitoring  
+- 🔄 Automatic reconnection controls
+- 📊 Xiaozhi platform usage statistics
 
-**Dashboard Overview**:
+## 🌐 API Endpoints
 
-- Live status of all MCP servers
-- Enable/disable or reconfigure servers
-- Group management for organizing servers
-- User administration for access control
-
-### Streamable HTTP Endpoint
-
-> As of now, support for streaming HTTP endpoints varies across different AI clients. If you encounter issues, you can use the SSE endpoint or wait for future updates.
-
-Connect AI clients (e.g., Claude Desktop, Cursor, DeepChat, etc.) via:
-
+### Traditional MCP Endpoints
 ```
-http://localhost:3000/mcp
+http://localhost:3000/mcp          # Unified endpoint for all servers
+http://localhost:3000/mcp/$smart   # Smart routing with vector search  
+http://localhost:3000/mcp/{group}  # Group-specific endpoints
+http://localhost:3000/mcp/{server} # Server-specific endpoints
 ```
 
-This endpoint provides a unified streamable HTTP interface for all your MCP servers. It allows you to:
-
-- Send requests to any configured MCP server
-- Receive responses in real-time
-- Easily integrate with various AI clients and tools
-- Use the same endpoint for all servers, simplifying your integration process
-
-**Smart Routing (Experimental)**:
-
-Smart Routing is MCPHub's intelligent tool discovery system that uses vector semantic search to automatically find the most relevant tools for any given task.
-
+### Xiaozhi Platform Management *(New!)*
 ```
-http://localhost:3000/mcp/$smart
-```
-
-**How it Works:**
-
-1. **Tool Indexing**: All MCP tools are automatically converted to vector embeddings and stored in PostgreSQL with pgvector
-2. **Semantic Search**: User queries are converted to vectors and matched against tool embeddings using cosine similarity
-3. **Intelligent Filtering**: Dynamic thresholds ensure relevant results without noise
-4. **Precise Execution**: Found tools can be directly executed with proper parameter validation
-
-**Setup Requirements:**
-
-![Smart Routing](assets/smart-routing.png)
-
-To enable Smart Routing, you need:
-
-- PostgreSQL with pgvector extension
-- OpenAI API key (or compatible embedding service)
-- Enable Smart Routing in MCPHub settings
-
-**Group-Specific Endpoints (Recommended)**:
-
-![Group Management](assets/group.png)
-
-For targeted access to specific server groups, use the group-based HTTP endpoint:
-
-```
-http://localhost:3000/mcp/{group}
-```
-
-Where `{group}` is the ID or name of the group you created in the dashboard. This allows you to:
-
-- Connect to a specific subset of MCP servers organized by use case
-- Isolate different AI tools to access only relevant servers
-- Implement more granular access control for different environments or teams
-
-**Server-Specific Endpoints**:
-For direct access to individual servers, use the server-specific HTTP endpoint:
-
-```
-http://localhost:3000/mcp/{server}
-```
-
-Where `{server}` is the name of the server you want to connect to. This allows you to access a specific MCP server directly.
-
-> **Note**: If the server name and group name are the same, the group name will take precedence.
-
-### SSE Endpoint (Deprecated in Future)
-
-Connect AI clients (e.g., Claude Desktop, Cursor, DeepChat, etc.) via:
-
-```
-http://localhost:3000/sse
-```
-
-For smart routing, use:
-
-```
-http://localhost:3000/sse/$smart
-```
-
-For targeted access to specific server groups, use the group-based SSE endpoint:
-
-```
-http://localhost:3000/sse/{group}
-```
-
-For direct access to individual servers, use the server-specific SSE endpoint:
-
-```
-http://localhost:3000/sse/{server}
+GET    /api/xiaozhi/status     # Get connection status
+GET    /api/xiaozhi/config     # Get configuration (token masked)
+PUT    /api/xiaozhi/config     # Update configuration
+POST   /api/xiaozhi/restart    # Restart client connection
+POST   /api/xiaozhi/start      # Start client
+POST   /api/xiaozhi/stop       # Stop client
 ```
 
 ## 🧑‍💻 Local Development
 
 ```bash
-git clone https://github.com/samanhappy/mcphub.git
-cd mcphub
+git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
+cd xiaozhi-mcphub
 pnpm install
 pnpm dev
 ```
 
 This starts both frontend and backend in development mode with hot-reloading.
 
-> For windows users, you may need to start the backend server and frontend separately: `pnpm backend:dev`, `pnpm frontend:dev`.
+## 📊 Xiaozhi Tool Integration
 
-## 🛠️ Common Issues
+xiaozhi-mcphub successfully exposes powerful tools to Xiaozhi AI platform:
 
-### Using Nginx as a Reverse Proxy
+### 🎭 Web Automation (Playwright)
+- Browser control, page interaction, content capture
+- Screenshot and PDF generation  
+- Tab management and automation testing
 
-If you are using Nginx to reverse proxy MCPHub, please make sure to add the following configuration in your Nginx setup:
+### 🌐 Network Tools (Fetch)
+- Web content fetching with markdown conversion
 
-```nginx
-proxy_buffering off
-```
+### 💬 Communication (Slack)  
+- Channel management, messaging, user interaction
+- Thread replies and reactions
 
-## 🔍 Tech Stack
+### 🗺️ Location Services (Amap)
+- Geocoding, search, routing, weather
+- Point-of-interest discovery
 
-- **Backend**: Node.js, Express, TypeScript
-- **Frontend**: React, Vite, Tailwind CSS
-- **Auth**: JWT & bcrypt
-- **Protocol**: Model Context Protocol SDK
+## 📄 Attribution
 
-## 👥 Contributing
+This project is based on [MCPHub](https://github.com/samanhappy/mcphub) by samanhappy and contributors, licensed under Apache License 2.0.
 
-Contributions of any kind are welcome!
+**Major enhancements in xiaozhi-mcphub:**
+- ✨ Xiaozhi AI platform integration  
+- 🔄 Enhanced tool synchronization mechanism
+- 🔗 Improved reconnection logic for Xiaozhi clients
+- 📡 Extended API endpoints for Xiaozhi platform management
 
-- New features & optimizations
-- Documentation improvements
-- Bug reports & fixes
-- Translations & suggestions
+## 📜 License
 
-Welcome to join our [Discord community](https://discord.gg/qMKNsn5Q) for discussions and support.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) file for details.
 
-## ❤️ Sponsor
+## 🤝 Contributing
 
-If you like this project, maybe you can consider:
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/samanhappy)
+## 🔗 Links
 
-## 🌟 Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=samanhappy/mcphub&type=Date)](https://www.star-history.com/#samanhappy/mcphub&Date)
-
-## 📄 License
-
-Licensed under the [Apache 2.0 License](LICENSE).
+- [Original MCPHub Project](https://github.com/samanhappy/mcphub)
+- [Xiaozhi AI Platform](https://xiaozhi.me)
+- [Model Context Protocol](https://modelcontextprotocol.io)

@@ -5,7 +5,7 @@
 
 # production
 dist
-
+documents/docs/.vitepress/cache/
 # env files
 .env
 .env.local

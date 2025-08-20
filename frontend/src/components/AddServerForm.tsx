@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ServerForm from './ServerForm'
-import { apiPost } from '../utils/fetchInterceptor'
+import { getApiUrl } from '../utils/runtime'
 import { detectVariables } from '../utils/variableDetection'
 
 interface AddServerFormProps {
@@ -34,12 +34,26 @@ const AddServerForm = ({ onAdd }: AddServerFormProps) => {
   const submitServer = async (payload: any) => {
     try {
       setError(null)
-      const result = await apiPost('/servers', payload)
+      const token = localStorage.getItem('mcphub_token');
+      const response = await fetch(getApiUrl('/servers'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token || ''
+        },
+        body: JSON.stringify(payload),
+      })
 
-      if (!result.success) {
+      const result = await response.json()
+
+      if (!response.ok) {
         // Use specific error message from the response if available
         if (result && result.message) {
           setError(result.message)
+        } else if (response.status === 400) {
+          setError(t('server.invalidData'))
+        } else if (response.status === 409) {
+          setError(t('server.alreadyExists', { serverName: payload.name }))
         } else {
           setError(t('server.addError'))
         }

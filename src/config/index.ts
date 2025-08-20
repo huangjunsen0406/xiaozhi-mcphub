@@ -1,23 +1,19 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
-import { McpSettings, IUser } from '../types/index.js';
+import { McpSettings } from '../types/index.js';
 import { getConfigFilePath } from '../utils/path.js';
 import { getPackageVersion } from '../utils/version.js';
-import { getDataService } from '../services/services.js';
-import { DataService } from '../services/dataService.js';
 
 dotenv.config();
 
 const defaultConfig = {
   port: process.env.PORT || 3000,
   initTimeout: process.env.INIT_TIMEOUT || 300000,
+  timeout: process.env.REQUEST_TIMEOUT || 60000,
   basePath: process.env.BASE_PATH || '',
-  readonly: 'true' === process.env.READONLY || false,
-  mcpHubName: 'mcphub',
+  mcpHubName: 'xiaozhi-mcphub',
   mcpHubVersion: getPackageVersion(),
 };
-
-const dataService: DataService = getDataService();
 
 // Settings cache
 let settingsCache: McpSettings | null = null;
@@ -26,7 +22,7 @@ export const getSettingsPath = (): string => {
   return getConfigFilePath('mcp_settings.json', 'Settings');
 };
 
-export const loadOriginalSettings = (): McpSettings => {
+export const loadSettings = (): McpSettings => {
   // If cache exists, return cached data directly
   if (settingsCache) {
     return settingsCache;
@@ -53,18 +49,13 @@ export const loadOriginalSettings = (): McpSettings => {
   }
 };
 
-export const loadSettings = (user?: IUser): McpSettings => {
-  return dataService.filterSettings!(loadOriginalSettings(), user);
-};
-
-export const saveSettings = (settings: McpSettings, user?: IUser): boolean => {
+export const saveSettings = (settings: McpSettings): boolean => {
   const settingsPath = getSettingsPath();
   try {
-    const mergedSettings = dataService.mergeSettings!(loadOriginalSettings(), settings, user);
-    fs.writeFileSync(settingsPath, JSON.stringify(mergedSettings, null, 2), 'utf8');
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
 
     // Update cache after successful save
-    settingsCache = mergedSettings;
+    settingsCache = settings;
 
     return true;
   } catch (error) {
@@ -89,42 +80,17 @@ export const getSettingsCacheInfo = (): { hasCache: boolean } => {
   };
 };
 
-export function replaceEnvVars(input: Record<string, any>): Record<string, any>;
-export function replaceEnvVars(input: string[] | undefined): string[];
-export function replaceEnvVars(input: string): string;
-export function replaceEnvVars(
-  input: Record<string, any> | string[] | string | undefined,
-): Record<string, any> | string[] | string {
-  // Handle object input
-  if (input && typeof input === 'object' && !Array.isArray(input)) {
-    const res: Record<string, string> = {};
-    for (const [key, value] of Object.entries(input)) {
-      if (typeof value === 'string') {
-        res[key] = expandEnvVars(value);
-      } else {
-        res[key] = String(value);
-      }
+export const replaceEnvVars = (env: Record<string, any>): Record<string, any> => {
+  const res: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string') {
+      res[key] = expandEnvVars(value);
+    } else {
+      res[key] = String(value);
     }
-    return res;
   }
-
-  // Handle array input
-  if (Array.isArray(input)) {
-    return input.map((item) => expandEnvVars(item));
-  }
-
-  // Handle string input
-  if (typeof input === 'string') {
-    return expandEnvVars(input);
-  }
-
-  // Handle undefined/null array input
-  if (input === undefined || input === null) {
-    return [];
-  }
-
-  return input;
-}
+  return res;
+};
 
 export const expandEnvVars = (value: string): string => {
   if (typeof value !== 'string') {

@@ -13,11 +13,7 @@ import {
   Loader,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  Link,
-  FileCode,
-  ChevronDown as DropdownIcon,
-  Wrench
+  AlertCircle
 } from 'lucide-react'
 
 export {
@@ -35,11 +31,7 @@ export {
   Loader,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  Link,
-  FileCode,
-  DropdownIcon,
-  Wrench
+  AlertCircle
 }
 
 const LucideIcons = {
@@ -57,10 +49,7 @@ const LucideIcons = {
   Loader,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  Link,
-  FileCode,
-  DropdownIcon
+  AlertCircle
 }
 
 export default LucideIcons
