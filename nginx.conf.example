@@ -1,11 +1,11 @@
-# Nginx configuration example for MCPHub with subpath routing
-# This example shows how to deploy MCPHub under a subpath like /mcphub
+# Nginx configuration example for xiaozhi-mcphub with subpath routing
+# This example shows how to deploy xiaozhi-mcphub under a subpath like /mcphub
 
 server {
     listen 80;
     server_name your-domain.com;
     
-    # MCPHub under /mcphub subpath
+    # xiaozhi-mcphub under /mcphub subpath
     location /mcphub/ {
         # Remove the subpath prefix before forwarding to MCPHub
         rewrite ^/mcphub/(.*)$ /$1 break;

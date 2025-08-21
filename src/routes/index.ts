@@ -64,6 +64,14 @@ import { getPrompt } from '../controllers/promptController.js';
 import { uploadDxtFile, uploadMiddleware } from '../controllers/dxtController.js';
 import { healthCheck } from '../controllers/healthController.js';
 import {
+  getXiaozhiStatus,
+  getXiaozhiConfig,
+  updateXiaozhiConfig,
+  restartXiaozhiClient,
+  stopXiaozhiClient,
+  startXiaozhiClient,
+} from '../controllers/xiaozhiController.js';
+import {
   getOpenAPISpec,
   getOpenAPIServers,
   getOpenAPIStats,
@@ -113,6 +121,14 @@ export const initRoutes = (app: express.Application): void => {
   router.put('/users/:username', updateExistingUser);
   router.delete('/users/:username', deleteExistingUser);
   router.get('/users-stats', getUserStats);
+
+  // Xiaozhi client management routes
+  router.get('/xiaozhi/status', getXiaozhiStatus);
+  router.get('/xiaozhi/config', getXiaozhiConfig);
+  router.put('/xiaozhi/config', updateXiaozhiConfig);
+  router.post('/xiaozhi/restart', restartXiaozhiClient);
+  router.post('/xiaozhi/stop', stopXiaozhiClient);
+  router.post('/xiaozhi/start', startXiaozhiClient);
 
   // Tool management routes
   router.post('/tools/call/:server', callTool);

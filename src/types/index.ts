@@ -124,6 +124,18 @@ export interface MCPRouterCallToolResponse {
   isError: boolean;
 }
 
+// 小智客户端配置
+export interface XiaozhiConfig {
+  enabled: boolean;
+  webSocketUrl: string; // 完整的 WebSocket URL (包含token)
+  reconnect?: {
+    maxAttempts?: number;
+    initialDelay?: number;
+    maxDelay?: number;
+    backoffMultiplier?: number;
+  };
+}
+
 export interface SystemConfig {
   routing?: {
     enableGlobalRoute?: boolean; // Controls whether the /sse endpoint without group is enabled
@@ -162,6 +174,7 @@ export interface McpSettings {
     [key: string]: ServerConfig; // Key-value pairs of server names and their configurations
   };
   groups?: IGroup[]; // Array of server groups
+  xiaozhi?: XiaozhiConfig; // 小智客户端配置
   systemConfig?: SystemConfig; // System-wide configuration settings
   userConfigs?: Record<string, UserConfig>; // User-specific configurations
 }

@@ -34,6 +34,11 @@ interface MCPRouterConfig {
   baseUrl: string;
 }
 
+interface XiaozhiConfig {
+  enabled: boolean;
+  webSocketUrl: string;
+}
+
 interface SystemSettings {
   systemConfig?: {
     routing?: RoutingConfig;
@@ -41,6 +46,7 @@ interface SystemSettings {
     smartRouting?: SmartRoutingConfig;
     mcpRouter?: MCPRouterConfig;
   };
+  xiaozhi?: XiaozhiConfig;
 }
 
 interface TempRoutingConfig {
@@ -82,6 +88,11 @@ export const useSettingsData = () => {
     referer: 'https://www.mcphubx.com',
     title: 'MCPHub',
     baseUrl: 'https://api.mcprouter.to/v1',
+  });
+
+  const [xiaozhiConfig, setXiaozhiConfig] = useState<XiaozhiConfig>({
+    enabled: false,
+    webSocketUrl: '',
   });
 
   const [loading, setLoading] = useState(false);
@@ -133,6 +144,12 @@ export const useSettingsData = () => {
           referer: data.data.systemConfig.mcpRouter.referer || 'https://www.mcphubx.com',
           title: data.data.systemConfig.mcpRouter.title || 'MCPHub',
           baseUrl: data.data.systemConfig.mcpRouter.baseUrl || 'https://api.mcprouter.to/v1',
+        });
+      }
+      if (data.success && data.data?.xiaozhi) {
+        setXiaozhiConfig({
+          enabled: data.data.xiaozhi.enabled ?? false,
+          webSocketUrl: data.data.xiaozhi.webSocketUrl || '',
         });
       }
     } catch (error) {
@@ -384,6 +401,46 @@ export const useSettingsData = () => {
     }
   };
 
+  // Update xiaozhi configuration
+  const updateXiaozhiConfig = async <T extends keyof XiaozhiConfig>(
+    key: T,
+    value: XiaozhiConfig[T],
+  ) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await apiPut('/xiaozhi/config', {
+        [key]: value,
+      });
+
+      if (data.success) {
+        setXiaozhiConfig({
+          ...xiaozhiConfig,
+          [key]: value,
+        });
+        
+        // 配置更新成功后，重新获取最新配置确保前后端同步
+        await fetchSettings();
+        
+        showToast(t('settings.xiaozhiConfigUpdated'));
+        return true;
+      } else {
+        showToast(data.message || t('errors.failedToUpdateSystemConfig'));
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to update xiaozhi config:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to update xiaozhi config';
+      setError(errorMessage);
+      showToast(errorMessage);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch settings when the component mounts or refreshKey changes
   useEffect(() => {
     fetchSettings();
@@ -404,6 +461,7 @@ export const useSettingsData = () => {
     installConfig,
     smartRoutingConfig,
     mcpRouterConfig,
+    xiaozhiConfig,
     loading,
     error,
     setError,
@@ -416,5 +474,6 @@ export const useSettingsData = () => {
     updateRoutingConfigBatch,
     updateMCPRouterConfig,
     updateMCPRouterConfigBatch,
+    updateXiaozhiConfig,
   };
 };

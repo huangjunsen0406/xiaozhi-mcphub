@@ -1,11 +1,11 @@
 {
-  "name": "@samanhappy/mcphub",
-  "version": "dev",
-  "description": "A hub server for mcp servers",
+  "name": "@huangjunsen0406/xiaozhi-mcphub",
+  "version": "1.0.0",
+  "description": "MCPHub enhanced with Xiaozhi AI platform integration - 为小智AI平台优化的MCP工具桥接系统",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "mcphub": "bin/cli.js"
+    "xiaozhi-mcphub": "bin/cli.js"
   },
   "files": [
     "dist",
@@ -14,7 +14,8 @@
     "servers.json",
     "frontend/dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "pnpm backend:build && pnpm frontend:build",
@@ -34,13 +35,20 @@
     "frontend:preview": "cd frontend && vite preview",
     "dev": "concurrently \"pnpm backend:dev\" \"pnpm frontend:dev\"",
     "debug": "concurrently \"pnpm backend:debug\" \"pnpm frontend:dev\"",
-    "prepublishOnly": "npm run build && node scripts/verify-dist.js"
+    "prepublishOnly": "npm run build && node scripts/verify-dist.js",
+    "docs:dev": "npm run --prefix documents docs:dev",
+    "docs:build": "npm run --prefix documents docs:build",
+    "docs:serve": "npm run --prefix documents docs:serve"
   },
   "keywords": [
     "typescript",
     "server",
     "mcp",
-    "model context protocol"
+    "model context protocol",
+    "xiaozhi",
+    "ai platform",
+    "websocket",
+    "tool bridge"
   ],
   "author": "",
   "license": "ISC",
@@ -68,7 +76,8 @@
     "postgres": "^3.4.7",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.26",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
@@ -89,6 +98,7 @@
     "@types/react-dom": "^19.1.7",
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "@vitejs/plugin-react": "^4.7.0",

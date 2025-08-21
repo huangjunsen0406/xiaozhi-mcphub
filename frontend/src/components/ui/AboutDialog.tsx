@@ -65,6 +65,10 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ isOpen, onClose, version }) =
               </span>
             </div>
 
+            <div className="text-gray-700 dark:text-gray-300">
+              <p>{t('about.description')}</p>
+            </div>
+
             {hasNewVersion && latestVersion && (
               <div className="bg-blue-50 dark:bg-blue-900 p-3 rounded">
                 <div className="flex items-start">
@@ -77,7 +81,7 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ isOpen, onClose, version }) =
                     <p>{t('about.newVersionAvailable', { version: latestVersion })}</p>
                     <p className="mt-1">
                       <a
-                        href="https://github.com/samanhappy/mcphub"
+                        href="https://github.com/huangjunsen0406/xiaozhi-mcphub"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 dark:text-blue-400 hover:underline"
@@ -89,6 +93,17 @@ const AboutDialog: React.FC<AboutDialogProps> = ({ isOpen, onClose, version }) =
                 </div>
               </div>
             )}
+
+            <div className="mt-4">
+              <a
+                href="https://github.com/huangjunsen0406/xiaozhi-mcphub"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {t('about.viewOnGitHub')}
+              </a>
+            </div>
 
             <button
               onClick={checkForUpdates}

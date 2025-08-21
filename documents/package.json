@@ -1,0 +1,35 @@
+{
+  "name": "documents",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "fs-extra": "^11.3.0",
+    "sass-embedded": "^1.86.3",
+    "typescript": "^5.8.3",
+    "vitepress": "^1.6.3"
+  },
+  "dependencies": {
+    "@heroicons/vue": "^2.2.0",
+    "@tailwindcss/vite": "^4.1.4",
+    "echarts": "^5.6.0",
+    "tailwindcss": "^4.1.4",
+    "@vue/repl": "^4.4.2",
+    "@vue/theme": "^2.3.0",
+    "dynamics.js": "^1.1.5",
+    "gsap": "^3.12.5",
+    "vue": "^3.5.13"
+  }
+}

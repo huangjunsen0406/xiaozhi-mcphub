@@ -2,7 +2,6 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 import fs from 'fs';
 
 // Enable debug logging if needed
@@ -12,11 +11,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Start with more debug information
-console.log('📋 MCPHub CLI');
+console.log('📋 xiaozhi-mcphub CLI');
 console.log(`📁 CLI script location: ${__dirname}`);
 
 // The npm package directory structure when installed is:
-// node_modules/@samanhappy/mcphub/
+// node_modules/@huangjunsen0406/xiaozhi-mcphub/
 //   - dist/
 //   - bin/
 //   - frontend/dist/
@@ -48,7 +47,7 @@ function findPackageRoot() {
     if (fs.existsSync(packageJsonPath)) {
       try {
         const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-        if (pkg.name === 'mcphub' || pkg.name === '@samanhappy/mcphub') {
+        if (pkg.name === 'xiaozhi-mcphub' || pkg.name === '@huangjunsen0406/xiaozhi-mcphub') {
           if (isDebug) {
             console.log(`DEBUG: Found package.json at ${packageJsonPath}`);
           }
@@ -89,8 +88,8 @@ console.log(`📦 Using package root: ${projectRoot}`);
 checkFrontend(projectRoot);
 
 // Start the server
-console.log('🚀 Starting MCPHub server...');
+console.log('🚀 Starting xiaozhi-mcphub server...');
 import(path.join(projectRoot, 'dist', 'index.js')).catch(err => {
-  console.error('Failed to start MCPHub:', err);
+  console.error('Failed to start xiaozhi-mcphub:', err);
   process.exit(1);
 });
