@@ -8,6 +8,7 @@ import { XiaozhiEndpoint, XiaozhiEndpointStatus } from '../hooks/useXiaozhiEndpo
 interface XiaozhiEndpointCardProps {
   endpoint: XiaozhiEndpoint;
   status?: XiaozhiEndpointStatus;
+  isReconnecting?: boolean;
   onEdit: (endpoint: XiaozhiEndpoint) => void;
   onDelete: (endpointId: string) => void;
   onReconnect: (endpointId: string) => void;
@@ -17,6 +18,7 @@ interface XiaozhiEndpointCardProps {
 const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
   endpoint,
   status,
+  isReconnecting = false,
   onEdit,
   onDelete,
   onReconnect,
@@ -134,9 +136,12 @@ const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
             variant="outline"
             size="sm"
             onClick={() => onReconnect(endpoint.id)}
-            disabled={!endpoint.enabled || !status || status.connected}
+            disabled={!endpoint.enabled || isReconnecting}
           >
-            {t('xiaozhi.reconnect.title', 'Reconnect')}
+            {isReconnecting 
+              ? t('xiaozhi.reconnect.connecting', 'Reconnecting...') 
+              : t('xiaozhi.reconnect.title', 'Reconnect')
+            }
           </Button>
         </div>
 

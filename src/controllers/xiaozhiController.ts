@@ -259,6 +259,8 @@ export const createXiaozhiEndpoint = async (req: Request, res: Response): Promis
       enabled: true,
       reconnect: {
         maxAttempts: 10,
+        infiniteReconnect: true,
+        infiniteRetryDelay: 1800000, // 30分钟
         initialDelay: 2000,
         maxDelay: 60000,
         backoffMultiplier: 2,

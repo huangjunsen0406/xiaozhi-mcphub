@@ -30,6 +30,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
     getEndpointStatusById,
     getConnectedCount,
     getEnabledCount,
+    isEndpointReconnecting,
   } = useXiaozhiEndpoints();
 
   const [groups, setGroups] = useState<Group[]>([]);
@@ -234,6 +235,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
               key={endpoint.id}
               endpoint={endpoint}
               status={getEndpointStatusById(endpoint.id)}
+              isReconnecting={isEndpointReconnecting(endpoint.id)}
               onEdit={handleEdit}
               onDelete={deleteEndpoint}
               onReconnect={reconnectEndpoint}

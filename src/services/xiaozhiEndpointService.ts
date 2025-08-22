@@ -9,6 +9,7 @@ interface EndpointConnection {
   endpoint: XiaozhiEndpoint;
   reconnectTimer?: NodeJS.Timeout;
   reconnectAttempts: number;
+  isInInfiniteReconnectMode?: boolean; // 是否进入无限重连模式
 }
 
 export class XiaozhiEndpointService {
@@ -38,6 +39,8 @@ export class XiaozhiEndpointService {
           groupId: undefined,
           reconnect: {
             maxAttempts: oldConfig.reconnect?.maxAttempts || 10,
+            infiniteReconnect: oldConfig.reconnect?.infiniteReconnect ?? true,
+            infiniteRetryDelay: oldConfig.reconnect?.infiniteRetryDelay || 1800000, // 30分钟
             initialDelay: oldConfig.reconnect?.initialDelay || 2000,
             maxDelay: oldConfig.reconnect?.maxDelay || 60000,
             backoffMultiplier: oldConfig.reconnect?.backoffMultiplier || 2,
@@ -95,7 +98,8 @@ export class XiaozhiEndpointService {
     const connection: EndpointConnection = {
       ws,
       endpoint: { ...endpoint },
-      reconnectAttempts: 0
+      reconnectAttempts: 0,
+      isInInfiniteReconnectMode: false
     };
 
     this.connections.set(endpoint.id, connection);
@@ -105,6 +109,7 @@ export class XiaozhiEndpointService {
       console.log(`小智端点已连接: ${endpoint.name}`);
       this.updateEndpointStatus(endpoint.id, 'connected');
       connection.reconnectAttempts = 0; // 重置重连次数
+      connection.isInInfiniteReconnectMode = false; // 重置无限重连模式
     });
 
     ws.on('error', (error) => {
@@ -155,7 +160,7 @@ export class XiaozhiEndpointService {
       // 处理ListTools请求 - 根据端点分组过滤
       if (message.method === 'tools/list') {
         const smartRoutingConfig = getSmartRoutingConfig();
-        let extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
+        const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
         
         if (smartRoutingConfig.enabled) {
           extraParams.group = '$smart';
@@ -183,7 +188,7 @@ export class XiaozhiEndpointService {
         const toolName = message.params?.name;
         const isSmartRoutingTool = toolName === 'search_tools' || toolName === 'call_tool';
         
-        let extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
+        const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
         
         if (smartRoutingConfig.enabled && isSmartRoutingTool) {
           extraParams.group = '$smart';
@@ -251,8 +256,18 @@ export class XiaozhiEndpointService {
   private scheduleReconnect(connection: EndpointConnection): void {
     const { endpoint } = connection;
     
+    // 检查是否已达到快速重连上限
     if (connection.reconnectAttempts >= endpoint.reconnect.maxAttempts) {
-      console.log(`端点 ${endpoint.name} 重连次数已达上限，停止重连`);
+      // 如果启用了无限重连，进入无限重连模式
+      if (endpoint.reconnect.infiniteReconnect) {
+        if (!connection.isInInfiniteReconnectMode) {
+          connection.isInInfiniteReconnectMode = true;
+          console.log(`端点 ${endpoint.name} 快速重连次数已达上限，进入无限重连模式`);
+        }
+        this.scheduleInfiniteReconnect(connection);
+      } else {
+        console.log(`端点 ${endpoint.name} 重连次数已达上限，停止重连`);
+      }
       return;
     }
 
@@ -273,6 +288,30 @@ export class XiaozhiEndpointService {
         await this.connectEndpoint(endpoint);
       } catch (error) {
         console.error(`端点 ${endpoint.name} 重连失败:`, error);
+      }
+    }, delay);
+  }
+
+  // 无限重连调度
+  private scheduleInfiniteReconnect(connection: EndpointConnection): void {
+    const { endpoint } = connection;
+    
+    if (connection.reconnectTimer) {
+      clearTimeout(connection.reconnectTimer);
+    }
+
+    const delay = endpoint.reconnect.infiniteRetryDelay || 1800000; // 默认30分钟
+    
+    console.log(`端点 ${endpoint.name} 将在 ${Math.round(delay / 60000)}分钟 后进行无限重连尝试`);
+
+    connection.reconnectTimer = setTimeout(async () => {
+      console.log(`端点 ${endpoint.name} 进行无限重连尝试...`);
+      try {
+        await this.connectEndpoint(endpoint);
+      } catch (error) {
+        console.error(`端点 ${endpoint.name} 无限重连失败:`, error);
+        // 继续调度下次无限重连
+        this.scheduleInfiniteReconnect(connection);
       }
     }, delay);
   }
@@ -330,7 +369,7 @@ export class XiaozhiEndpointService {
 
     const endpoint: XiaozhiEndpoint = {
       ...endpointData,
-      id: `endpoint-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      id: `endpoint-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       createdAt: new Date().toISOString(),
       status: 'disconnected'
     };

@@ -134,6 +134,8 @@ export interface XiaozhiEndpoint {
   groupId?: string; // null表示使用全部工具
   reconnect: {
     maxAttempts: number;
+    infiniteReconnect?: boolean;   // 是否启用无限重连
+    infiniteRetryDelay?: number;   // 无限重连模式的固定延迟(毫秒，默认30分钟)
     initialDelay: number;
     maxDelay: number;
     backoffMultiplier: number;

@@ -60,6 +60,7 @@ export const useXiaozhiEndpoints = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [reconnectingEndpoints, setReconnectingEndpoints] = useState<Set<string>>(new Set());
 
   // 触发刷新
   const triggerRefresh = useCallback(() => {
@@ -211,7 +212,13 @@ export const useXiaozhiEndpoints = () => {
 
   // 重连端点
   const reconnectEndpoint = useCallback(async (endpointId: string): Promise<boolean> => {
-    setLoading(true);
+    // 检查是否已在重连中
+    if (reconnectingEndpoints.has(endpointId)) {
+      return false;
+    }
+
+    // 设置重连状态
+    setReconnectingEndpoints(prev => new Set(prev).add(endpointId));
     setError(null);
 
     try {
@@ -219,10 +226,47 @@ export const useXiaozhiEndpoints = () => {
       
       if (response.success) {
         showToast(t('settings.endpointReconnecting', 'Endpoint reconnection initiated'));
-        // 延迟刷新状态，给重连时间
+        
+        // 监听连接状态变化，成功连接后解除重连状态
+        const checkConnectionStatus = async () => {
+          try {
+            const statusResponse: ApiResponse<XiaozhiEndpointStatus[]> = await apiGet('/xiaozhi/endpoints/status/all');
+            if (statusResponse.success && statusResponse.data) {
+              setEndpointStatuses(statusResponse.data);
+              
+              const endpointStatus = statusResponse.data.find(status => status.endpoint.id === endpointId);
+              if (endpointStatus?.connected) {
+                // 连接成功，解除重连状态
+                setReconnectingEndpoints(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(endpointId);
+                  return newSet;
+                });
+                return;
+              }
+            }
+          } catch (error) {
+            console.error('Failed to check connection status:', error);
+          }
+          
+          // 如果还在重连中，继续检查（最多检查30秒）
+          if (reconnectingEndpoints.has(endpointId)) {
+            setTimeout(checkConnectionStatus, 2000);
+          }
+        };
+
+        // 开始检查连接状态
+        setTimeout(checkConnectionStatus, 1000);
+        
+        // 30秒后强制解除重连状态
         setTimeout(() => {
-          fetchEndpointStatuses();
-        }, 1000);
+          setReconnectingEndpoints(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(endpointId);
+            return newSet;
+          });
+        }, 30000);
+        
         return true;
       } else {
         throw new Error(response.message || 'Failed to reconnect endpoint');
@@ -232,11 +276,17 @@ export const useXiaozhiEndpoints = () => {
       const errorMessage = error instanceof Error ? error.message : 'Failed to reconnect endpoint';
       setError(errorMessage);
       showToast(t('errors.failedToReconnectEndpoint', 'Failed to reconnect endpoint'));
+      
+      // 发生错误时立即解除重连状态
+      setReconnectingEndpoints(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(endpointId);
+        return newSet;
+      });
+      
       return false;
-    } finally {
-      setLoading(false);
     }
-  }, [t, showToast, fetchEndpointStatuses]);
+  }, [t, showToast, reconnectingEndpoints]);
 
   // 更新小智总配置（启用/禁用）
   const updateConfig = useCallback(async (configData: Partial<XiaozhiConfig>): Promise<boolean> => {
@@ -302,6 +352,11 @@ export const useXiaozhiEndpoints = () => {
     return endpoints.filter(ep => ep.enabled).length;
   }, [endpoints]);
 
+  // 检查端点是否正在重连
+  const isEndpointReconnecting = useCallback((endpointId: string): boolean => {
+    return reconnectingEndpoints.has(endpointId);
+  }, [reconnectingEndpoints]);
+
   // 初始化和定期刷新
   useEffect(() => {
     fetchConfig();
@@ -343,6 +398,7 @@ export const useXiaozhiEndpoints = () => {
     getEndpointStatusById,
     getConnectedCount,
     getEnabledCount,
+    isEndpointReconnecting,
 
     // 状态管理
     setError,
