@@ -11,9 +11,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        variant: ${{ startsWith(github.ref, 'refs/tags/') && fromJSON('["base", "full"]') || fromJSON('["base"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,9 +52,9 @@ jobs:
             ${{ endsWith(github.repository, 'mcphub') && github.repository || '' }}
             ${{ endsWith(github.repository, 'mcphubx') && format('ghcr.io/{0}', github.repository) || '' }}
           tags: |
-            type=raw,value=edge${{ matrix.variant == 'full' && '-full' || '' }},enable=${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-            type=semver,pattern={{version}}${{ matrix.variant == 'full' && '-full' || '' }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=latest${{ matrix.variant == 'full' && '-full' || '' }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=edge,enable=${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
           flavor: |
             latest=false
 
@@ -70,7 +67,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
-            INSTALL_EXT=${{ matrix.variant == 'full' && 'true' || 'false' }}
+            INSTALL_EXT=true
