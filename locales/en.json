@@ -635,6 +635,10 @@
       "connecting": "Connecting",
       "unknown": "Unknown"
     },
+    "modal": {
+      "createTitle": "Create New Endpoint",
+      "editTitle": "Edit Endpoint"
+    },
     "empty": {
       "title": "No endpoints configured",
       "description": "Get started by creating your first Xiaozhi endpoint."
