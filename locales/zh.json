@@ -647,6 +647,7 @@
     },
     "reconnect": {
       "title": "重连",
+      "connecting": "重连中...",
       "maxAttempts": "最大尝试次数",
       "initialDelay": "初始延迟"
     },

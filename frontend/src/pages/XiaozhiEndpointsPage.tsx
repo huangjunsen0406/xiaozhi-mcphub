@@ -18,7 +18,6 @@ const XiaozhiEndpointsPage: React.FC = () => {
   const {
     config,
     endpoints,
-    endpointStatuses,
     loading,
     error,
     createEndpoint,
@@ -106,7 +105,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
           </Button>
         </div>
 
-        <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="p-6 mx-auto max-w-4xl bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
           <XiaozhiEndpointForm
             endpoint={editingEndpoint}
             groups={groups}
@@ -123,12 +122,12 @@ const XiaozhiEndpointsPage: React.FC = () => {
     <div className="p-6">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex justify-between items-center mb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               {t('xiaozhi.title', 'Xiaozhi Endpoints')}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
+            <p className="mt-1 text-gray-600 dark:text-gray-400">
               {t('xiaozhi.description', 'Manage your Xiaozhi WebSocket endpoints for MCP integration')}
             </p>
           </div>
@@ -139,9 +138,9 @@ const XiaozhiEndpointsPage: React.FC = () => {
         </div>
 
         {/* Status Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-4">
+          <div className="p-4 bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+            <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {t('xiaozhi.status.service', 'Service Status')}
@@ -155,27 +154,27 @@ const XiaozhiEndpointsPage: React.FC = () => {
                   type="checkbox"
                   checked={config.enabled}
                   onChange={(e) => handleToggleService(e.target.checked)}
-                  className="form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out"
+                  className="w-4 h-4 text-blue-600 transition duration-150 ease-in-out form-checkbox"
                 />
               </label>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <div className="p-4 bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('xiaozhi.status.totalEndpoints', 'Total Endpoints')}
             </p>
             <p className="text-2xl font-bold text-blue-600">{endpoints.length}</p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <div className="p-4 bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('xiaozhi.status.enabled', 'Enabled')}
             </p>
             <p className="text-2xl font-bold text-green-600">{getEnabledCount()}</p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <div className="p-4 bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('xiaozhi.status.connected', 'Connected')}
             </p>
@@ -186,7 +185,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
 
       {/* Error Display */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+        <div className="p-4 mb-6 bg-red-50 rounded-lg border border-red-200 dark:bg-red-900/20 dark:border-red-800">
           <p className="text-red-800 dark:text-red-400">{error}</p>
         </div>
       )}
@@ -194,17 +193,17 @@ const XiaozhiEndpointsPage: React.FC = () => {
       {/* Endpoints List */}
       <div className="space-y-4">
         {loading && endpoints.length === 0 ? (
-          <div className="text-center py-8">
+          <div className="py-8 text-center">
             <p className="text-gray-500 dark:text-gray-400">
-              {t('common.loading', 'Loading...')}
+              {t('app.loading', 'Loading...')}
             </p>
           </div>
         ) : endpoints.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="max-w-md mx-auto">
+          <div className="py-12 text-center">
+            <div className="mx-auto max-w-md">
               <div className="mb-4">
                 <svg
-                  className="mx-auto h-12 w-12 text-gray-400"
+                  className="mx-auto w-12 h-12 text-gray-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -218,10 +217,10 @@ const XiaozhiEndpointsPage: React.FC = () => {
                   />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              <h3 className="mb-2 text-lg font-medium text-gray-900 dark:text-white">
                 {t('xiaozhi.empty.title', 'No endpoints configured')}
               </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
+              <p className="mb-4 text-gray-500 dark:text-gray-400">
                 {t('xiaozhi.empty.description', 'Get started by creating your first Xiaozhi endpoint.')}
               </p>
               <Button onClick={handleCreateNew}>

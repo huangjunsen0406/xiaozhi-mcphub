@@ -138,7 +138,7 @@ export const useXiaozhiEndpoints = () => {
       const response: ApiResponse<XiaozhiEndpoint> = await apiPost('/xiaozhi/endpoints', endpointData);
       
       if (response.success && response.data) {
-        setEndpoints(prev => [...prev, response.data]);
+        setEndpoints(prev => [...prev, response.data!]);
         showToast(t('settings.endpointCreated', 'Endpoint created successfully'));
         triggerRefresh();
         return true;
@@ -165,7 +165,7 @@ export const useXiaozhiEndpoints = () => {
       const response: ApiResponse<XiaozhiEndpoint> = await apiPut(`/xiaozhi/endpoints/${endpointId}`, updateData);
       
       if (response.success && response.data) {
-        setEndpoints(prev => prev.map(ep => ep.id === endpointId ? response.data : ep));
+        setEndpoints(prev => prev.map(ep => ep.id === endpointId ? response.data! : ep));
         showToast(t('settings.endpointUpdated', 'Endpoint updated successfully'));
         triggerRefresh();
         return true;
