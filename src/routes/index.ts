@@ -70,6 +70,15 @@ import {
   restartXiaozhiClient,
   stopXiaozhiClient,
   startXiaozhiClient,
+  // 多端点管理API
+  getXiaozhiEndpoints,
+  getXiaozhiEndpoint,
+  createXiaozhiEndpoint,
+  updateXiaozhiEndpoint,
+  deleteXiaozhiEndpoint,
+  reconnectXiaozhiEndpoint,
+  getXiaozhiEndpointStatus,
+  getAllXiaozhiEndpointStatus,
 } from '../controllers/xiaozhiController.js';
 import {
   getOpenAPISpec,
@@ -129,6 +138,16 @@ export const initRoutes = (app: express.Application): void => {
   router.post('/xiaozhi/restart', restartXiaozhiClient);
   router.post('/xiaozhi/stop', stopXiaozhiClient);
   router.post('/xiaozhi/start', startXiaozhiClient);
+
+  // Xiaozhi endpoints management routes
+  router.get('/xiaozhi/endpoints', getXiaozhiEndpoints);
+  router.get('/xiaozhi/endpoints/:id', getXiaozhiEndpoint);
+  router.post('/xiaozhi/endpoints', createXiaozhiEndpoint);
+  router.put('/xiaozhi/endpoints/:id', updateXiaozhiEndpoint);
+  router.delete('/xiaozhi/endpoints/:id', deleteXiaozhiEndpoint);
+  router.post('/xiaozhi/endpoints/:id/reconnect', reconnectXiaozhiEndpoint);
+  router.get('/xiaozhi/endpoints/:id/status', getXiaozhiEndpointStatus);
+  router.get('/xiaozhi/endpoints/status/all', getAllXiaozhiEndpointStatus);
 
   // Tool management routes
   router.post('/tools/call/:server', callTool);

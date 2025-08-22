@@ -196,6 +196,7 @@
     "dashboard": "Dashboard",
     "servers": "Servers",
     "groups": "Groups",
+    "xiaozhi": "Xiaozhi",
     "users": "Users",
     "settings": "Settings",
     "changePassword": "Change Password",
@@ -584,7 +585,14 @@
       "failedToGetMarketTags": "Failed to get market tags",
       "failedToSearchMarketServers": "Failed to search market servers",
       "failedToFilterMarketServers": "Failed to filter market servers",
-      "failedToProcessDxtFile": "Failed to process DXT file"
+      "failedToProcessDxtFile": "Failed to process DXT file",
+      "failedToFetchXiaozhiConfig": "Failed to fetch Xiaozhi configuration",
+      "failedToFetchEndpoints": "Failed to fetch endpoints",
+      "failedToCreateEndpoint": "Failed to create endpoint",
+      "failedToUpdateEndpoint": "Failed to update endpoint",
+      "failedToDeleteEndpoint": "Failed to delete endpoint",
+      "failedToReconnectEndpoint": "Failed to reconnect endpoint",
+      "failedToUpdateXiaozhiConfig": "Failed to update Xiaozhi configuration"
     },
     "success": {
       "serverCreated": "Server created successfully",
@@ -599,7 +607,76 @@
       "groupDeleted": "Group deleted successfully",
       "serverAddedToGroup": "Server added to group successfully",
       "serverRemovedFromGroup": "Server removed from group successfully",
-      "serverToolsUpdated": "Server tools updated successfully"
+      "serverToolsUpdated": "Server tools updated successfully",
+      "endpointCreated": "Endpoint created successfully",
+      "endpointUpdated": "Endpoint updated successfully",
+      "endpointDeleted": "Endpoint deleted successfully",
+      "endpointReconnecting": "Endpoint reconnection initiated",
+      "xiaozhiConfigUpdated": "Xiaozhi configuration updated"
+    }
+  },
+  "xiaozhi": {
+    "title": "Xiaozhi Endpoints",
+    "description": "Manage your Xiaozhi WebSocket endpoints for MCP integration",
+    "addEndpoint": "Add Endpoint",
+    "url": "WebSocket URL",
+    "group": "Group",
+    "created": "Created",
+    "lastConnected": "Last Connected",
+    "enabled": "Enabled",
+    "never": "Never",
+    "status": {
+      "service": "Service Status",
+      "totalEndpoints": "Total Endpoints",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "connecting": "Connecting",
+      "unknown": "Unknown"
+    },
+    "empty": {
+      "title": "No endpoints configured",
+      "description": "Get started by creating your first Xiaozhi endpoint."
+    },
+    "delete": {
+      "title": "Delete Endpoint",
+      "message": "Are you sure you want to delete this endpoint? This action cannot be undone."
+    },
+    "reconnect": {
+      "title": "Reconnect",
+      "maxAttempts": "Max Attempts",
+      "initialDelay": "Initial Delay"
+    },
+    "form": {
+      "create": {
+        "title": "Create New Endpoint"
+      },
+      "edit": {
+        "title": "Edit Endpoint"
+      },
+      "name": "Name",
+      "namePlaceholder": "Enter endpoint name",
+      "url": "WebSocket URL",
+      "description": "Description",
+      "descriptionPlaceholder": "Optional description for this endpoint",
+      "group": "Group",
+      "noGroup": "No Group (All Tools)",
+      "enabled": "Enable this endpoint",
+      "reconnectSettings": "Reconnection Settings",
+      "maxAttempts": "Max Attempts",
+      "initialDelay": "Initial Delay (ms)",
+      "maxDelay": "Max Delay (ms)",
+      "backoffMultiplier": "Backoff Multiplier",
+      "errors": {
+        "nameRequired": "Name is required",
+        "urlRequired": "WebSocket URL is required",
+        "urlInvalid": "WebSocket URL must start with ws:// or wss://",
+        "maxAttemptsRange": "Max attempts must be between 1 and 100",
+        "initialDelayRange": "Initial delay must be between 100ms and 60000ms",
+        "maxDelayGreater": "Max delay must be greater than initial delay",
+        "backoffRange": "Backoff multiplier must be between 1 and 10"
+      }
     }
   }
 }

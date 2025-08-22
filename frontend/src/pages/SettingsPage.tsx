@@ -48,7 +48,6 @@ const SettingsPage: React.FC = () => {
     baseUrl: 'https://api.mcprouter.to/v1',
   });
 
-  const [tempXiaozhiUrl, setTempXiaozhiUrl] = useState('');
 
   const {
     routingConfig,
@@ -57,7 +56,6 @@ const SettingsPage: React.FC = () => {
     installConfig: savedInstallConfig,
     smartRoutingConfig,
     mcpRouterConfig,
-    xiaozhiConfig,
     loading,
     updateRoutingConfig,
     updateRoutingConfigBatch,
@@ -65,7 +63,6 @@ const SettingsPage: React.FC = () => {
     updateSmartRoutingConfig,
     updateSmartRoutingConfigBatch,
     updateMCPRouterConfig,
-    updateXiaozhiConfig
   } = useSettingsData();
 
   // Update local installConfig when savedInstallConfig changes
@@ -99,23 +96,16 @@ const SettingsPage: React.FC = () => {
     }
   }, [mcpRouterConfig]);
 
-  // Update tempXiaozhiUrl when xiaozhiConfig changes
-  useEffect(() => {
-    if (xiaozhiConfig) {
-      setTempXiaozhiUrl(xiaozhiConfig.webSocketUrl);
-    }
-  }, [xiaozhiConfig]);
 
   const [sectionsVisible, setSectionsVisible] = useState({
     routingConfig: false,
     installConfig: false,
     smartRoutingConfig: false,
     mcpRouterConfig: false,
-    xiaozhiConfig: false,
     password: false
   });
 
-  const toggleSection = (section: 'routingConfig' | 'installConfig' | 'smartRoutingConfig' | 'mcpRouterConfig' | 'xiaozhiConfig' | 'password') => {
+  const toggleSection = (section: 'routingConfig' | 'installConfig' | 'smartRoutingConfig' | 'mcpRouterConfig' | 'password') => {
     setSectionsVisible(prev => ({
       ...prev,
       [section]: !prev[section]
@@ -193,66 +183,6 @@ const SettingsPage: React.FC = () => {
     await updateMCPRouterConfig(key, tempMCPRouterConfig[key]);
   };
 
-  // Xiaozhi configuration handlers
-  const handleXiaozhiEnabledChange = async (value: boolean) => {
-    if (value) {
-      // 如果要启用，先检查是否有URL配置
-      const hasUrl = tempXiaozhiUrl.trim() || xiaozhiConfig.webSocketUrl.trim();
-      if (!hasUrl) {
-        showToast('请先配置小智WebSocket URL');
-        return;
-      }
-      
-      // 如果输入框有未保存的内容，先保存
-      if (tempXiaozhiUrl.trim() && tempXiaozhiUrl !== xiaozhiConfig.webSocketUrl) {
-        const urlSaved = await updateXiaozhiConfig('webSocketUrl', tempXiaozhiUrl);
-        if (!urlSaved) {
-          return; // 如果URL保存失败，不继续启用
-        }
-      }
-    }
-
-    await updateXiaozhiConfig('enabled', value);
-  };
-
-  const handleXiaozhiUrlChange = (value: string) => {
-    setTempXiaozhiUrl(value);
-  };
-
-  /**
-   * 检查URL格式是否有效
-   */
-  const isValidUrl = (url: string): boolean => {
-    if (!url.trim()) return true; // 空URL视为有效（未填写状态）
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const saveXiaozhiUrl = async () => {
-    // 直接保存用户输入的URL，不做修改
-    const success = await updateXiaozhiConfig('webSocketUrl', tempXiaozhiUrl);
-    
-    // 如果保存成功且小智客户端已启用，则重启连接以使用新URL
-    if (success && xiaozhiConfig.enabled) {
-      try {
-        const token = localStorage.getItem('mcphub_token');
-        await fetch(`${import.meta.env.VITE_API_URL || ''}/api/xiaozhi/restart`, {
-          method: 'POST',
-          headers: {
-            'x-auth-token': token || '',
-          },
-        });
-        showToast('小智客户端已重新连接');
-      } catch (error) {
-        console.error('重启小智客户端失败:', error);
-        showToast('重启小智客户端失败');
-      }
-    }
-  };
 
   const handleSmartRoutingEnabledChange = async (value: boolean) => {
     // If enabling Smart Routing, validate required fields and save any unsaved changes
@@ -500,73 +430,6 @@ const SettingsPage: React.FC = () => {
         </div>
       </PermissionChecker>
 
-      {/* Xiaozhi Configuration Settings */}
-      <div className="bg-white shadow rounded-lg py-4 px-6 mb-6 page-card dashboard-card">
-        <div
-          className="flex justify-between items-center cursor-pointer transition-colors duration-200 hover:text-blue-600"
-          onClick={() => toggleSection('xiaozhiConfig')}
-        >
-          <h2 className="font-semibold text-gray-800">小智客户端配置</h2>
-          <span className="text-gray-500 transition-transform duration-200">
-            {sectionsVisible.xiaozhiConfig ? '▼' : '►'}
-          </span>
-        </div>
-
-        {sectionsVisible.xiaozhiConfig && (
-          <div className="space-y-4 mt-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-              <div>
-                <h3 className="font-medium text-gray-700">启用小智客户端</h3>
-                <p className="text-sm text-gray-500">启用与小智AI平台的WebSocket连接</p>
-              </div>
-              <Switch
-                disabled={loading}
-                checked={xiaozhiConfig.enabled}
-                onCheckedChange={(checked) => handleXiaozhiEnabledChange(checked)}
-              />
-            </div>
-
-            <div className="p-3 bg-gray-50 rounded-md">
-              <div className="mb-2">
-                <h3 className="font-medium text-gray-700">
-                  <span className="text-red-500 px-1">*</span>小智WebSocket URL
-                </h3>
-                <p className="text-sm text-gray-500">小智平台的WebSocket连接地址</p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={tempXiaozhiUrl}
-                    onChange={(e) => handleXiaozhiUrlChange(e.target.value)}
-                    placeholder="wss://api.xiaozhi.me/mcp?token=your_token"
-                    className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
-                    disabled={loading}
-                  />
-                  <button
-                    onClick={saveXiaozhiUrl}
-                    disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
-                  >
-                    保存
-                  </button>
-                </div>
-                {tempXiaozhiUrl.trim() && !isValidUrl(tempXiaozhiUrl) && (
-                  <div className="text-xs text-red-600">
-                    ⚠️ URL格式不正确
-                  </div>
-                )}
-                <div className="text-xs text-gray-500 mt-1">
-                  支持的URL格式示例:
-                  <br />• wss://api.xiaozhi.me/mcp?token=... (官方)
-                  <br />• wss://your-domain.com/mcp_endpoint/mcp?token=... (自部署)
-                  <br />• 填什么就用什么，不会自动修改您的输入
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Route Configuration Settings */}
       <div className="bg-white shadow rounded-lg py-4 px-6 mb-6 dashboard-card">

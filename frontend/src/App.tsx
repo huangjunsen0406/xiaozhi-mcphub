@@ -13,6 +13,7 @@ import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
 import MarketPage from './pages/MarketPage';
 import LogsPage from './pages/LogsPage';
+import XiaozhiEndpointsPage from './pages/XiaozhiEndpointsPage';
 import { getBasePath } from './utils/runtime';
 
 // Helper component to redirect cloud server routes to market
@@ -39,6 +40,7 @@ function App() {
                   <Route path="/servers" element={<ServersPage />} />
                   <Route path="/groups" element={<GroupsPage />} />
                   <Route path="/users" element={<UsersPage />} />
+                  <Route path="/xiaozhi" element={<XiaozhiEndpointsPage />} />
                   <Route path="/market" element={<MarketPage />} />
                   <Route path="/market/:serverName" element={<MarketPage />} />
                   {/* Legacy cloud routes redirect to market with cloud tab */}

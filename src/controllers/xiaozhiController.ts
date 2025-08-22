@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { xiaozhiClientService } from '../services/xiaozhiClientService.js';
+import { xiaozhiEndpointService } from '../services/xiaozhiEndpointService.js';
 import { loadSettings, saveSettings } from '../config/index.js';
-import { XiaozhiConfig } from '../types/index.js';
+import { XiaozhiConfig, XiaozhiEndpoint } from '../types/index.js';
 
 // 获取小智客户端状态
 export const getXiaozhiStatus = async (req: Request, res: Response): Promise<void> => {
@@ -20,30 +21,36 @@ export const getXiaozhiStatus = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// 获取小智客户端配置
+// 获取小智客户端配置（兼容老API）
 export const getXiaozhiConfig = async (req: Request, res: Response): Promise<void> => {
   try {
     const settings = loadSettings();
     const config = settings.xiaozhi || {
       enabled: false,
-      webSocketUrl: '',
-      reconnect: {
+      endpoints: [],
+    };
+
+    // 为了兼容老的前端，如果有端点，返回第一个端点的信息作为单端点模式
+    const compatConfig = {
+      enabled: config.enabled,
+      webSocketUrl: config.endpoints.length > 0 ? 
+        config.endpoints[0].webSocketUrl.replace(/token=[^&?]*/g, 'token=***') : '',
+      reconnect: config.endpoints.length > 0 ? config.endpoints[0].reconnect : {
         maxAttempts: 10,
         initialDelay: 2000,
         maxDelay: 60000,
         backoffMultiplier: 2,
       },
-    };
-
-    // 隐藏敏感信息 (URL中的token部分)
-    const safeConfig = {
-      ...config,
-      webSocketUrl: config.webSocketUrl ? config.webSocketUrl.replace(/token=[^&]*/g, 'token=***') : '',
+      // 同时返回新的多端点信息
+      endpoints: config.endpoints.map(endpoint => ({
+        ...endpoint,
+        webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
+      }))
     };
 
     res.json({
       success: true,
-      data: safeConfig,
+      data: compatConfig,
     });
   } catch (error) {
     console.error('获取小智配置失败:', error);
@@ -54,43 +61,28 @@ export const getXiaozhiConfig = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// 更新小智客户端配置
+// 更新小智客户端配置（兼容老API，用于总开关）
 export const updateXiaozhiConfig = async (req: Request, res: Response): Promise<void> => {
   try {
-    const newConfig: Partial<XiaozhiConfig> = req.body;
+    const { enabled } = req.body;
 
     const settings = loadSettings();
     const currentConfig = settings.xiaozhi || {
       enabled: false,
-      webSocketUrl: '',
-      reconnect: {
-        maxAttempts: 10,
-        initialDelay: 2000,
-        maxDelay: 60000,
-        backoffMultiplier: 2,
-      },
+      endpoints: [],
     };
 
-    // 如果URL为占位符，保持原有URL
-    if (newConfig.webSocketUrl && newConfig.webSocketUrl.includes('token=***')) {
-      newConfig.webSocketUrl = currentConfig.webSocketUrl;
-    }
-
-    // 合并配置
+    // 只更新enabled状态，端点管理使用专门的端点API
     const updatedConfig: XiaozhiConfig = {
-      enabled: newConfig.enabled ?? currentConfig.enabled,
-      webSocketUrl: newConfig.webSocketUrl ?? currentConfig.webSocketUrl,
-      reconnect: {
-        ...currentConfig.reconnect,
-        ...newConfig.reconnect,
-      },
+      ...currentConfig,
+      enabled: enabled ?? currentConfig.enabled,
     };
 
-    // 验证最终配置：如果要启用小智客户端，必须有 WebSocket URL
-    if (updatedConfig.enabled && !updatedConfig.webSocketUrl.trim()) {
+    // 验证：如果要启用小智客户端，必须有至少一个端点
+    if (updatedConfig.enabled && updatedConfig.endpoints.length === 0) {
       res.status(400).json({
         success: false,
-        message: '启用小智客户端时，WebSocket URL为必填项',
+        message: '启用小智客户端时，必须至少配置一个端点',
       });
       return;
     }
@@ -195,4 +187,217 @@ export const startXiaozhiClient = async (req: Request, res: Response): Promise<v
       message: `启动小智客户端失败: ${error}`,
     });
   }
-}; 
+};
+
+// ===== 多端点管理API =====
+
+// 获取所有小智端点
+export const getXiaozhiEndpoints = (req: Request, res: Response): void => {
+  try {
+    const endpoints = xiaozhiEndpointService.getAllEndpoints();
+    
+    // 隐藏敏感信息 (URL中的token部分)
+    const safeEndpoints = endpoints.map(endpoint => ({
+      ...endpoint,
+      webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
+    }));
+    
+    res.json({ success: true, data: safeEndpoints });
+  } catch (error) {
+    console.error('获取小智端点失败:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// 获取单个小智端点详情（用于编辑，返回完整URL）
+export const getXiaozhiEndpoint = (req: Request, res: Response): void => {
+  try {
+    const { id } = req.params;
+    const endpoints = xiaozhiEndpointService.getAllEndpoints();
+    const endpoint = endpoints.find(ep => ep.id === id);
+    
+    if (!endpoint) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+    
+    // 返回完整的端点信息，不掩码URL
+    res.json({ success: true, data: endpoint });
+  } catch (error) {
+    console.error('获取小智端点详情失败:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// 创建小智端点
+export const createXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, webSocketUrl, description, groupId } = req.body;
+
+    if (!name || !webSocketUrl) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Name and webSocketUrl are required' 
+      });
+      return;
+    }
+
+    // 验证webSocketUrl格式
+    if (!webSocketUrl.startsWith('ws://') && !webSocketUrl.startsWith('wss://')) {
+      res.status(400).json({
+        success: false,
+        message: 'WebSocket URL must start with ws:// or wss://'
+      });
+      return;
+    }
+
+    const endpoint = await xiaozhiEndpointService.createEndpoint({
+      name,
+      webSocketUrl,
+      description: description || '',
+      groupId: groupId || null,
+      enabled: true,
+      reconnect: {
+        maxAttempts: 10,
+        initialDelay: 2000,
+        maxDelay: 60000,
+        backoffMultiplier: 2,
+      }
+    });
+
+    // 隐藏敏感信息返回
+    const safeEndpoint = {
+      ...endpoint,
+      webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
+    };
+
+    res.json({ success: true, data: safeEndpoint });
+  } catch (error) {
+    console.error('创建小智端点失败:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// 更新小智端点
+export const updateXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // 如果URL为占位符，不更新URL
+    if (updateData.webSocketUrl && updateData.webSocketUrl.includes('token=***')) {
+      delete updateData.webSocketUrl;
+    }
+
+    // 验证webSocketUrl格式（如果有的话）
+    if (updateData.webSocketUrl && !updateData.webSocketUrl.startsWith('ws://') && !updateData.webSocketUrl.startsWith('wss://')) {
+      res.status(400).json({
+        success: false,
+        message: 'WebSocket URL must start with ws:// or wss://'
+      });
+      return;
+    }
+
+    const endpoint = await xiaozhiEndpointService.updateEndpoint(id, updateData);
+
+    if (!endpoint) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+
+    // 隐藏敏感信息返回
+    const safeEndpoint = {
+      ...endpoint,
+      webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
+    };
+
+    res.json({ success: true, data: safeEndpoint });
+  } catch (error) {
+    console.error('更新小智端点失败:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// 删除小智端点
+export const deleteXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const success = await xiaozhiEndpointService.deleteEndpoint(id);
+
+    if (!success) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Endpoint deleted successfully' });
+  } catch (error) {
+    console.error('删除小智端点失败:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// 重连小智端点
+export const reconnectXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const success = await xiaozhiEndpointService.reconnectEndpoint(id);
+
+    if (!success) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Endpoint reconnection initiated' });
+  } catch (error) {
+    console.error('重连小智端点失败:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// 获取小智端点状态
+export const getXiaozhiEndpointStatus = (req: Request, res: Response): void => {
+  try {
+    const { id } = req.params;
+    const status = xiaozhiEndpointService.getEndpointStatus(id);
+
+    if (!status) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+
+    // 隐藏敏感信息
+    const safeStatus = {
+      ...status,
+      endpoint: {
+        ...status.endpoint,
+        webSocketUrl: status.endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
+      }
+    };
+
+    res.json({ success: true, data: safeStatus });
+  } catch (error) {
+    console.error('获取小智端点状态失败:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// 获取所有小智端点状态
+export const getAllXiaozhiEndpointStatus = (req: Request, res: Response): void => {
+  try {
+    const allStatus = xiaozhiEndpointService.getAllEndpointsStatus();
+    
+    // 隐藏敏感信息
+    const safeAllStatus = allStatus.map(status => ({
+      ...status,
+      endpoint: {
+        ...status.endpoint,
+        webSocketUrl: status.endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
+      }
+    }));
+
+    res.json({ success: true, data: safeAllStatus });
+  } catch (error) {
+    console.error('获取所有小智端点状态失败:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

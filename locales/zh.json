@@ -199,6 +199,7 @@
     "settings": "设置",
     "changePassword": "修改密码",
     "groups": "分组",
+    "xiaozhi": "小智",
     "users": "用户",
     "market": "市场",
     "cloud": "云端市场",
@@ -586,7 +587,14 @@
       "failedToGetMarketTags": "获取市场标签失败",
       "failedToSearchMarketServers": "搜索市场服务器失败",
       "failedToFilterMarketServers": "过滤市场服务器失败",
-      "failedToProcessDxtFile": "处理 DXT 文件失败"
+      "failedToProcessDxtFile": "处理 DXT 文件失败",
+      "failedToFetchXiaozhiConfig": "获取小智配置失败",
+      "failedToFetchEndpoints": "获取端点失败",
+      "failedToCreateEndpoint": "创建端点失败",
+      "failedToUpdateEndpoint": "更新端点失败",
+      "failedToDeleteEndpoint": "删除端点失败",
+      "failedToReconnectEndpoint": "重连端点失败",
+      "failedToUpdateXiaozhiConfig": "更新小智配置失败"
     },
     "success": {
       "serverCreated": "服务器创建成功",
@@ -601,7 +609,76 @@
       "groupDeleted": "分组删除成功",
       "serverAddedToGroup": "服务器添加到分组成功",
       "serverRemovedFromGroup": "服务器从分组移除成功",
-      "serverToolsUpdated": "服务器工具更新成功"
+      "serverToolsUpdated": "服务器工具更新成功",
+      "endpointCreated": "端点创建成功",
+      "endpointUpdated": "端点更新成功",
+      "endpointDeleted": "端点删除成功",
+      "endpointReconnecting": "端点重连已启动",
+      "xiaozhiConfigUpdated": "小智配置更新成功"
+    }
+  },
+  "xiaozhi": {
+    "title": "小智端点",
+    "description": "管理您的小智 WebSocket 端点以实现 MCP 集成",
+    "addEndpoint": "添加端点",
+    "url": "WebSocket URL",
+    "group": "分组",
+    "created": "创建时间",
+    "lastConnected": "最后连接",
+    "enabled": "已启用",
+    "never": "从未",
+    "status": {
+      "service": "服务状态",
+      "totalEndpoints": "总端点数",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "connected": "已连接",
+      "disconnected": "已断开",
+      "connecting": "连接中",
+      "unknown": "未知"
+    },
+    "empty": {
+      "title": "未配置端点",
+      "description": "通过创建您的第一个小智端点来开始使用。"
+    },
+    "delete": {
+      "title": "删除端点",
+      "message": "您确定要删除此端点吗？此操作无法撤销。"
+    },
+    "reconnect": {
+      "title": "重连",
+      "maxAttempts": "最大尝试次数",
+      "initialDelay": "初始延迟"
+    },
+    "form": {
+      "create": {
+        "title": "创建新端点"
+      },
+      "edit": {
+        "title": "编辑端点"
+      },
+      "name": "名称",
+      "namePlaceholder": "输入端点名称",
+      "url": "WebSocket URL",
+      "description": "描述",
+      "descriptionPlaceholder": "为此端点输入可选描述",
+      "group": "分组",
+      "noGroup": "无分组（所有工具）",
+      "enabled": "启用此端点",
+      "reconnectSettings": "重连设置",
+      "maxAttempts": "最大尝试次数",
+      "initialDelay": "初始延迟（毫秒）",
+      "maxDelay": "最大延迟（毫秒）",
+      "backoffMultiplier": "退避倍数",
+      "errors": {
+        "nameRequired": "名称为必填项",
+        "urlRequired": "WebSocket URL 为必填项",
+        "urlInvalid": "WebSocket URL 必须以 ws:// 或 wss:// 开头",
+        "maxAttemptsRange": "最大尝试次数必须在 1 到 100 之间",
+        "initialDelayRange": "初始延迟必须在 100 到 60000 毫秒之间",
+        "maxDelayGreater": "最大延迟必须大于初始延迟",
+        "backoffRange": "退避倍数必须在 1 到 10 之间"
+      }
     }
   }
 }

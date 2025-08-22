@@ -124,15 +124,42 @@ export interface MCPRouterCallToolResponse {
   isError: boolean;
 }
 
-// 小智客户端配置
-export interface XiaozhiConfig {
+// 小智端点配置
+export interface XiaozhiEndpoint {
+  id: string;
+  name: string;
   enabled: boolean;
   webSocketUrl: string; // 完整的 WebSocket URL (包含token)
-  reconnect?: {
-    maxAttempts?: number;
-    initialDelay?: number;
-    maxDelay?: number;
-    backoffMultiplier?: number;
+  description?: string;
+  groupId?: string; // null表示使用全部工具
+  reconnect: {
+    maxAttempts: number;
+    initialDelay: number;
+    maxDelay: number;
+    backoffMultiplier: number;
+  };
+  createdAt: string;
+  lastConnected?: string;
+  status?: 'connected' | 'disconnected' | 'connecting';
+}
+
+// 小智端点状态信息
+export interface XiaozhiEndpointStatus {
+  endpoint: XiaozhiEndpoint;
+  connected: boolean;
+  connectionCount: number;
+  tools?: Tool[];
+  lastConnected?: string;
+  error?: string;
+}
+
+// 小智多端点配置
+export interface XiaozhiConfig {
+  enabled: boolean;
+  endpoints: XiaozhiEndpoint[];
+  loadBalancing?: {
+    enabled: boolean;
+    strategy: 'round-robin' | 'random' | 'least-connections';
   };
 }
 

@@ -893,7 +893,8 @@ export const toggleServerStatus = async (
 
 export const handleListToolsRequest = async (_: any, extra: any) => {
   const sessionId = extra.sessionId || '';
-  const group = getGroup(sessionId);
+  // Use extra.group if provided (for Xiaozhi endpoints), otherwise fall back to session-based lookup
+  const group = extra.group || getGroup(sessionId);
   console.log(`Handling ListToolsRequest for group: ${group}`);
 
   // Special handling for $smart group to return special tools
