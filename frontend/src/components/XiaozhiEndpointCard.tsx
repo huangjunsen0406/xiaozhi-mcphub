@@ -54,10 +54,10 @@ const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-      <div className="flex items-start justify-between mb-4">
+    <div className="p-6 bg-white rounded-lg border border-gray-200 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+      <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex gap-3 items-center mb-2">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {endpoint.name}
             </h3>
@@ -65,15 +65,15 @@ const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
           </div>
           
           {endpoint.description && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
               {endpoint.description}
             </p>
           )}
 
-          <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+          <div className="space-y-1 text-sm text-gray-500 dark:text-gray-400">
             <p>
               <span className="font-medium">{t('xiaozhi.url', 'WebSocket URL')}:</span>{' '}
-              <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+              <span className="px-2 py-1 font-mono text-xs bg-gray-100 rounded dark:bg-gray-700">
                 {endpoint.webSocketUrl}
               </span>
             </p>
@@ -107,13 +107,13 @@ const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
+        <div className="flex gap-2 items-center ml-4">
           <label className="inline-flex items-center">
             <input
               type="checkbox"
               checked={endpoint.enabled}
               onChange={(e) => onToggleEnabled(endpoint.id, e.target.checked)}
-              className="form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out"
+              className="w-4 h-4 text-blue-600 transition duration-150 ease-in-out form-checkbox"
             />
             <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
               {t('xiaozhi.enabled', 'Enabled')}
@@ -122,14 +122,14 @@ const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => onEdit(endpoint)}
           >
-            {t('common.edit', 'Edit')}
+            {t('server.edit', 'Edit')}
           </Button>
           
           <Button

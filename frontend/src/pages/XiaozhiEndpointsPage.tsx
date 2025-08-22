@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../components/ui/Button';
 import XiaozhiEndpointCard from '../components/XiaozhiEndpointCard';
-import XiaozhiEndpointForm from '../components/XiaozhiEndpointForm';
+import XiaozhiEndpointModal from '../components/XiaozhiEndpointModal';
 import { useXiaozhiEndpoints, XiaozhiEndpoint } from '../hooks/useXiaozhiEndpoints';
 import { ApiResponse } from '@/types';
 import { apiGet } from '../utils/fetchInterceptor';
@@ -33,7 +33,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
   } = useXiaozhiEndpoints();
 
   const [groups, setGroups] = useState<Group[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingEndpoint, setEditingEndpoint] = useState<XiaozhiEndpoint | undefined>();
 
   // Fetch groups for the form dropdown
@@ -54,7 +54,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
 
   const handleCreateNew = () => {
     setEditingEndpoint(undefined);
-    setShowForm(true);
+    setShowModal(true);
   };
 
   const handleEdit = async (endpoint: XiaozhiEndpoint) => {
@@ -62,7 +62,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
     const fullEndpoint = await fetchEndpointDetails(endpoint.id);
     if (fullEndpoint) {
       setEditingEndpoint(fullEndpoint);
-      setShowForm(true);
+      setShowModal(true);
     }
   };
 
@@ -71,16 +71,11 @@ const XiaozhiEndpointsPage: React.FC = () => {
       ? await updateEndpoint(editingEndpoint.id, data)
       : await createEndpoint(data);
     
-    if (success) {
-      setShowForm(false);
-      setEditingEndpoint(undefined);
-    }
-    
     return success;
   };
 
-  const handleFormCancel = () => {
-    setShowForm(false);
+  const handleModalClose = () => {
+    setShowModal(false);
     setEditingEndpoint(undefined);
   };
 
@@ -92,31 +87,6 @@ const XiaozhiEndpointsPage: React.FC = () => {
     await updateConfig({ enabled });
   };
 
-  if (showForm) {
-    return (
-      <div className="p-6">
-        <div className="mb-6">
-          <Button
-            variant="outline"
-            onClick={handleFormCancel}
-            className="mb-4"
-          >
-            ← {t('common.back', 'Back')}
-          </Button>
-        </div>
-
-        <div className="p-6 mx-auto max-w-4xl bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-          <XiaozhiEndpointForm
-            endpoint={editingEndpoint}
-            groups={groups}
-            onSubmit={handleFormSubmit}
-            onCancel={handleFormCancel}
-            loading={loading}
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6">
@@ -243,6 +213,16 @@ const XiaozhiEndpointsPage: React.FC = () => {
           ))
         )}
       </div>
+
+      {/* Modal */}
+      <XiaozhiEndpointModal
+        isOpen={showModal}
+        endpoint={editingEndpoint}
+        groups={groups}
+        onSubmit={handleFormSubmit}
+        onClose={handleModalClose}
+        loading={loading}
+      />
     </div>
   );
 };

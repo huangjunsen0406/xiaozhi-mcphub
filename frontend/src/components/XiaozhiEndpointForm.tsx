@@ -161,18 +161,18 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+      {/* <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
         {isEditMode 
           ? t('xiaozhi.form.edit.title', 'Edit Endpoint') 
           : t('xiaozhi.form.create.title', 'Create New Endpoint')
         }
-      </h3>
+      </h3> */}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Basic Information */}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.name', 'Name')} *
             </label>
             <input
@@ -188,7 +188,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.url', 'WebSocket URL')} *
             </label>
             <input
@@ -204,26 +204,26 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.description', 'Description')}
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="px-3 py-2 w-full rounded-md border border-gray-300 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               placeholder={t('xiaozhi.form.descriptionPlaceholder', 'Optional description for this endpoint')}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.group', 'Group')}
             </label>
             <select
               value={formData.groupId}
               onChange={(e) => handleInputChange('groupId', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="px-3 py-2 w-full rounded-md border border-gray-300 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
               <option value="">{t('xiaozhi.form.noGroup', 'No Group (All Tools)')}</option>
               {groups.map((group) => (
@@ -240,9 +240,9 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
               id="enabled"
               checked={formData.enabled}
               onChange={(e) => handleInputChange('enabled', e.target.checked)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
             />
-            <label htmlFor="enabled" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+            <label htmlFor="enabled" className="block ml-2 text-sm text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.enabled', 'Enable this endpoint')}
             </label>
           </div>
@@ -250,12 +250,12 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
 
         {/* Reconnection Settings */}
         <div className="space-y-4">
-          <h4 className="text-md font-medium text-gray-900 dark:text-white">
+          <h4 className="font-medium text-gray-900 text-md dark:text-white">
             {t('xiaozhi.form.reconnectSettings', 'Reconnection Settings')}
           </h4>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.maxAttempts', 'Max Attempts')}
             </label>
             <input
@@ -272,7 +272,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.initialDelay', 'Initial Delay (ms)')}
             </label>
             <input
@@ -290,7 +290,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.maxDelay', 'Max Delay (ms)')}
             </label>
             <input
@@ -308,7 +308,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.backoffMultiplier', 'Backoff Multiplier')}
             </label>
             <input
@@ -327,7 +327,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
         </div>
       </div>
 
-      <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex justify-end pt-6 space-x-3 border-t border-gray-200 dark:border-gray-700">
         <Button
           type="button"
           variant="outline"

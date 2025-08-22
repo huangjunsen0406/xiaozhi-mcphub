@@ -166,7 +166,7 @@ export const useXiaozhiEndpoints = () => {
       
       if (response.success && response.data) {
         setEndpoints(prev => prev.map(ep => ep.id === endpointId ? response.data! : ep));
-        showToast(t('settings.endpointUpdated', 'Endpoint updated successfully'));
+        showToast(t('api.success.endpointUpdated', 'Endpoint updated successfully'));
         triggerRefresh();
         return true;
       } else {
