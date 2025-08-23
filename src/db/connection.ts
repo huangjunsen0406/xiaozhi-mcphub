@@ -3,7 +3,7 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 import entities from './entities/index.js';
 import { registerPostgresVectorType } from './types/postgresVectorType.js';
 import { VectorEmbeddingSubscriber } from './subscribers/VectorEmbeddingSubscriber.js';
-import { getSmartRoutingConfig } from '../utils/smartRouting.js';
+import { initializeDefaultData } from './services/initializationService.js';
 
 // Helper function to create required PostgreSQL extensions
 const createRequiredExtensions = async (dataSource: DataSource): Promise<void> => {
@@ -24,9 +24,9 @@ const createRequiredExtensions = async (dataSource: DataSource): Promise<void> =
   }
 };
 
-// Get database URL from smart routing config or fallback to environment variable
+// Get database URL from environment variable or use default
 const getDatabaseUrl = (): string => {
-  return getSmartRoutingConfig().dbUrl;
+  return process.env.DATABASE_URL || process.env.DB_URL || 'postgres://xiaozhi:xiaozhi123@localhost:5432/xiaozhi_mcphub';
 };
 
 // Default database configuration
@@ -314,6 +314,14 @@ const performDatabaseInitialization = async (): Promise<DataSource> => {
         } catch (error: any) {
           console.warn('Post-initialization vector setup failed:', error.message);
         }
+      }
+
+      // Initialize default data after database setup
+      try {
+        await initializeDefaultData(appDataSource);
+      } catch (error: any) {
+        console.error('Failed to initialize default data:', error.message);
+        // Continue even if default data initialization fails
       }
     }
     return appDataSource;

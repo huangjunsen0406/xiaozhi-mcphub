@@ -34,6 +34,11 @@ export class AppServer {
 
   async initialize(): Promise<void> {
     try {
+      // Initialize database first
+      const { initializeDatabase } = await import('./db/connection.js');
+      await initializeDatabase();
+      console.log('Database initialized successfully');
+
       // Initialize i18n before other components
       await initI18n();
       console.log('i18n initialized successfully');
