@@ -45,7 +45,7 @@ const defaultMcpServers = [
 const defaultUsers = [
   {
     username: 'admin',
-    password: '$2b$10$Vt7krIvjNgyN67LXqly0uOcTpN0LI55cYRbcKC71pUDAP0nJ7RPa.', // Pre-hashed password
+    password: '$2b$10$P/FoYsdJZROBNgkxeyQjlOcEB2x369M/rhkWU0du9fedzj1YoOSKy', // Pre-hashed password for 'admin123'
     isAdmin: true
   }
 ];

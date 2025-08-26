@@ -14,7 +14,6 @@ import {
   handleMcpPostRequest,
   handleMcpOtherRequest,
 } from './services/sseService.js';
-import { getUserService } from './services/userService.js';
 import { sseUserContextMiddleware } from './middlewares/userContext.js';
 
 // Get the current working directory (will be project root in most cases)
@@ -43,10 +42,6 @@ export class AppServer {
       // Initialize i18n before other components
       await initI18n();
       console.log('i18n initialized successfully');
-
-      // Initialize default admin user if no users exist
-      const userService = getUserService();
-      await userService.initializeDefaultAdmin();
 
       initMiddlewares(this.app);
       initRoutes(this.app);
