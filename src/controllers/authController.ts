@@ -1,12 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { validationResult } from 'express-validator';
-import {
-  findUserByUsername,
-  verifyPassword,
-  createUser,
-  updateUserPassword,
-} from '../models/User.js';
+import { getUserService } from '../services/userService.js';
 import { getDataService } from '../services/services.js';
 import { DataService } from '../services/dataService.js';
 import { JWT_SECRET } from '../config/jwt.js';
@@ -32,10 +27,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 
   const { username, password } = req.body;
+  const userService = getUserService();
 
   try {
-    // Find user by username
-    const user = findUserByUsername(username);
+    // Find user by username (with password for authentication)
+    const user = await userService.getUserByUsernameWithPassword(username);
 
     if (!user) {
       res.status(401).json({
@@ -46,7 +42,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Verify password
-    const isPasswordValid = await verifyPassword(password, user.password);
+    const isPasswordValid = await userService.verifyPassword(password, user.password);
 
     if (!isPasswordValid) {
       res.status(401).json({
@@ -103,10 +99,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 
   const { username, password, isAdmin } = req.body;
+  const userService = getUserService();
 
   try {
     // Create new user
-    const newUser = await createUser({ username, password, isAdmin });
+    const newUser = await userService.createUser(username, password, isAdmin);
 
     if (!newUser) {
       res.status(400).json({ success: false, message: 'User already exists' });
@@ -129,7 +126,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         user: {
           username: newUser.username,
           isAdmin: newUser.isAdmin,
-          permissions: dataService.getPermissions(newUser),
+          permissions: dataService.getPermissions(newUser as any),
         },
       });
     });
@@ -170,10 +167,11 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
 
   const { currentPassword, newPassword } = req.body;
   const username = (req as any).user.username;
+  const userService = getUserService();
 
   try {
     // Find user by username
-    const user = findUserByUsername(username);
+    const user = await userService.getUserByUsernameWithPassword(username);
 
     if (!user) {
       res.status(404).json({ success: false, message: 'User not found' });
@@ -181,7 +179,7 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     }
 
     // Verify current password
-    const isPasswordValid = await verifyPassword(currentPassword, user.password);
+    const isPasswordValid = await userService.verifyPassword(currentPassword, user.password);
 
     if (!isPasswordValid) {
       res.status(401).json({ success: false, message: 'Current password is incorrect' });
@@ -189,7 +187,7 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     }
 
     // Update the password
-    const updated = await updateUserPassword(username, newPassword);
+    const updated = await userService.updateUserPassword(username, newPassword);
 
     if (!updated) {
       res.status(500).json({ success: false, message: 'Failed to update password' });

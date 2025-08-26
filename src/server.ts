@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import express from 'express';
 import cors from 'cors';
 import config from './config/index.js';
@@ -13,7 +14,7 @@ import {
   handleMcpPostRequest,
   handleMcpOtherRequest,
 } from './services/sseService.js';
-import { initializeDefaultUser } from './models/User.js';
+import { getUserService } from './services/userService.js';
 import { sseUserContextMiddleware } from './middlewares/userContext.js';
 
 // Get the current working directory (will be project root in most cases)
@@ -44,7 +45,8 @@ export class AppServer {
       console.log('i18n initialized successfully');
 
       // Initialize default admin user if no users exist
-      await initializeDefaultUser();
+      const userService = getUserService();
+      await userService.initializeDefaultAdmin();
 
       initMiddlewares(this.app);
       initRoutes(this.app);
