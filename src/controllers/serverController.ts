@@ -10,7 +10,6 @@ import {
   toggleServerStatus,
 } from '../services/mcpService.js';
 import { loadSettings, saveSettings } from '../config/index.js';
-import { syncAllServerToolsEmbeddings } from '../services/vectorSearchService.js';
 import { createSafeJSON } from '../utils/serialization.js';
 
 export const getAllServers = (_: Request, res: Response): void => {
@@ -503,10 +502,9 @@ export const updateToolDescription = async (req: Request, res: Response): Promis
   }
 };
 
-export const updateSystemConfig = (req: Request, res: Response): void => {
+export const updateSystemConfig = async (req: Request, res: Response): Promise<void> => {
   try {
     const { routing, install, smartRouting, mcpRouter } = req.body;
-    const currentUser = (req as any).user;
 
     if (
       (!routing ||
@@ -538,207 +536,69 @@ export const updateSystemConfig = (req: Request, res: Response): void => {
       return;
     }
 
-    const settings = loadSettings();
-    if (!settings.systemConfig) {
-      settings.systemConfig = {
-        routing: {
-          enableGlobalRoute: true,
-          enableGroupNameRoute: true,
-          enableBearerAuth: false,
-          bearerAuthKey: '',
-          skipAuth: false,
-        },
-        install: {
-          pythonIndexUrl: '',
-          npmRegistry: '',
-          baseUrl: 'http://localhost:3000',
-        },
-        smartRouting: {
-          enabled: false,
-          dbUrl: '',
-          openaiApiBaseUrl: '',
-          openaiApiKey: '',
-          openaiApiEmbeddingModel: '',
-        },
-        mcpRouter: {
-          apiKey: '',
-          referer: 'https://www.mcphubx.com',
-          title: 'MCPHub',
-          baseUrl: 'https://api.mcprouter.to/v1',
-        },
-      };
-    }
-
-    if (!settings.systemConfig.routing) {
-      settings.systemConfig.routing = {
-        enableGlobalRoute: true,
-        enableGroupNameRoute: true,
-        enableBearerAuth: false,
-        bearerAuthKey: '',
-        skipAuth: false,
-      };
-    }
-
-    if (!settings.systemConfig.install) {
-      settings.systemConfig.install = {
-        pythonIndexUrl: '',
-        npmRegistry: '',
-        baseUrl: 'http://localhost:3000',
-      };
-    }
-
-    if (!settings.systemConfig.smartRouting) {
-      settings.systemConfig.smartRouting = {
-        enabled: false,
-        dbUrl: '',
-        openaiApiBaseUrl: '',
-        openaiApiKey: '',
-        openaiApiEmbeddingModel: '',
-      };
-    }
-
-    if (!settings.systemConfig.mcpRouter) {
-      settings.systemConfig.mcpRouter = {
-        apiKey: '',
-        referer: 'https://www.mcphubx.com',
-        title: 'MCPHub',
-        baseUrl: 'https://api.mcprouter.to/v1',
-      };
-    }
-
-    if (routing) {
-      if (typeof routing.enableGlobalRoute === 'boolean') {
-        settings.systemConfig.routing.enableGlobalRoute = routing.enableGlobalRoute;
-      }
-
-      if (typeof routing.enableGroupNameRoute === 'boolean') {
-        settings.systemConfig.routing.enableGroupNameRoute = routing.enableGroupNameRoute;
-      }
-
-      if (typeof routing.enableBearerAuth === 'boolean') {
-        settings.systemConfig.routing.enableBearerAuth = routing.enableBearerAuth;
-      }
-
-      if (typeof routing.bearerAuthKey === 'string') {
-        settings.systemConfig.routing.bearerAuthKey = routing.bearerAuthKey;
-      }
-
-      if (typeof routing.skipAuth === 'boolean') {
-        settings.systemConfig.routing.skipAuth = routing.skipAuth;
-      }
-    }
-
-    if (install) {
-      if (typeof install.pythonIndexUrl === 'string') {
-        settings.systemConfig.install.pythonIndexUrl = install.pythonIndexUrl;
-      }
-      if (typeof install.npmRegistry === 'string') {
-        settings.systemConfig.install.npmRegistry = install.npmRegistry;
-      }
-      if (typeof install.baseUrl === 'string') {
-        settings.systemConfig.install.baseUrl = install.baseUrl;
-      }
-    }
-
-    // Track smartRouting state and configuration changes
-    const wasSmartRoutingEnabled = settings.systemConfig.smartRouting.enabled || false;
-    const previousSmartRoutingConfig = { ...settings.systemConfig.smartRouting };
-    let needsSync = false;
-
-    if (smartRouting) {
-      if (typeof smartRouting.enabled === 'boolean') {
-        // If enabling Smart Routing, validate required fields
-        if (smartRouting.enabled) {
-          const currentDbUrl = smartRouting.dbUrl || settings.systemConfig.smartRouting.dbUrl;
-          const currentOpenaiApiKey =
-            smartRouting.openaiApiKey || settings.systemConfig.smartRouting.openaiApiKey;
-
-          if (!currentDbUrl || !currentOpenaiApiKey) {
-            const missingFields = [];
-            if (!currentDbUrl) missingFields.push('Database URL');
-            if (!currentOpenaiApiKey) missingFields.push('OpenAI API Key');
-
-            res.status(400).json({
-              success: false,
-              message: `Smart Routing requires the following fields: ${missingFields.join(', ')}`,
-            });
-            return;
-          }
-        }
-        settings.systemConfig.smartRouting.enabled = smartRouting.enabled;
-      }
-      if (typeof smartRouting.dbUrl === 'string') {
-        settings.systemConfig.smartRouting.dbUrl = smartRouting.dbUrl;
-      }
-      if (typeof smartRouting.openaiApiBaseUrl === 'string') {
-        settings.systemConfig.smartRouting.openaiApiBaseUrl = smartRouting.openaiApiBaseUrl;
-      }
-      if (typeof smartRouting.openaiApiKey === 'string') {
-        settings.systemConfig.smartRouting.openaiApiKey = smartRouting.openaiApiKey;
-      }
-      if (typeof smartRouting.openaiApiEmbeddingModel === 'string') {
-        settings.systemConfig.smartRouting.openaiApiEmbeddingModel =
-          smartRouting.openaiApiEmbeddingModel;
-      }
-
-      // Check if we need to sync embeddings
-      const isNowEnabled = settings.systemConfig.smartRouting.enabled || false;
-      const hasConfigChanged =
-        previousSmartRoutingConfig.dbUrl !== settings.systemConfig.smartRouting.dbUrl ||
-        previousSmartRoutingConfig.openaiApiBaseUrl !==
-          settings.systemConfig.smartRouting.openaiApiBaseUrl ||
-        previousSmartRoutingConfig.openaiApiKey !==
-          settings.systemConfig.smartRouting.openaiApiKey ||
-        previousSmartRoutingConfig.openaiApiEmbeddingModel !==
-          settings.systemConfig.smartRouting.openaiApiEmbeddingModel;
-
-      // Sync if: first time enabling OR smart routing is enabled and any config changed
-      needsSync = (!wasSmartRoutingEnabled && isNowEnabled) || (isNowEnabled && hasConfigChanged);
-    }
-
-    if (mcpRouter) {
-      if (typeof mcpRouter.apiKey === 'string') {
-        settings.systemConfig.mcpRouter.apiKey = mcpRouter.apiKey;
-      }
-      if (typeof mcpRouter.referer === 'string') {
-        settings.systemConfig.mcpRouter.referer = mcpRouter.referer;
-      }
-      if (typeof mcpRouter.title === 'string') {
-        settings.systemConfig.mcpRouter.title = mcpRouter.title;
-      }
-      if (typeof mcpRouter.baseUrl === 'string') {
-        settings.systemConfig.mcpRouter.baseUrl = mcpRouter.baseUrl;
-      }
-    }
-
-    if (saveSettings(settings, currentUser)) {
-      res.json({
-        success: true,
-        data: settings.systemConfig,
-        message: 'System configuration updated successfully',
+    // Use the system config service to update configuration in database
+    const { getSystemConfigService } = await import('../services/systemConfigService.js');
+    const systemConfigService = getSystemConfigService();
+    
+    try {
+      const updatedConfig = await systemConfigService.updateSystemConfig({
+        routing,
+        install,
+        smartRouting,
+        mcpRouter
       });
 
-      // If smart routing configuration changed, sync all existing server tools
-      if (needsSync) {
-        console.log('SmartRouting configuration changed - syncing all existing server tools...');
-        // Run sync asynchronously to avoid blocking the response
-        syncAllServerToolsEmbeddings().catch((error) => {
-          console.error('Failed to sync server tools embeddings:', error);
-        });
-      }
-    } else {
+      res.json({
+        success: true,
+        data: updatedConfig,
+        message: 'System configuration updated successfully'
+      });
+    } catch (error: any) {
+      console.error('Failed to update system config:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to save system configuration',
+        message: 'Failed to update system configuration',
+        error: error.message
       });
     }
   } catch (error) {
+    console.error('Error in updateSystemConfig:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: 'Internal server error'
     });
   }
 };
+
+// Add new endpoint to get system config from database
+export const getSystemConfig = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { getSystemConfigService } = await import('../services/systemConfigService.js');
+    const systemConfigService = getSystemConfigService();
+    
+    const config = await systemConfigService.getSystemConfig();
+    
+    if (!config) {
+      res.status(404).json({
+        success: false,
+        message: 'System configuration not found'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    console.error('Error getting system config:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get system configuration'
+    });
+  }
+};
+
 
 // Toggle prompt status for a specific server
 export const togglePrompt = async (req: Request, res: Response): Promise<void> => {

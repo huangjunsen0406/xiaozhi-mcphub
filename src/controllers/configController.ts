@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import config from '../config/index.js';
-import { loadSettings } from '../config/index.js';
 import { getDataService } from '../services/services.js';
 import { DataService } from '../services/dataService.js';
 import { IUser } from '../types/index.js';
@@ -39,12 +38,15 @@ export const getRuntimeConfig = (req: Request, res: Response): void => {
  * Get public system configuration (only skipAuth setting)
  * This endpoint doesn't require authentication to allow checking if auth should be skipped
  */
-export const getPublicConfig = (req: Request, res: Response): void => {
+export const getPublicConfig = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const settings = loadSettings();
-    const skipAuth = settings.systemConfig?.routing?.skipAuth || false;
+    // Get config from database only
+    const { getSystemConfigService } = await import('../services/systemConfigService.js');
+    const systemConfigService = getSystemConfigService();
+    const publicConfig = await systemConfigService.getPublicConfig();
+    
     let permissions = {};
-    if (skipAuth) {
+    if (publicConfig.skipAuth) {
       const user: IUser = {
         username: 'guest',
         password: '',
@@ -60,12 +62,12 @@ export const getPublicConfig = (req: Request, res: Response): void => {
     res.json({
       success: true,
       data: {
-        skipAuth,
+        skipAuth: publicConfig.skipAuth,
         permissions,
       },
     });
   } catch (error) {
-    console.error('Error getting public config:', error);
+    console.error('Error getting public config from database:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get public configuration',

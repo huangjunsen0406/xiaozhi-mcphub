@@ -204,7 +204,7 @@ export interface McpSettings {
   };
   groups?: IGroup[]; // Array of server groups
   xiaozhi?: XiaozhiConfig; // 小智客户端配置
-  systemConfig?: SystemConfig; // System-wide configuration settings
+  // systemConfig moved to database - use SystemConfigService
   userConfigs?: Record<string, UserConfig>; // User-specific configurations
 }
 

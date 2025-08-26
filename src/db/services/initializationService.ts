@@ -88,6 +88,12 @@ export async function initializeDefaultData(dataSource: DataSource): Promise<voi
       console.log(`MCP servers already exist (${existingServers} found), skipping server initialization`);
     }
 
+    // Initialize system configuration
+    const { getSystemConfigService } = await import('../../services/systemConfigService.js');
+    const systemConfigService = getSystemConfigService();
+    await systemConfigService.initialize();
+    console.log('System configuration initialized');
+
     console.log('Default data initialization completed');
   } catch (error) {
     console.error('Error initializing default data:', error);

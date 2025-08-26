@@ -1,4 +1,5 @@
-import { loadSettings, expandEnvVars } from '../config/index.js';
+import { expandEnvVars } from '../config/index.js';
+import { getSystemConfigService } from '../services/systemConfigService.js';
 
 /**
  * Smart routing configuration interface
@@ -22,10 +23,11 @@ export interface SmartRoutingConfig {
  *
  * @returns {SmartRoutingConfig} Complete smart routing configuration
  */
-export function getSmartRoutingConfig(): SmartRoutingConfig {
-  const settings = loadSettings();
+export async function getSmartRoutingConfig(): Promise<SmartRoutingConfig> {
+  const systemConfigService = getSystemConfigService();
+  const systemConfig = await systemConfigService.getSystemConfig();
   const smartRoutingSettings: Partial<SmartRoutingConfig> =
-    settings.systemConfig?.smartRouting || {};
+    systemConfig?.smartRouting || {};
 
   return {
     // Enabled status - check multiple environment variables

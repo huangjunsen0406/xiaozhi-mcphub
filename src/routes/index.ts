@@ -12,6 +12,7 @@ import {
   updateToolDescription,
   togglePrompt,
   updatePromptDescription,
+  getSystemConfig,
   updateSystemConfig,
 } from '../controllers/serverController.js';
 import {
@@ -105,6 +106,7 @@ export const initRoutes = (app: express.Application): void => {
   router.put('/servers/:serverName/tools/:toolName/description', updateToolDescription);
   router.post('/servers/:serverName/prompts/:promptName/toggle', togglePrompt);
   router.put('/servers/:serverName/prompts/:promptName/description', updatePromptDescription);
+  router.get('/system-config', getSystemConfig);
   router.put('/system-config', updateSystemConfig);
 
   // Group management routes

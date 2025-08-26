@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { loadSettings } from '../config/index.js';
 import defaultConfig from '../config/index.js';
 import { JWT_SECRET } from '../config/jwt.js';
+import { getSystemConfigService } from '../services/systemConfigService.js';
 
 const validateBearerAuth = (req: Request, routingConfig: any): boolean => {
   if (!routingConfig.enableBearerAuth) {
@@ -34,7 +34,7 @@ const checkReadonly = (req: Request): boolean => {
 };
 
 // Middleware to authenticate JWT token
-export const auth = (req: Request, res: Response, next: NextFunction): void => {
+export const auth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const t = (req as any).t;
   if (!checkReadonly(req)) {
     res.status(403).json({ success: false, message: t('api.errors.readonly') });
@@ -42,7 +42,9 @@ export const auth = (req: Request, res: Response, next: NextFunction): void => {
   }
 
   // Check if authentication is disabled globally
-  const routingConfig = loadSettings().systemConfig?.routing || {
+  const systemConfigService = getSystemConfigService();
+  const systemConfig = await systemConfigService.getSystemConfig();
+  const routingConfig = systemConfig?.routing || {
     enableGlobalRoute: true,
     enableGroupNameRoute: true,
     enableBearerAuth: false,

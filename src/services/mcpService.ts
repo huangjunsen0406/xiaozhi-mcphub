@@ -18,6 +18,7 @@ import { getServersInGroup, getServerConfigInGroup } from './groupService.js';
 import { saveToolsAsVectorEmbeddings, searchToolsByVector } from './vectorSearchService.js';
 import { OpenAPIClient } from '../clients/openapi.js';
 import { getDataService } from './services.js';
+import { getSystemConfigService } from './systemConfigService.js';
 
 const servers: { [sessionId: string]: Server } = {};
 
@@ -104,14 +105,14 @@ export const initUpstreamServers = async (): Promise<void> => {
   }
 };
 
-export const getMcpServer = (sessionId?: string, group?: string): Server => {
+export const getMcpServer = async (sessionId?: string, group?: string): Promise<Server> => {
   if (!sessionId) {
-    return createMcpServer(config.mcpHubName, config.mcpHubVersion, group);
+    return await createMcpServer(config.mcpHubName, config.mcpHubVersion, group);
   }
 
   if (!servers[sessionId]) {
     const serverGroup = group || getGroup(sessionId);
-    const server = createMcpServer(config.mcpHubName, config.mcpHubVersion, serverGroup);
+    const server = await createMcpServer(config.mcpHubName, config.mcpHubVersion, serverGroup);
     servers[sessionId] = server;
   } else {
     console.log(`MCP server already exists for sessionId: ${sessionId}`);
@@ -262,7 +263,7 @@ export const cleanupAllServers = (): void => {
 };
 
 // Helper function to create transport based on server configuration
-const createTransportFromConfig = (name: string, conf: ServerConfig): any => {
+const createTransportFromConfig = async (name: string, conf: ServerConfig): Promise<any> => {
   let transport;
 
   if (conf.type === 'streamable-http') {
@@ -293,24 +294,27 @@ const createTransportFromConfig = (name: string, conf: ServerConfig): any => {
     };
     env['PATH'] = expandEnvVars(process.env.PATH as string) || '';
 
-    const settings = loadSettings();
+    // Get system configuration from database
+    const systemConfigService = getSystemConfigService();
+    const systemConfig = await systemConfigService.getSystemConfig();
+    
     // Add UV_DEFAULT_INDEX and npm_config_registry if needed
     if (
-      settings.systemConfig?.install?.pythonIndexUrl &&
+      systemConfig?.install?.pythonIndexUrl &&
       (conf.command === 'uvx' || conf.command === 'uv' || conf.command === 'python')
     ) {
-      env['UV_DEFAULT_INDEX'] = settings.systemConfig.install.pythonIndexUrl;
+      env['UV_DEFAULT_INDEX'] = systemConfig.install.pythonIndexUrl;
     }
 
     if (
-      settings.systemConfig?.install?.npmRegistry &&
+      systemConfig?.install?.npmRegistry &&
       (conf.command === 'npm' ||
         conf.command === 'npx' ||
         conf.command === 'pnpm' ||
         conf.command === 'yarn' ||
         conf.command === 'node')
     ) {
-      env['npm_config_registry'] = settings.systemConfig.install.npmRegistry;
+      env['npm_config_registry'] = systemConfig.install.npmRegistry;
     }
 
     transport = new StdioClientTransport({
@@ -373,7 +377,7 @@ const callToolWithReconnect = async (
           }
 
           // Recreate transport using helper function
-          const newTransport = createTransportFromConfig(serverInfo.name, conf);
+          const newTransport = await createTransportFromConfig(serverInfo.name, conf);
 
           // Create new client
           const client = new Client(
@@ -552,7 +556,7 @@ export const initializeClientsFromSettings = async (
         continue;
       }
     } else {
-      transport = createTransportFromConfig(name, conf);
+      transport = await createTransportFromConfig(name, conf);
     }
 
     const client = new Client(
@@ -964,15 +968,26 @@ Available servers: ${serversList}`;
     };
   }
 
-  const allServerInfos = getDataService()
-    .filterData(serverInfos)
-    .filter((serverInfo) => {
-      if (serverInfo.enabled === false) return false;
-      if (!group) return true;
-      const serversInGroup = getServersInGroup(group);
-      if (!serversInGroup || serversInGroup.length === 0) return serverInfo.name === group;
-      return serversInGroup.includes(serverInfo.name);
-    });
+  // Filter servers - need to handle async getServersInGroup
+  const filteredServerInfos = getDataService().filterData(serverInfos);
+  const allServerInfos = [];
+  
+  for (const serverInfo of filteredServerInfos) {
+    if (serverInfo.enabled === false) continue;
+    if (!group) {
+      allServerInfos.push(serverInfo);
+      continue;
+    }
+    
+    const serversInGroup = await getServersInGroup(group);
+    if (!serversInGroup || serversInGroup.length === 0) {
+      if (serverInfo.name === group) {
+        allServerInfos.push(serverInfo);
+      }
+    } else if (serversInGroup.includes(serverInfo.name)) {
+      allServerInfos.push(serverInfo);
+    }
+  }
 
   const allTools = [];
   for (const serverInfo of allServerInfos) {
@@ -982,11 +997,11 @@ Available servers: ${serversList}`;
 
       // If this is a group request, apply group-level tool filtering
       if (group) {
-        const serverConfig = getServerConfigInGroup(group, serverInfo.name);
+        const serverConfig = await getServerConfigInGroup(group, serverInfo.name);
         if (serverConfig && serverConfig.tools !== 'all' && Array.isArray(serverConfig.tools)) {
           // Filter tools based on group configuration
           const allowedToolNames = serverConfig.tools.map(
-            (toolName) => `${serverInfo.name}-${toolName}`,
+            (toolName: string) => `${serverInfo.name}-${toolName}`,
           );
           enabledTools = enabledTools.filter((tool) => allowedToolNames.includes(tool.name));
         }
@@ -1333,15 +1348,26 @@ export const handleListPromptsRequest = async (_: any, extra: any) => {
   const group = getGroup(sessionId);
   console.log(`Handling ListPromptsRequest for group: ${group}`);
 
-  const allServerInfos = getDataService()
-    .filterData(serverInfos)
-    .filter((serverInfo) => {
-      if (serverInfo.enabled === false) return false;
-      if (!group) return true;
-      const serversInGroup = getServersInGroup(group);
-      if (!serversInGroup || serversInGroup.length === 0) return serverInfo.name === group;
-      return serversInGroup.includes(serverInfo.name);
-    });
+  // Filter servers - need to handle async getServersInGroup
+  const filteredServerInfos = getDataService().filterData(serverInfos);
+  const allServerInfos = [];
+  
+  for (const serverInfo of filteredServerInfos) {
+    if (serverInfo.enabled === false) continue;
+    if (!group) {
+      allServerInfos.push(serverInfo);
+      continue;
+    }
+    
+    const serversInGroup = await getServersInGroup(group);
+    if (!serversInGroup || serversInGroup.length === 0) {
+      if (serverInfo.name === group) {
+        allServerInfos.push(serverInfo);
+      }
+    } else if (serversInGroup.includes(serverInfo.name)) {
+      allServerInfos.push(serverInfo);
+    }
+  }
 
   const allPrompts: any[] = [];
   for (const serverInfo of allServerInfos) {
@@ -1361,7 +1387,7 @@ export const handleListPromptsRequest = async (_: any, extra: any) => {
 
       // If this is a group request, apply group-level prompt filtering
       if (group) {
-        const serverConfigInGroup = getServerConfigInGroup(group, serverInfo.name);
+        const serverConfigInGroup = await getServerConfigInGroup(group, serverInfo.name);
         if (
           serverConfigInGroup &&
           serverConfigInGroup.tools !== 'all' &&
@@ -1391,13 +1417,13 @@ export const handleListPromptsRequest = async (_: any, extra: any) => {
 };
 
 // Create McpServer instance
-export const createMcpServer = (name: string, version: string, group?: string): Server => {
+export const createMcpServer = async (name: string, version: string, group?: string): Promise<Server> => {
   // Determine server name based on routing type
   let serverName = name;
 
   if (group) {
     // Check if it's a group or a single server
-    const serversInGroup = getServersInGroup(group);
+    const serversInGroup = await getServersInGroup(group);
     if (!serversInGroup || serversInGroup.length === 0) {
       // Single server routing
       serverName = `${name}_${group}`;

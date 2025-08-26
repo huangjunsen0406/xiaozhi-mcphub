@@ -6,8 +6,8 @@ import { getSmartRoutingConfig } from '../utils/smartRouting.js';
 import OpenAI from 'openai';
 
 // Get OpenAI configuration from smartRouting settings or fallback to environment variables
-const getOpenAIConfig = () => {
-  const smartRoutingConfig = getSmartRoutingConfig();
+const getOpenAIConfig = async () => {
+  const smartRoutingConfig = await getSmartRoutingConfig();
   return {
     apiKey: smartRoutingConfig.openaiApiKey,
     baseURL: smartRoutingConfig.openaiApiBaseUrl,
@@ -34,8 +34,8 @@ const getDimensionsForModel = (model: string): number => {
 };
 
 // Initialize the OpenAI client with smartRouting configuration
-const getOpenAIClient = () => {
-  const config = getOpenAIConfig();
+const getOpenAIClient = async () => {
+  const config = await getOpenAIConfig();
   return new OpenAI({
     apiKey: config.apiKey, // Get API key from smartRouting settings or environment variables
     baseURL: config.baseURL, // Get base URL from smartRouting settings or fallback to default
@@ -54,8 +54,8 @@ const getOpenAIClient = () => {
  */
 async function generateEmbedding(text: string): Promise<number[]> {
   try {
-    const config = getOpenAIConfig();
-    const openai = getOpenAIClient();
+    const config = await getOpenAIConfig();
+    const openai = await getOpenAIClient();
 
     // Check if API key is configured
     if (!openai.apiKey) {
@@ -198,12 +198,12 @@ export const saveToolsAsVectorEmbeddings = async (
       return;
     }
 
-    const smartRoutingConfig = getSmartRoutingConfig();
+    const smartRoutingConfig = await getSmartRoutingConfig();
     if (!smartRoutingConfig.enabled) {
       return;
     }
 
-    const config = getOpenAIConfig();
+    const config = await getOpenAIConfig();
     const vectorRepository = getRepositoryFactory(
       'vectorEmbeddings',
     )() as VectorEmbeddingRepository;
@@ -381,7 +381,7 @@ export const getAllVectorizedTools = async (
   }>
 > => {
   try {
-    const config = getOpenAIConfig();
+    const config = await getOpenAIConfig();
     const vectorRepository = getRepositoryFactory(
       'vectorEmbeddings',
     )() as VectorEmbeddingRepository;

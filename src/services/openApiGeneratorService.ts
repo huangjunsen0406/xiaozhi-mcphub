@@ -2,7 +2,7 @@ import { OpenAPIV3 } from 'openapi-types';
 import { Tool } from '../types/index.js';
 import { getServersInfo } from './mcpService.js';
 import config from '../config/index.js';
-import { loadSettings } from '../config/index.js';
+import { getSystemConfigService } from './systemConfigService.js';
 
 /**
  * Service for generating OpenAPI 3.x specifications from MCP tools
@@ -158,7 +158,7 @@ function generateOperationFromTool(tool: Tool, serverName: string): OpenAPIV3.Op
 /**
  * Generate OpenAPI specification from MCP tools
  */
-export function generateOpenAPISpec(options: OpenAPIGenerationOptions = {}): OpenAPIV3.Document {
+export async function generateOpenAPISpec(options: OpenAPIGenerationOptions = {}): Promise<OpenAPIV3.Document> {
   const serverInfos = getServersInfo();
 
   // Filter servers based on options
@@ -199,11 +199,14 @@ export function generateOpenAPISpec(options: OpenAPIGenerationOptions = {}): Ope
     paths[pathName][method] = operation;
   }
 
-  const settings = loadSettings();
+  // Get system configuration from database
+  const systemConfigService = getSystemConfigService();
+  const systemConfig = await systemConfigService.getSystemConfig();
+  
   // Get server URL
   const baseUrl =
     options.serverUrl ||
-    settings.systemConfig?.install?.baseUrl ||
+    systemConfig?.install?.baseUrl ||
     `http://localhost:${config.port}`;
   const serverUrl = `${baseUrl}${config.basePath}/api`;
 

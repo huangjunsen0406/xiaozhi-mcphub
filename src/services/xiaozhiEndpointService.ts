@@ -159,7 +159,7 @@ export class XiaozhiEndpointService {
 
       // 处理ListTools请求 - 根据端点分组过滤
       if (message.method === 'tools/list') {
-        const smartRoutingConfig = getSmartRoutingConfig();
+        const smartRoutingConfig = await getSmartRoutingConfig();
         const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
         
         if (smartRoutingConfig.enabled) {
@@ -184,7 +184,7 @@ export class XiaozhiEndpointService {
 
       // 处理CallTool请求
       if (message.method === 'tools/call') {
-        const smartRoutingConfig = getSmartRoutingConfig();
+        const smartRoutingConfig = await getSmartRoutingConfig();
         const toolName = message.params?.name;
         const isSmartRoutingTool = toolName === 'search_tools' || toolName === 'call_tool';
         

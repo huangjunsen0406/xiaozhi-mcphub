@@ -339,7 +339,7 @@ export const removeServerFromExistingGroup = (req: Request, res: Response): void
 };
 
 // Get servers in a group
-export const getGroupServers = (req: Request, res: Response): void => {
+export const getGroupServers = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     if (!id) {
@@ -350,7 +350,7 @@ export const getGroupServers = (req: Request, res: Response): void => {
       return;
     }
 
-    const group = getGroupByIdOrName(id);
+    const group = await getGroupByIdOrName(id);
     if (!group) {
       res.status(404).json({
         success: false,

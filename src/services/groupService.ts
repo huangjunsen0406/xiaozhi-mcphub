@@ -3,6 +3,7 @@ import { IGroup, IGroupServerConfig } from '../types/index.js';
 import { loadSettings, saveSettings } from '../config/index.js';
 import { notifyToolChanged } from './mcpService.js';
 import { getDataService } from './services.js';
+import { getSystemConfigService } from './systemConfigService.js';
 
 // Helper function to normalize group servers configuration
 const normalizeGroupServers = (servers: string[] | IGroupServerConfig[]): IGroupServerConfig[] => {
@@ -26,9 +27,10 @@ export const getAllGroups = (): IGroup[] => {
 };
 
 // Get group by ID or name
-export const getGroupByIdOrName = (key: string): IGroup | undefined => {
-  const settings = loadSettings();
-  const routingConfig = settings.systemConfig?.routing || {
+export const getGroupByIdOrName = async (key: string): Promise<IGroup | undefined> => {
+  const systemConfigService = getSystemConfigService();
+  const systemConfig = await systemConfigService.getSystemConfig();
+  const routingConfig = systemConfig?.routing || {
     enableGlobalRoute: true,
     enableGroupNameRoute: true,
   };
@@ -260,27 +262,27 @@ export const removeServerFromGroup = (groupId: string, serverName: string): IGro
 };
 
 // Get all servers in a group
-export const getServersInGroup = (groupId: string): string[] => {
-  const group = getGroupByIdOrName(groupId);
+export const getServersInGroup = async (groupId: string): Promise<string[]> => {
+  const group = await getGroupByIdOrName(groupId);
   if (!group) return [];
   const normalizedServers = normalizeGroupServers(group.servers);
   return normalizedServers.map((server) => server.name);
 };
 
 // Get server configuration from group (including tool selection)
-export const getServerConfigInGroup = (
+export const getServerConfigInGroup = async (
   groupId: string,
   serverName: string,
-): IGroupServerConfig | undefined => {
-  const group = getGroupByIdOrName(groupId);
+): Promise<IGroupServerConfig | undefined> => {
+  const group = await getGroupByIdOrName(groupId);
   if (!group) return undefined;
   const normalizedServers = normalizeGroupServers(group.servers);
   return normalizedServers.find((server) => server.name === serverName);
 };
 
 // Get all server configurations in a group
-export const getServerConfigsInGroup = (groupId: string): IGroupServerConfig[] => {
-  const group = getGroupByIdOrName(groupId);
+export const getServerConfigsInGroup = async (groupId: string): Promise<IGroupServerConfig[]> => {
+  const group = await getGroupByIdOrName(groupId);
   if (!group) return [];
   return normalizeGroupServers(group.servers);
 };

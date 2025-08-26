@@ -9,12 +9,13 @@ import {
   getUserCount,
   getAdminCount,
 } from '../services/userService.js';
-import { loadSettings } from '../config/index.js';
+import { getSystemConfigService } from '../services/systemConfigService.js';
 
 // Admin permission check middleware function
-const requireAdmin = (req: Request, res: Response): boolean => {
-  const settings = loadSettings();
-  if (settings.systemConfig?.routing?.skipAuth) {
+const requireAdmin = async (req: Request, res: Response): Promise<boolean> => {
+  const systemConfigService = getSystemConfigService();
+  const systemConfig = await systemConfigService.getSystemConfig();
+  if (systemConfig?.routing?.skipAuth) {
     return true;
   }
 
@@ -31,7 +32,7 @@ const requireAdmin = (req: Request, res: Response): boolean => {
 
 // Get all users (admin only)
 export const getUsers = async (req: Request, res: Response): Promise<void> => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     const users = await getAllUsers(); // Already returns users without password
@@ -50,7 +51,7 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
 
 // Get a specific user by username (admin only)
 export const getUser = async (req: Request, res: Response): Promise<void> => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     const { username } = req.params;
@@ -86,7 +87,7 @@ export const getUser = async (req: Request, res: Response): Promise<void> => {
 
 // Create a new user (admin only)
 export const createUser = async (req: Request, res: Response): Promise<void> => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     const { username, password, isAdmin } = req.body;
@@ -124,7 +125,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
 
 // Update an existing user (admin only)
 export const updateExistingUser = async (req: Request, res: Response): Promise<void> => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     const { username } = req.params;
@@ -196,7 +197,7 @@ export const updateExistingUser = async (req: Request, res: Response): Promise<v
 
 // Delete a user (admin only)
 export const deleteExistingUser = async (req: Request, res: Response): Promise<void> => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     const { username } = req.params;
@@ -241,7 +242,7 @@ export const deleteExistingUser = async (req: Request, res: Response): Promise<v
 
 // Get user statistics (admin only)
 export const getUserStats = async (req: Request, res: Response): Promise<void> => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     const totalUsers = await getUserCount();

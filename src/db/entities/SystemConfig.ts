@@ -34,6 +34,9 @@ export class SystemConfig {
     apiKey?: string;
     model?: string;
     dbUrl?: string;
+    openaiApiBaseUrl?: string;
+    openaiApiKey?: string;
+    openaiApiEmbeddingModel?: string;
   };
 
   @Column({ type: 'simple-json', name: 'mcp_router', nullable: true })

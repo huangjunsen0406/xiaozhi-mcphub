@@ -5,9 +5,9 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { deleteMcpServer, getMcpServer } from './mcpService.js';
-import { loadSettings } from '../config/index.js';
 import config from '../config/index.js';
 import { UserContextService } from './userContextService.js';
+import { getSystemConfigService } from './systemConfigService.js';
 
 const transports: { [sessionId: string]: { transport: Transport; group: string } } = {};
 
@@ -16,9 +16,10 @@ export const getGroup = (sessionId: string): string => {
 };
 
 // Helper function to validate bearer auth
-const validateBearerAuth = (req: Request): boolean => {
-  const settings = loadSettings();
-  const routingConfig = settings.systemConfig?.routing || {
+const validateBearerAuth = async (req: Request): Promise<boolean> => {
+  const systemConfigService = getSystemConfigService();
+  const systemConfig = await systemConfigService.getSystemConfig();
+  const routingConfig = systemConfig?.routing || {
     enableGlobalRoute: true,
     enableGroupNameRoute: true,
     enableBearerAuth: false,
@@ -44,15 +45,16 @@ export const handleSseConnection = async (req: Request, res: Response): Promise<
   const currentUser = userContextService.getCurrentUser();
   const username = currentUser?.username;
   
-  // Check bearer auth using filtered settings
-  if (!validateBearerAuth(req)) {
+  // Check bearer auth using system config from database
+  if (!(await validateBearerAuth(req))) {
     console.warn('Bearer authentication failed or not provided');
     res.status(401).send('Bearer authentication required or invalid token');
     return;
   }
 
-  const settings = loadSettings();
-  const routingConfig = settings.systemConfig?.routing || {
+  const systemConfigService = getSystemConfigService();
+  const systemConfig = await systemConfigService.getSystemConfig();
+  const routingConfig = systemConfig?.routing || {
     enableGlobalRoute: true,
     enableGroupNameRoute: true,
     enableBearerAuth: false,
@@ -92,7 +94,8 @@ export const handleSseConnection = async (req: Request, res: Response): Promise<
   console.log(
     `New SSE connection established: ${transport.sessionId} with group: ${group || 'global'}${username ? ` for user: ${username}` : ''}`,
   );
-  await getMcpServer(transport.sessionId, group).connect(transport);
+  const server = await getMcpServer(transport.sessionId, group);
+  await server.connect(transport);
 };
 
 export const handleSseMessage = async (req: Request, res: Response): Promise<void> => {
@@ -145,15 +148,16 @@ export const handleMcpPostRequest = async (req: Request, res: Response): Promise
     `Handling MCP post request for sessionId: ${sessionId} and group: ${group}${username ? ` for user: ${username}` : ''} with body: ${JSON.stringify(body)}`,
   );
   
-  // Check bearer auth using filtered settings
-  if (!validateBearerAuth(req)) {
+  // Check bearer auth using system config from database
+  if (!(await validateBearerAuth(req))) {
     res.status(401).send('Bearer authentication required or invalid token');
     return;
   }
 
-  // Get filtered settings based on user context (after setting user context)
-  const settings = loadSettings();
-  const routingConfig = settings.systemConfig?.routing || {
+  // Get system config from database
+  const systemConfigService = getSystemConfigService();
+  const systemConfig = await systemConfigService.getSystemConfig();
+  const routingConfig = systemConfig?.routing || {
     enableGlobalRoute: true,
     enableGroupNameRoute: true,
   };
@@ -184,7 +188,8 @@ export const handleMcpPostRequest = async (req: Request, res: Response): Promise
     };
 
     console.log(`MCP connection established: ${transport.sessionId}${username ? ` for user: ${username}` : ''}`);
-    await getMcpServer(transport.sessionId, group).connect(transport);
+    const server = await getMcpServer(transport.sessionId, group);
+    await server.connect(transport);
   } else {
     res.status(400).json({
       jsonrpc: '2.0',
