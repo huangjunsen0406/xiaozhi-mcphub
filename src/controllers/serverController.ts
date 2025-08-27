@@ -9,12 +9,12 @@ import {
   syncToolEmbedding,
   toggleServerStatus,
 } from '../services/mcpService.js';
-import { loadSettings, saveSettings } from '../config/index.js';
 import { createSafeJSON } from '../utils/serialization.js';
+import { getMcpServerService } from '../services/mcpServerService.js';
 
-export const getAllServers = (_: Request, res: Response): void => {
+export const getAllServers = async (_: Request, res: Response): Promise<void> => {
   try {
-    const serversInfo = getServersInfo();
+    const serversInfo = await getServersInfo();
     const response: ApiResponse = {
       success: true,
       data: createSafeJSON(serversInfo),
@@ -29,18 +29,23 @@ export const getAllServers = (_: Request, res: Response): void => {
   }
 };
 
-export const getAllSettings = (_: Request, res: Response): void => {
+export const getAllSettings = async (_: Request, res: Response): Promise<void> => {
   try {
-    const settings = loadSettings();
+    // Settings page only needs system config data from database
+    const { getSystemConfigService } = await import('../services/systemConfigService.js');
+    const systemConfigService = getSystemConfigService();
+    const systemConfig = await systemConfigService.getSystemConfig();
+    
     const response: ApiResponse = {
       success: true,
-      data: createSafeJSON(settings),
+      data: createSafeJSON(systemConfig),
     };
     res.json(response);
   } catch (error) {
+    console.error('Failed to get settings:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get server settings',
+      message: 'Failed to get settings',
     });
   }
 };
@@ -166,7 +171,7 @@ export const deleteServer = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const result = removeServer(name);
+    const result = await removeServer(name);
     if (result.success) {
       notifyToolChanged();
       res.json({
@@ -298,11 +303,14 @@ export const updateServer = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-export const getServerConfig = (req: Request, res: Response): void => {
+export const getServerConfig = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name } = req.params;
-    const settings = loadSettings();
-    if (!settings.mcpServers || !settings.mcpServers[name]) {
+    const mcpServerService = getMcpServerService();
+    
+    // Check if server exists in database
+    const server = await mcpServerService.getServerByName(name);
+    if (!server) {
       res.status(404).json({
         success: false,
         message: 'Server not found',
@@ -310,8 +318,10 @@ export const getServerConfig = (req: Request, res: Response): void => {
       return;
     }
 
-    const serverInfo = getServersInfo().find((s) => s.name === name);
-    const serverConfig = settings.mcpServers[name];
+    const serversInfo = await getServersInfo();
+    const serverInfo = serversInfo.find((s) => s.name === name);
+    const serverConfig = mcpServerService.entityToConfig(server);
+    
     const response: ApiResponse = {
       success: true,
       data: {
@@ -394,8 +404,10 @@ export const toggleTool = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const settings = loadSettings();
-    if (!settings.mcpServers[serverName]) {
+    const mcpServerService = getMcpServerService();
+    const server = await mcpServerService.getServerByName(serverName);
+    
+    if (!server) {
       res.status(404).json({
         success: false,
         message: 'Server not found',
@@ -403,18 +415,21 @@ export const toggleTool = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // Initialize tools config if it doesn't exist
-    if (!settings.mcpServers[serverName].tools) {
-      settings.mcpServers[serverName].tools = {};
+    // Get current server config and update tools
+    const currentConfig = mcpServerService.entityToConfig(server);
+    if (!currentConfig.tools) {
+      currentConfig.tools = {};
     }
 
     // Set the tool's enabled state
-    settings.mcpServers[serverName].tools![toolName] = { enabled };
+    currentConfig.tools[toolName] = { enabled };
 
-    if (!saveSettings(settings)) {
+    // Update server in database
+    const success = await mcpServerService.updateServer(serverName, currentConfig);
+    if (!success) {
       res.status(500).json({
         success: false,
-        message: 'Failed to save settings',
+        message: 'Failed to update server configuration',
       });
       return;
     }
@@ -456,8 +471,10 @@ export const updateToolDescription = async (req: Request, res: Response): Promis
       return;
     }
 
-    const settings = loadSettings();
-    if (!settings.mcpServers[serverName]) {
+    const mcpServerService = getMcpServerService();
+    const server = await mcpServerService.getServerByName(serverName);
+    
+    if (!server) {
       res.status(404).json({
         success: false,
         message: 'Server not found',
@@ -465,22 +482,25 @@ export const updateToolDescription = async (req: Request, res: Response): Promis
       return;
     }
 
-    // Initialize tools config if it doesn't exist
-    if (!settings.mcpServers[serverName].tools) {
-      settings.mcpServers[serverName].tools = {};
+    // Get current server config and update tools
+    const currentConfig = mcpServerService.entityToConfig(server);
+    if (!currentConfig.tools) {
+      currentConfig.tools = {};
     }
 
     // Set the tool's description
-    if (!settings.mcpServers[serverName].tools![toolName]) {
-      settings.mcpServers[serverName].tools![toolName] = { enabled: true };
+    if (!currentConfig.tools[toolName]) {
+      currentConfig.tools[toolName] = { enabled: true };
     }
 
-    settings.mcpServers[serverName].tools![toolName].description = description;
+    currentConfig.tools[toolName].description = description;
 
-    if (!saveSettings(settings)) {
+    // Update server in database
+    const success = await mcpServerService.updateServer(serverName, currentConfig);
+    if (!success) {
       res.status(500).json({
         success: false,
-        message: 'Failed to save settings',
+        message: 'Failed to update server configuration',
       });
       return;
     }
@@ -571,7 +591,7 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
 };
 
 // Add new endpoint to get system config from database
-export const getSystemConfig = async (req: Request, res: Response): Promise<void> => {
+export const getSystemConfig = async (_: Request, res: Response): Promise<void> => {
   try {
     const { getSystemConfigService } = await import('../services/systemConfigService.js');
     const systemConfigService = getSystemConfigService();
@@ -622,8 +642,10 @@ export const togglePrompt = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const settings = loadSettings();
-    if (!settings.mcpServers[serverName]) {
+    const mcpServerService = getMcpServerService();
+    const server = await mcpServerService.getServerByName(serverName);
+    
+    if (!server) {
       res.status(404).json({
         success: false,
         message: 'Server not found',
@@ -631,18 +653,21 @@ export const togglePrompt = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Initialize prompts config if it doesn't exist
-    if (!settings.mcpServers[serverName].prompts) {
-      settings.mcpServers[serverName].prompts = {};
+    // Get current server config and update prompts
+    const currentConfig = mcpServerService.entityToConfig(server);
+    if (!currentConfig.prompts) {
+      currentConfig.prompts = {};
     }
 
     // Set the prompt's enabled state
-    settings.mcpServers[serverName].prompts![promptName] = { enabled };
+    currentConfig.prompts[promptName] = { enabled };
 
-    if (!saveSettings(settings)) {
+    // Update server in database
+    const success = await mcpServerService.updateServer(serverName, currentConfig);
+    if (!success) {
       res.status(500).json({
         success: false,
-        message: 'Failed to save settings',
+        message: 'Failed to update server configuration',
       });
       return;
     }
@@ -684,8 +709,10 @@ export const updatePromptDescription = async (req: Request, res: Response): Prom
       return;
     }
 
-    const settings = loadSettings();
-    if (!settings.mcpServers[serverName]) {
+    const mcpServerService = getMcpServerService();
+    const server = await mcpServerService.getServerByName(serverName);
+    
+    if (!server) {
       res.status(404).json({
         success: false,
         message: 'Server not found',
@@ -693,22 +720,25 @@ export const updatePromptDescription = async (req: Request, res: Response): Prom
       return;
     }
 
-    // Initialize prompts config if it doesn't exist
-    if (!settings.mcpServers[serverName].prompts) {
-      settings.mcpServers[serverName].prompts = {};
+    // Get current server config and update prompts
+    const currentConfig = mcpServerService.entityToConfig(server);
+    if (!currentConfig.prompts) {
+      currentConfig.prompts = {};
     }
 
     // Set the prompt's description
-    if (!settings.mcpServers[serverName].prompts![promptName]) {
-      settings.mcpServers[serverName].prompts![promptName] = { enabled: true };
+    if (!currentConfig.prompts[promptName]) {
+      currentConfig.prompts[promptName] = { enabled: true };
     }
 
-    settings.mcpServers[serverName].prompts![promptName].description = description;
+    currentConfig.prompts[promptName].description = description;
 
-    if (!saveSettings(settings)) {
+    // Update server in database
+    const success = await mcpServerService.updateServer(serverName, currentConfig);
+    if (!success) {
       res.status(500).json({
         success: false,
-        message: 'Failed to save settings',
+        message: 'Failed to update server configuration',
       });
       return;
     }

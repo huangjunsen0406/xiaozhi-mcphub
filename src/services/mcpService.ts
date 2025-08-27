@@ -19,6 +19,7 @@ import { saveToolsAsVectorEmbeddings, searchToolsByVector } from './vectorSearch
 import { OpenAPIClient } from '../clients/openapi.js';
 import { getDataService } from './services.js';
 import { getSystemConfigService } from './systemConfigService.js';
+import { getMcpServerService } from './mcpServerService.js';
 
 const servers: { [sessionId: string]: Server } = {};
 
@@ -370,11 +371,12 @@ const callToolWithReconnect = async (
           serverInfo.transport.close();
 
           // Get server configuration to recreate transport
-          const settings = loadSettings();
-          const conf = settings.mcpServers[serverInfo.name];
-          if (!conf) {
+          const mcpServerService = getMcpServerService();
+          const server = await mcpServerService.getServerByName(serverInfo.name);
+          if (!server) {
             throw new Error(`Server configuration not found for: ${serverInfo.name}`);
           }
+          const conf = mcpServerService.entityToConfig(server);
 
           // Recreate transport using helper function
           const newTransport = await createTransportFromConfig(serverInfo.name, conf);
@@ -451,11 +453,31 @@ export const initializeClientsFromSettings = async (
   isInit: boolean,
   serverName?: string,
 ): Promise<ServerInfo[]> => {
+  // First check if we should try to migrate from JSON
   const settings = loadSettings();
+  const mcpServerService = getMcpServerService();
+  
+  // Check if database has any servers, if not migrate from JSON
+  const dbServerCount = await mcpServerService.getServerCount();
+  if (dbServerCount === 0 && settings.mcpServers && Object.keys(settings.mcpServers).length > 0) {
+    console.log('Migrating MCP servers from JSON to database...');
+    await mcpServerService.migrateFromJson(settings.mcpServers);
+    console.log(`Migrated ${Object.keys(settings.mcpServers).length} servers to database`);
+  }
+
+  // Load servers from database
+  const dbServers = await mcpServerService.getAllServers();
+  const serverConfigs: Record<string, ServerConfig> = {};
+  
+  // Convert database entities to configuration objects
+  for (const server of dbServers) {
+    serverConfigs[server.name] = mcpServerService.entityToConfig(server);
+  }
+
   const existingServerInfos = serverInfos;
   serverInfos = [];
 
-  for (const [name, conf] of Object.entries(settings.mcpServers)) {
+  for (const [name, conf] of Object.entries(serverConfigs)) {
     // Skip disabled servers
     if (conf.enabled === false) {
       console.log(`Skipping disabled server: ${name}`);
@@ -683,14 +705,15 @@ export const registerAllTools = async (isInit: boolean, serverName?: string): Pr
 };
 
 // Get all server information
-export const getServersInfo = (): Omit<ServerInfo, 'client' | 'transport'>[] => {
-  const settings = loadSettings();
+export const getServersInfo = async (): Promise<Omit<ServerInfo, 'client' | 'transport'>[]> => {
+  const mcpServerService = getMcpServerService();
+  const serverConfigs = await mcpServerService.getServersAsConfig();
   const dataService = getDataService();
   const filterServerInfos: ServerInfo[] = dataService.filterData
     ? dataService.filterData(serverInfos)
     : serverInfos;
   const infos = filterServerInfos.map(({ name, status, tools, prompts, createTime, error }) => {
-    const serverConfig = settings.mcpServers[name];
+    const serverConfig = serverConfigs[name];
     const enabled = serverConfig ? serverConfig.enabled !== false : true;
 
     // Add enabled status and custom description to each tool
@@ -735,9 +758,10 @@ const getServerByName = (name: string): ServerInfo | undefined => {
 };
 
 // Filter tools by server configuration
-const filterToolsByConfig = (serverName: string, tools: Tool[]): Tool[] => {
-  const settings = loadSettings();
-  const serverConfig = settings.mcpServers[serverName];
+const filterToolsByConfig = async (serverName: string, tools: Tool[]): Promise<Tool[]> => {
+  const mcpServerService = getMcpServerService();
+  const server = await mcpServerService.getServerByName(serverName);
+  const serverConfig = server ? mcpServerService.entityToConfig(server) : null;
 
   if (!serverConfig || !serverConfig.tools) {
     // If no tool configuration exists, all tools are enabled by default
@@ -762,16 +786,16 @@ export const addServer = async (
   config: ServerConfig,
 ): Promise<{ success: boolean; message?: string }> => {
   try {
-    const settings = loadSettings();
-    if (settings.mcpServers[name]) {
+    const mcpServerService = getMcpServerService();
+    
+    // Check if server already exists
+    const exists = await mcpServerService.serverExists(name);
+    if (exists) {
       return { success: false, message: 'Server name already exists' };
     }
 
-    settings.mcpServers[name] = config;
-    if (!saveSettings(settings)) {
-      return { success: false, message: 'Failed to save settings' };
-    }
-
+    // Create server in database
+    await mcpServerService.createServer(name, config);
     return { success: true, message: 'Server added successfully' };
   } catch (error) {
     console.error(`Failed to add server: ${name}`, error);
@@ -780,19 +804,23 @@ export const addServer = async (
 };
 
 // Remove server
-export const removeServer = (name: string): { success: boolean; message?: string } => {
+export const removeServer = async (name: string): Promise<{ success: boolean; message?: string }> => {
   try {
-    const settings = loadSettings();
-    if (!settings.mcpServers[name]) {
+    const mcpServerService = getMcpServerService();
+    
+    // Check if server exists
+    const exists = await mcpServerService.serverExists(name);
+    if (!exists) {
       return { success: false, message: 'Server not found' };
     }
 
-    delete settings.mcpServers[name];
-
-    if (!saveSettings(settings)) {
-      return { success: false, message: 'Failed to save settings' };
+    // Delete server from database
+    const deleted = await mcpServerService.deleteServer(name);
+    if (!deleted) {
+      return { success: false, message: 'Failed to delete server from database' };
     }
 
+    // Remove from runtime server infos
     serverInfos = serverInfos.filter((serverInfo) => serverInfo.name !== name);
     return { success: true, message: 'Server removed successfully' };
   } catch (error) {
@@ -808,8 +836,8 @@ export const addOrUpdateServer = async (
   allowOverride: boolean = false,
 ): Promise<{ success: boolean; message?: string }> => {
   try {
-    const settings = loadSettings();
-    const exists = !!settings.mcpServers[name];
+    const mcpServerService = getMcpServerService();
+    const exists = await mcpServerService.serverExists(name);
 
     if (exists && !allowOverride) {
       return { success: false, message: 'Server name already exists' };
@@ -824,9 +852,12 @@ export const addOrUpdateServer = async (
       serverInfos = serverInfos.filter((serverInfo) => serverInfo.name !== name);
     }
 
-    settings.mcpServers[name] = config;
-    if (!saveSettings(settings)) {
-      return { success: false, message: 'Failed to save settings' };
+    if (exists) {
+      // Update existing server
+      await mcpServerService.updateServer(name, config);
+    } else {
+      // Create new server
+      await mcpServerService.createServer(name, config);
     }
 
     const action = exists ? 'updated' : 'added';
@@ -861,16 +892,18 @@ export const toggleServerStatus = async (
   enabled: boolean,
 ): Promise<{ success: boolean; message?: string }> => {
   try {
-    const settings = loadSettings();
-    if (!settings.mcpServers[name]) {
+    const mcpServerService = getMcpServerService();
+    
+    // Check if server exists
+    const exists = await mcpServerService.serverExists(name);
+    if (!exists) {
       return { success: false, message: 'Server not found' };
     }
 
-    // Update the enabled status in settings
-    settings.mcpServers[name].enabled = enabled;
-
-    if (!saveSettings(settings)) {
-      return { success: false, message: 'Failed to save settings' };
+    // Update the enabled status in database
+    const success = await mcpServerService.toggleServer(name, enabled);
+    if (!success) {
+      return { success: false, message: 'Failed to update server status in database' };
     }
 
     // If disabling, disconnect the server and remove from active servers
@@ -993,7 +1026,7 @@ Available servers: ${serversList}`;
   for (const serverInfo of allServerInfos) {
     if (serverInfo.tools && serverInfo.tools.length > 0) {
       // Filter tools based on server configuration
-      let enabledTools = filterToolsByConfig(serverInfo.name, serverInfo.tools);
+      let enabledTools = await filterToolsByConfig(serverInfo.name, serverInfo.tools);
 
       // If this is a group request, apply group-level tool filtering
       if (group) {
@@ -1008,8 +1041,9 @@ Available servers: ${serversList}`;
       }
 
       // Apply custom descriptions from server configuration
-      const settings = loadSettings();
-      const serverConfig = settings.mcpServers[serverInfo.name];
+      const mcpServerService = getMcpServerService();
+      const serverConfigs = await mcpServerService.getServersAsConfig();
+      const serverConfig = serverConfigs[serverInfo.name];
       const toolsWithCustomDescriptions = enabledTools.map((tool) => {
         const toolConfig = serverConfig?.tools?.[tool.name];
         return {
@@ -1059,8 +1093,8 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
       const searchResults = await searchToolsByVector(query, limitNum, thresholdNum, servers);
       console.log(`Search results: ${JSON.stringify(searchResults)}`);
       // Find actual tool information from serverInfos by serverName and toolName
-      const tools = searchResults
-        .map((result) => {
+      const tools = await Promise.all(
+        searchResults.map(async (result) => {
           // Find the server in serverInfos
           const server = serverInfos.find(
             (serverInfo) =>
@@ -1073,11 +1107,12 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
             const actualTool = server.tools.find((tool) => tool.name === result.toolName);
             if (actualTool) {
               // Check if the tool is enabled in configuration
-              const enabledTools = filterToolsByConfig(server.name, [actualTool]);
+              const enabledTools = await filterToolsByConfig(server.name, [actualTool]);
               if (enabledTools.length > 0) {
-                // Apply custom description from configuration
-                const settings = loadSettings();
-                const serverConfig = settings.mcpServers[server.name];
+                // Get server configurations from database
+                const mcpServerService = getMcpServerService();
+                const serverConfigs = await mcpServerService.getServersAsConfig();
+                const serverConfig = serverConfigs[server.name];
                 const toolConfig = serverConfig?.tools?.[actualTool.name];
 
                 // Return the actual tool info from serverInfos with custom description
@@ -1095,26 +1130,33 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
             description: result.description || '',
             inputSchema: cleanInputSchema(result.inputSchema || {}),
           };
-        })
-        .filter((tool) => {
-          // Additional filter to remove tools that are disabled
+        }),
+      );
+
+      // Additional filter to remove tools that are disabled  
+      const filteredTools = await Promise.all(
+        tools.map(async (tool) => {
           if (tool.name) {
             const serverName = searchResults.find((r) => r.toolName === tool.name)?.serverName;
             if (serverName) {
-              const enabledTools = filterToolsByConfig(serverName, [tool as Tool]);
-              return enabledTools.length > 0;
+              const enabledTools = await filterToolsByConfig(serverName, [tool as Tool]);
+              return enabledTools.length > 0 ? tool : null;
             }
           }
-          return true; // Keep fallback results
-        });
+          return tool; // Keep fallback results
+        })
+      );
+      
+      // Remove null values
+      const finalTools = filteredTools.filter((tool) => tool !== null);
 
       // Add usage guidance to the response
       const response = {
-        tools,
+        tools: finalTools,
         metadata: {
           query: query,
           threshold: thresholdNum,
-          totalResults: tools.length,
+          totalResults: finalTools.length,
           guideline:
             tools.length > 0
               ? "Found relevant tools. If these tools don't match exactly what you need, try another search with more specific keywords."
@@ -1373,8 +1415,9 @@ export const handleListPromptsRequest = async (_: any, extra: any) => {
   for (const serverInfo of allServerInfos) {
     if (serverInfo.prompts && serverInfo.prompts.length > 0) {
       // Filter prompts based on server configuration
-      const settings = loadSettings();
-      const serverConfig = settings.mcpServers[serverInfo.name];
+      const mcpServerService = getMcpServerService();
+      const serverConfigs = await mcpServerService.getServersAsConfig();
+      const serverConfig = serverConfigs[serverInfo.name];
 
       let enabledPrompts = serverInfo.prompts;
       if (serverConfig && serverConfig.prompts) {

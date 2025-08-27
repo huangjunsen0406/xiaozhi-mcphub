@@ -7,6 +7,7 @@ import {
   createServer,
   updateServer,
   deleteServer,
+  getServerConfig,
   toggleServer,
   toggleTool,
   updateToolDescription,
@@ -97,6 +98,7 @@ export const initRoutes = (app: express.Application): void => {
 
   // API routes protected by auth middleware in middlewares/index.ts
   router.get('/servers', getAllServers);
+  router.get('/servers/:name', getServerConfig);
   router.get('/settings', getAllSettings);
   router.post('/servers', createServer);
   router.put('/servers/:name', updateServer);

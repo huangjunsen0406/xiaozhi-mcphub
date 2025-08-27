@@ -34,19 +34,12 @@ interface MCPRouterConfig {
   baseUrl: string;
 }
 
-interface XiaozhiConfig {
-  enabled: boolean;
-  webSocketUrl: string;
-}
 
 interface SystemSettings {
-  systemConfig?: {
-    routing?: RoutingConfig;
-    install?: InstallConfig;
-    smartRouting?: SmartRoutingConfig;
-    mcpRouter?: MCPRouterConfig;
-  };
-  xiaozhi?: XiaozhiConfig;
+  routing?: RoutingConfig;
+  install?: InstallConfig;
+  smartRouting?: SmartRoutingConfig;
+  mcpRouter?: MCPRouterConfig;
 }
 
 interface TempRoutingConfig {
@@ -90,10 +83,6 @@ export const useSettingsData = () => {
     baseUrl: 'https://api.mcprouter.to/v1',
   });
 
-  const [xiaozhiConfig, setXiaozhiConfig] = useState<XiaozhiConfig>({
-    enabled: false,
-    webSocketUrl: '',
-  });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,44 +101,38 @@ export const useSettingsData = () => {
     try {
       const data: ApiResponse<SystemSettings> = await apiGet('/settings');
 
-      if (data.success && data.data?.systemConfig?.routing) {
+      if (data.success && data.data?.routing) {
         setRoutingConfig({
-          enableGlobalRoute: data.data.systemConfig.routing.enableGlobalRoute ?? true,
-          enableGroupNameRoute: data.data.systemConfig.routing.enableGroupNameRoute ?? true,
-          enableBearerAuth: data.data.systemConfig.routing.enableBearerAuth ?? false,
-          bearerAuthKey: data.data.systemConfig.routing.bearerAuthKey || '',
-          skipAuth: data.data.systemConfig.routing.skipAuth ?? false,
+          enableGlobalRoute: data.data.routing.enableGlobalRoute ?? true,
+          enableGroupNameRoute: data.data.routing.enableGroupNameRoute ?? true,
+          enableBearerAuth: data.data.routing.enableBearerAuth ?? false,
+          bearerAuthKey: data.data.routing.bearerAuthKey || '',
+          skipAuth: data.data.routing.skipAuth ?? false,
         });
       }
-      if (data.success && data.data?.systemConfig?.install) {
+      if (data.success && data.data?.install) {
         setInstallConfig({
-          pythonIndexUrl: data.data.systemConfig.install.pythonIndexUrl || '',
-          npmRegistry: data.data.systemConfig.install.npmRegistry || '',
-          baseUrl: data.data.systemConfig.install.baseUrl || 'http://localhost:3000',
+          pythonIndexUrl: data.data.install.pythonIndexUrl || '',
+          npmRegistry: data.data.install.npmRegistry || '',
+          baseUrl: data.data.install.baseUrl || 'http://localhost:3000',
         });
       }
-      if (data.success && data.data?.systemConfig?.smartRouting) {
+      if (data.success && data.data?.smartRouting) {
         setSmartRoutingConfig({
-          enabled: data.data.systemConfig.smartRouting.enabled ?? false,
-          dbUrl: data.data.systemConfig.smartRouting.dbUrl || '',
-          openaiApiBaseUrl: data.data.systemConfig.smartRouting.openaiApiBaseUrl || '',
-          openaiApiKey: data.data.systemConfig.smartRouting.openaiApiKey || '',
+          enabled: data.data.smartRouting.enabled ?? false,
+          dbUrl: data.data.smartRouting.dbUrl || '',
+          openaiApiBaseUrl: data.data.smartRouting.openaiApiBaseUrl || '',
+          openaiApiKey: data.data.smartRouting.openaiApiKey || '',
           openaiApiEmbeddingModel:
-            data.data.systemConfig.smartRouting.openaiApiEmbeddingModel || '',
+            data.data.smartRouting.openaiApiEmbeddingModel || '',
         });
       }
-      if (data.success && data.data?.systemConfig?.mcpRouter) {
+      if (data.success && data.data?.mcpRouter) {
         setMCPRouterConfig({
-          apiKey: data.data.systemConfig.mcpRouter.apiKey || '',
-          referer: data.data.systemConfig.mcpRouter.referer || 'https://www.mcphubx.com',
-          title: data.data.systemConfig.mcpRouter.title || 'MCPHub',
-          baseUrl: data.data.systemConfig.mcpRouter.baseUrl || 'https://api.mcprouter.to/v1',
-        });
-      }
-      if (data.success && data.data?.xiaozhi) {
-        setXiaozhiConfig({
-          enabled: data.data.xiaozhi.enabled ?? false,
-          webSocketUrl: data.data.xiaozhi.webSocketUrl || '',
+          apiKey: data.data.mcpRouter.apiKey || '',
+          referer: data.data.mcpRouter.referer || 'https://www.mcphubx.com',
+          title: data.data.mcpRouter.title || 'MCPHub',
+          baseUrl: data.data.mcpRouter.baseUrl || 'https://api.mcprouter.to/v1',
         });
       }
     } catch (error) {
@@ -401,45 +384,6 @@ export const useSettingsData = () => {
     }
   };
 
-  // Update xiaozhi configuration
-  const updateXiaozhiConfig = async <T extends keyof XiaozhiConfig>(
-    key: T,
-    value: XiaozhiConfig[T],
-  ) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const data = await apiPut('/xiaozhi/config', {
-        [key]: value,
-      });
-
-      if (data.success) {
-        setXiaozhiConfig({
-          ...xiaozhiConfig,
-          [key]: value,
-        });
-        
-        // 配置更新成功后，重新获取最新配置确保前后端同步
-        await fetchSettings();
-        
-        showToast(t('settings.xiaozhiConfigUpdated'));
-        return true;
-      } else {
-        showToast(data.message || t('errors.failedToUpdateSystemConfig'));
-        return false;
-      }
-    } catch (error) {
-      console.error('Failed to update xiaozhi config:', error);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to update xiaozhi config';
-      setError(errorMessage);
-      showToast(errorMessage);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Fetch settings when the component mounts or refreshKey changes
   useEffect(() => {
@@ -461,7 +405,6 @@ export const useSettingsData = () => {
     installConfig,
     smartRoutingConfig,
     mcpRouterConfig,
-    xiaozhiConfig,
     loading,
     error,
     setError,
@@ -474,6 +417,5 @@ export const useSettingsData = () => {
     updateRoutingConfigBatch,
     updateMCPRouterConfig,
     updateMCPRouterConfigBatch,
-    updateXiaozhiConfig,
   };
 };

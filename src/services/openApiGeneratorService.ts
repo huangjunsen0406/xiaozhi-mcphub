@@ -159,7 +159,7 @@ function generateOperationFromTool(tool: Tool, serverName: string): OpenAPIV3.Op
  * Generate OpenAPI specification from MCP tools
  */
 export async function generateOpenAPISpec(options: OpenAPIGenerationOptions = {}): Promise<OpenAPIV3.Document> {
-  const serverInfos = getServersInfo();
+  const serverInfos = await getServersInfo();
 
   // Filter servers based on options
   const filteredServers = serverInfos.filter(
@@ -286,20 +286,20 @@ export async function generateOpenAPISpec(options: OpenAPIGenerationOptions = {}
 /**
  * Get available server names for filtering
  */
-export function getAvailableServers(): string[] {
-  const serverInfos = getServersInfo();
+export async function getAvailableServers(): Promise<string[]> {
+  const serverInfos = await getServersInfo();
   return serverInfos.filter((server) => server.status === 'connected').map((server) => server.name);
 }
 
 /**
  * Get statistics about available tools
  */
-export function getToolStats(): {
+export async function getToolStats(): Promise<{
   totalServers: number;
   totalTools: number;
   serverBreakdown: Array<{ name: string; toolCount: number; status: string }>;
-} {
-  const serverInfos = getServersInfo();
+}> {
+  const serverInfos = await getServersInfo();
 
   const serverBreakdown = serverInfos.map((server) => ({
     name: server.name,

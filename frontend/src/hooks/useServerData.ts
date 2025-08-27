@@ -190,31 +190,18 @@ export const useServerData = () => {
 
   const handleServerEdit = async (server: Server) => {
     try {
-      // Fetch settings to get the full server config before editing
-      const settingsData: ApiResponse<{ mcpServers: Record<string, any> }> =
-        await apiGet('/settings');
+      // Fetch server config from the dedicated server config endpoint
+      const serverConfigData: ApiResponse<any> = await apiGet(`/servers/${server.name}`);
 
-      if (
-        settingsData &&
-        settingsData.success &&
-        settingsData.data &&
-        settingsData.data.mcpServers &&
-        settingsData.data.mcpServers[server.name]
-      ) {
-        const serverConfig = settingsData.data.mcpServers[server.name];
-        return {
-          name: server.name,
-          status: server.status,
-          tools: server.tools || [],
-          config: serverConfig,
-        };
+      if (serverConfigData && serverConfigData.success && serverConfigData.data) {
+        return serverConfigData.data;
       } else {
-        console.error('Failed to get server config from settings:', settingsData);
+        console.error('Failed to get server config:', serverConfigData);
         setError(t('server.invalidConfig', { serverName: server.name }));
         return null;
       }
     } catch (err) {
-      console.error('Error fetching server settings:', err);
+      console.error('Error fetching server config:', err);
       setError(err instanceof Error ? err.message : String(err));
       return null;
     }
