@@ -11,7 +11,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ServerInfo, ServerConfig, Tool } from '../types/index.js';
-import { loadSettings, saveSettings, expandEnvVars, replaceEnvVars } from '../config/index.js';
+import { expandEnvVars, replaceEnvVars } from '../config/index.js';
 import config from '../config/index.js';
 import { getGroup } from './sseService.js';
 import { getServersInGroup, getServerConfigInGroup } from './groupService.js';
@@ -453,18 +453,8 @@ export const initializeClientsFromSettings = async (
   isInit: boolean,
   serverName?: string,
 ): Promise<ServerInfo[]> => {
-  // First check if we should try to migrate from JSON
-  const settings = loadSettings();
   const mcpServerService = getMcpServerService();
   
-  // Check if database has any servers, if not migrate from JSON
-  const dbServerCount = await mcpServerService.getServerCount();
-  if (dbServerCount === 0 && settings.mcpServers && Object.keys(settings.mcpServers).length > 0) {
-    console.log('Migrating MCP servers from JSON to database...');
-    await mcpServerService.migrateFromJson(settings.mcpServers);
-    console.log(`Migrated ${Object.keys(settings.mcpServers).length} servers to database`);
-  }
-
   // Load servers from database
   const dbServers = await mcpServerService.getAllServers();
   const serverConfigs: Record<string, ServerConfig> = {};
