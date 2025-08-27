@@ -1,4 +1,4 @@
-import { VectorEmbedding } from '../entities/VectorEmbedding.js';
+import { VectorEmbedding } from '../entities/index.js';
 import BaseRepository from './BaseRepository.js';
 import { getAppDataSource } from '../connection.js';
 

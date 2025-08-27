@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { IGroupServerConfig } from '../../types/index.js';
 
 @Entity({ name: 'groups' })
 export class Group {
@@ -17,8 +18,8 @@ export class Group {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'simple-array', nullable: true })
-  servers: string[]; // Array of server names
+  @Column({ type: 'json', nullable: true })
+  servers: IGroupServerConfig[]; // Array of server configurations
 
   @Column({ type: 'varchar', nullable: true })
   owner: string; // Owner username

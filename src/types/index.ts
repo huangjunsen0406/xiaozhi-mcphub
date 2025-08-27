@@ -17,7 +17,7 @@ export interface IGroup {
   id: string; // Unique UUID for the group
   name: string; // Display name of the group
   description?: string; // Optional description of the group
-  servers: string[] | IGroupServerConfig[]; // Array of server names or server configurations that belong to this group
+  servers: IGroupServerConfig[]; // Array of server configurations that belong to this group
   owner?: string; // Owner of the group, defaults to 'admin' user
 }
 

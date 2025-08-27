@@ -1,6 +1,5 @@
 import { DataSource } from 'typeorm';
-import { User } from '../entities/User.js';
-import { McpServer } from '../entities/McpServer.js';
+import { User, McpServer } from '../entities/index.js';
 
 /**
  * Default MCP servers configuration

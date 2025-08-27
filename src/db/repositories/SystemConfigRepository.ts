@@ -1,4 +1,4 @@
-import { SystemConfig } from '../entities/SystemConfig.js';
+import { SystemConfig } from '../entities/index.js';
 import BaseRepository from './BaseRepository.js';
 
 /**

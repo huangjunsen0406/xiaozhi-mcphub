@@ -1,6 +1,6 @@
 import 'reflect-metadata'; // Ensure reflect-metadata is imported here too
 import { DataSource, DataSourceOptions } from 'typeorm';
-import entities from './entities/index.js';
+import { entities } from './entities/index.js';
 import { registerPostgresVectorType } from './types/postgresVectorType.js';
 import { VectorEmbeddingSubscriber } from './subscribers/VectorEmbeddingSubscriber.js';
 import { initializeDefaultData } from './services/initializationService.js';
@@ -248,6 +248,27 @@ const performDatabaseInitialization = async (): Promise<DataSource> => {
       }
 
       console.log('Database connection established successfully.');
+
+      // 添加实体加载自检
+      console.log('=== 实体元数据自检 ===');
+      console.table(
+        appDataSource.entityMetadatas.map(e => ({
+          name: e.name,
+          table: e.tableName,
+          columns: e.columns.length,
+          targetType: typeof e.target
+        }))
+      );
+
+      // 关键检查：直接要求Group的元数据（如果找不到会立刻抛错）
+      try {
+        const { Group } = await import('./entities/index.js');
+        const groupMetadata = appDataSource.getMetadata(Group);
+        console.log('✅ Group实体元数据加载成功:', groupMetadata.name, '->', groupMetadata.tableName);
+      } catch (error) {
+        console.error('❌ Group实体元数据加载失败:', error);
+        throw error;
+      }
 
       // Run one final setup check after schema synchronization is done
       if (defaultConfig.synchronize) {

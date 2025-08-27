@@ -1,5 +1,5 @@
 import { BaseRepository } from './BaseRepository.js';
-import { McpServer } from '../entities/McpServer.js';
+import { McpServer } from '../entities/index.js';
 
 /**
  * Repository for managing MCP servers in the database
@@ -103,6 +103,16 @@ export class McpServerRepository extends BaseRepository<McpServer> {
     
     return results;
   }
+}
+
+// Singleton instance
+let mcpServerRepositoryInstance: McpServerRepository | null = null;
+
+export function getMcpServerRepository(): McpServerRepository {
+  if (!mcpServerRepositoryInstance) {
+    mcpServerRepositoryInstance = new McpServerRepository();
+  }
+  return mcpServerRepositoryInstance;
 }
 
 export default McpServerRepository;
