@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate, useParams } from 'rea
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ServerProvider } from './contexts/ServerContext';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
@@ -27,38 +28,40 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <ToastProvider>
-          <Router basename={basename}>
-            <Routes>
-              {/* 公共路由 */}
-              <Route path="/login" element={<LoginPage />} />
+        <ServerProvider>
+          <ToastProvider>
+            <Router basename={basename}>
+              <Routes>
+                {/* 公共路由 */}
+                <Route path="/login" element={<LoginPage />} />
 
-              {/* 受保护的路由，使用 MainLayout 作为布局容器 */}
-              <Route element={<ProtectedRoute />}>
-                <Route element={<MainLayout />}>
-                  <Route path="/" element={<DashboardPage />} />
-                  <Route path="/servers" element={<ServersPage />} />
-                  <Route path="/groups" element={<GroupsPage />} />
-                  <Route path="/users" element={<UsersPage />} />
-                  <Route path="/xiaozhi" element={<XiaozhiEndpointsPage />} />
-                  <Route path="/market" element={<MarketPage />} />
-                  <Route path="/market/:serverName" element={<MarketPage />} />
-                  {/* Legacy cloud routes redirect to market with cloud tab */}
-                  <Route path="/cloud" element={<Navigate to="/market?tab=cloud" replace />} />
-                  <Route
-                    path="/cloud/:serverName"
-                    element={<CloudRedirect />}
-                  />
-                  <Route path="/logs" element={<LogsPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
+                {/* 受保护的路由，使用 MainLayout 作为布局容器 */}
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<MainLayout />}>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/servers" element={<ServersPage />} />
+                    <Route path="/groups" element={<GroupsPage />} />
+                    <Route path="/users" element={<UsersPage />} />
+                    <Route path="/xiaozhi" element={<XiaozhiEndpointsPage />} />
+                    <Route path="/market" element={<MarketPage />} />
+                    <Route path="/market/:serverName" element={<MarketPage />} />
+                    {/* Legacy cloud routes redirect to market with cloud tab */}
+                    <Route path="/cloud" element={<Navigate to="/market?tab=cloud" replace />} />
+                    <Route
+                      path="/cloud/:serverName"
+                      element={<CloudRedirect />}
+                    />
+                    <Route path="/logs" element={<LogsPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                  </Route>
                 </Route>
-              </Route>
 
-              {/* 未匹配的路由重定向到首页 */}
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Router>
-        </ToastProvider>
+                {/* 未匹配的路由重定向到首页 */}
+                <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
+            </Router>
+          </ToastProvider>
+        </ServerProvider>
       </AuthProvider>
     </ThemeProvider>
   );
