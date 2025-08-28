@@ -12,9 +12,18 @@ export class GroupRepository extends BaseRepository<Group> {
   }
 
   async findByIdOrName(key: string): Promise<Group | null> {
+    // 避免 Postgres 参数在 uuid 与 text 同时比较时的类型推断问题（42883）
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (isUuid.test(key)) {
+      return await this.repository
+        .createQueryBuilder('group')
+        .where('group.id = :idKey', { idKey: key })
+        .getOne();
+    }
+
     return await this.repository
       .createQueryBuilder('group')
-      .where('group.id = :key OR group.name = :key', { key })
+      .where('group.name = :nameKey', { nameKey: key })
       .getOne();
   }
 

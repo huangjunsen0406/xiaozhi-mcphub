@@ -47,6 +47,15 @@ export class AppServer {
       initRoutes(this.app);
       console.log('Server initialized successfully');
 
+      // Preload Xiaozhi configuration from database before initializing upstream servers
+      try {
+        const { xiaozhiClientService } = await import('./services/xiaozhiClientService.js');
+        await xiaozhiClientService.reloadConfig();
+        console.log('Preloaded Xiaozhi configuration from database');
+      } catch (error) {
+        console.warn('Failed to preload Xiaozhi configuration:', error);
+      }
+
       initUpstreamServers()
         .then(() => {
           console.log('MCP server initialized successfully');

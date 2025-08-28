@@ -1,8 +1,8 @@
 import WebSocket from 'ws';
-import { loadSettings, saveSettings } from '../config/index.js';
 import { XiaozhiEndpoint, XiaozhiConfig, XiaozhiEndpointStatus } from '../types/index.js';
 import { handleListToolsRequest, handleCallToolRequest } from './mcpService.js';
 import { getSmartRoutingConfig } from '../utils/smartRouting.js';
+import { getXiaozhiConfigRepository, getXiaozhiEndpointRepository, getGroupRepository } from '../db/repositories/index.js';
 
 interface EndpointConnection {
   ws: WebSocket;
@@ -17,55 +17,45 @@ export class XiaozhiEndpointService {
   private config: XiaozhiConfig | null = null;
 
   constructor() {
-    this.loadConfig();
+    // 延迟加载，避免在数据库初始化前访问仓储
   }
 
-  private loadConfig(): void {
-    const settings = loadSettings();
-    this.config = settings.xiaozhi || { enabled: false, endpoints: [] };
-    
-    // 如果是老版本配置，自动迁移为多端点
-    if ((this.config as any).webSocketUrl && !this.config.endpoints?.length) {
-      console.log('检测到老版本小智配置，正在迁移为多端点...');
-      const oldConfig = this.config as any;
-      this.config = {
-        enabled: oldConfig.enabled,
-        endpoints: [{
-          id: 'migrated-default',
-          name: '默认小智端点',
-          enabled: true,
-          webSocketUrl: oldConfig.webSocketUrl,
-          description: '从老版本自动迁移的端点',
-          groupId: undefined,
-          reconnect: {
-            maxAttempts: oldConfig.reconnect?.maxAttempts || 10,
-            infiniteReconnect: oldConfig.reconnect?.infiniteReconnect ?? true,
-            infiniteRetryDelay: oldConfig.reconnect?.infiniteRetryDelay || 1800000, // 30分钟
-            initialDelay: oldConfig.reconnect?.initialDelay || 2000,
-            maxDelay: oldConfig.reconnect?.maxDelay || 60000,
-            backoffMultiplier: oldConfig.reconnect?.backoffMultiplier || 2,
-          },
-          createdAt: new Date().toISOString(),
-          status: 'disconnected'
-        }],
-        loadBalancing: {
-          enabled: false,
-          strategy: 'round-robin'
-        }
-      };
-      this.saveConfig();
-      console.log('小智配置已成功迁移为多端点模式');
-    }
-  }
+  private async loadConfig(): Promise<void> {
+    const configRepo = getXiaozhiConfigRepository();
+    const endpointRepo = getXiaozhiEndpointRepository();
 
-  private saveConfig(): void {
-    const settings = loadSettings();
-    settings.xiaozhi = this.config || undefined;
-    saveSettings(settings);
+    const dbConfig = await configRepo.getConfig();
+    const endpoints = await endpointRepo.findAll();
+
+    this.config = {
+      enabled: dbConfig?.enabled ?? false,
+      endpoints: endpoints.map((ep: any) => ({
+        id: ep.id,
+        name: ep.name,
+        enabled: ep.enabled,
+        webSocketUrl: ep.webSocketUrl,
+        description: ep.description || '',
+        groupId: ep.groupId || undefined,
+        reconnect: ep.reconnect || {
+          maxAttempts: 10,
+          infiniteReconnect: true,
+          infiniteRetryDelay: 1800000,
+          initialDelay: 2000,
+          maxDelay: 60000,
+          backoffMultiplier: 2,
+        },
+        createdAt: (ep.createdAt || new Date()).toISOString(),
+        lastConnected: ep.lastConnected ? new Date(ep.lastConnected).toISOString() : undefined,
+        status: (ep.status as any) || 'disconnected',
+      })),
+      loadBalancing: dbConfig?.loadBalancing,
+    } as XiaozhiConfig;
   }
 
   // 初始化所有启用的端点
   public async initializeEndpoints(): Promise<void> {
+    // 始终从数据库读取最新配置
+    await this.loadConfig();
     if (!this.isEnabled()) {
       console.log('小智端点服务未启用');
       return;
@@ -110,6 +100,18 @@ export class XiaozhiEndpointService {
       this.updateEndpointStatus(endpoint.id, 'connected');
       connection.reconnectAttempts = 0; // 重置重连次数
       connection.isInInfiniteReconnectMode = false; // 重置无限重连模式
+
+      // 连接建立后立即通知工具列表可能已更新，确保首次连接即可看到工具
+      try {
+        const notification = {
+          jsonrpc: '2.0' as const,
+          method: 'notifications/tools/list_changed',
+        };
+        ws.send(JSON.stringify(notification));
+        console.log(`已在连接建立后通知端点 ${endpoint.name} 工具列表更新`);
+      } catch (e) {
+        console.warn(`在连接建立后通知端点 ${endpoint.name} 工具列表更新失败:`, e);
+      }
     });
 
     ws.on('error', (error) => {
@@ -171,14 +173,8 @@ export class XiaozhiEndpointService {
         console.log(`小智端点 ${endpoint.name} 请求工具列表，分组: ${endpoint.groupId && endpoint.groupId.trim() !== '' ? endpoint.groupId : '全部'}`);
         console.log(`extraParams:`, JSON.stringify(extraParams, null, 2));
         const response = await handleListToolsRequest(message.params || {}, extraParams);
-        
-        // 根据端点分组过滤工具
-        if (endpoint.groupId && endpoint.groupId.trim() !== '' && response.tools) {
-          const filteredResponse = this.filterToolsByGroup(response, endpoint.groupId);
-          await this.sendResponse(endpoint.id, message.id, filteredResponse);
-        } else {
-          await this.sendResponse(endpoint.id, message.id, response);
-        }
+        // mcpService 已基于分组做过过滤，这里直接返回，避免二次过滤造成前缀不一致
+        await this.sendResponse(endpoint.id, message.id, response);
         return;
       }
 
@@ -209,30 +205,26 @@ export class XiaozhiEndpointService {
   }
 
   // 根据分组过滤工具
-  private filterToolsByGroup(response: any, groupId: string): any {
-    const settings = loadSettings();
-    const group = settings.groups?.find(g => g.id === groupId);
-    
+  private async filterToolsByGroup(response: any, groupId: string): Promise<any> {
+    const groupRepo = getGroupRepository();
+    const group = await groupRepo.findById(groupId);
+
     if (!group || !response.tools || !Array.isArray(response.tools)) {
       return response;
     }
 
-    // 过滤工具
     const filteredTools = response.tools.filter((tool: any) => {
-      return group.servers.some((server: any) => {
+      return (group.servers || []).some((server: any) => {
         if (typeof server === 'string') return true;
-        if (server.tools === 'all') return true;
-        if (Array.isArray(server.tools)) {
-          return server.tools.includes(tool.name);
+        if ((server as any).tools === 'all') return true;
+        if (Array.isArray((server as any).tools)) {
+          return (server as any).tools.includes(tool.name);
         }
         return false;
       });
     });
 
-    return {
-      ...response,
-      tools: filteredTools
-    };
+    return { ...response, tools: filteredTools };
   }
 
   // 发送响应到指定端点
@@ -317,16 +309,17 @@ export class XiaozhiEndpointService {
   }
 
   // 更新端点状态
-  private updateEndpointStatus(endpointId: string, status: 'connected' | 'disconnected' | 'connecting'): void {
-    if (!this.config) return;
-
-    const endpointIndex = this.config.endpoints.findIndex(e => e.id === endpointId);
-    if (endpointIndex >= 0) {
-      this.config.endpoints[endpointIndex].status = status;
-      if (status === 'connected') {
-        this.config.endpoints[endpointIndex].lastConnected = new Date().toISOString();
+  private async updateEndpointStatus(endpointId: string, status: 'connected' | 'disconnected' | 'connecting'): Promise<void> {
+    const endpointRepo = getXiaozhiEndpointRepository();
+    await endpointRepo.updateStatus(endpointId, status, new Date());
+    if (this.config) {
+      const idx = this.config.endpoints.findIndex(e => e.id === endpointId);
+      if (idx >= 0) {
+        this.config.endpoints[idx].status = status;
+        if (status === 'connected') {
+          this.config.endpoints[idx].lastConnected = new Date().toISOString();
+        }
       }
-      this.saveConfig();
     }
   }
 
@@ -364,21 +357,32 @@ export class XiaozhiEndpointService {
   // 公共方法：创建端点
   public async createEndpoint(endpointData: Omit<XiaozhiEndpoint, 'id' | 'createdAt' | 'status'>): Promise<XiaozhiEndpoint> {
     if (!this.config) {
-      this.config = { enabled: false, endpoints: [] };
+      await this.loadConfig();
     }
 
+    const id = `endpoint-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const endpoint: XiaozhiEndpoint = {
       ...endpointData,
-      id: `endpoint-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id,
       createdAt: new Date().toISOString(),
-      status: 'disconnected'
+      status: 'disconnected',
     };
 
-    this.config.endpoints.push(endpoint);
-    this.saveConfig();
+    const repo = getXiaozhiEndpointRepository();
+    await repo.save({
+      id,
+      name: endpoint.name,
+      enabled: endpoint.enabled,
+      webSocketUrl: endpoint.webSocketUrl,
+      description: endpoint.description || '',
+      groupId: endpoint.groupId || null as any,
+      reconnect: endpoint.reconnect,
+      status: endpoint.status,
+    } as any);
 
-    // 如果端点已启用且服务已启用，立即连接
-    if (endpoint.enabled && this.config.enabled) {
+    this.config!.endpoints.push(endpoint);
+
+    if (endpoint.enabled && this.config!.enabled) {
       await this.connectEndpoint(endpoint);
     }
 
@@ -387,43 +391,48 @@ export class XiaozhiEndpointService {
 
   // 公共方法：更新端点
   public async updateEndpoint(endpointId: string, updateData: Partial<XiaozhiEndpoint>): Promise<XiaozhiEndpoint | null> {
-    if (!this.config) return null;
+    if (!this.config) {
+      await this.loadConfig();
+    }
 
-    const endpointIndex = this.config.endpoints.findIndex(e => e.id === endpointId);
-    if (endpointIndex === -1) return null;
+    const repo = getXiaozhiEndpointRepository();
+    const updated = await repo.updateById(endpointId, updateData as any);
+    if (!updated) return null;
 
-    const oldEndpoint = this.config.endpoints[endpointIndex];
-    const updatedEndpoint = { ...oldEndpoint, ...updateData };
-    this.config.endpoints[endpointIndex] = updatedEndpoint;
-    this.saveConfig();
+    const index = this.config!.endpoints.findIndex(e => e.id === endpointId);
+    if (index >= 0) {
+      this.config!.endpoints[index] = {
+        ...this.config!.endpoints[index],
+        ...updateData,
+      } as XiaozhiEndpoint;
+    }
 
-    // 如果URL或启用状态改变，重新连接
     if (updateData.webSocketUrl || updateData.enabled !== undefined) {
       await this.disconnectEndpoint(endpointId);
-      
-      if (updatedEndpoint.enabled && this.config.enabled) {
-        await this.connectEndpoint(updatedEndpoint);
+      const ep = this.config!.endpoints.find(e => e.id === endpointId)!;
+      if (ep.enabled && this.config!.enabled) {
+        await this.connectEndpoint(ep);
       }
     }
 
-    return updatedEndpoint;
+    return this.config!.endpoints.find(e => e.id === endpointId) || null;
   }
 
   // 公共方法：删除端点
   public async deleteEndpoint(endpointId: string): Promise<boolean> {
-    if (!this.config) return false;
-
-    const endpointIndex = this.config.endpoints.findIndex(e => e.id === endpointId);
+    if (!this.config) {
+      await this.loadConfig();
+    }
+    const endpointIndex = this.config!.endpoints.findIndex(e => e.id === endpointId);
     if (endpointIndex === -1) return false;
 
-    // 断开连接
     await this.disconnectEndpoint(endpointId);
-
-    // 从配置中删除
-    this.config.endpoints.splice(endpointIndex, 1);
-    this.saveConfig();
-
-    return true;
+    const repo = getXiaozhiEndpointRepository();
+    const ok = await repo.delete(endpointId);
+    if (ok) {
+      this.config!.endpoints.splice(endpointIndex, 1);
+    }
+    return ok;
   }
 
   // 公共方法：重连端点
@@ -485,15 +494,11 @@ export class XiaozhiEndpointService {
 
   // 公共方法：重新加载配置
   public async reloadConfig(): Promise<void> {
-    const oldConfig = this.config ? { ...this.config } : null;
-    this.loadConfig();
-
-    // 如果配置发生变化，重新初始化
-    if (!oldConfig || oldConfig.enabled !== this.config?.enabled) {
+    const oldEnabled = this.config?.enabled;
+    await this.loadConfig();
+    if (oldEnabled !== this.config?.enabled) {
       console.log('小智端点配置已更改，重新初始化连接...');
-      
       await this.disconnect();
-      
       if (this.isEnabled()) {
         await this.initializeEndpoints();
       }

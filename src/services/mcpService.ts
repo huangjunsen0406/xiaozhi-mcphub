@@ -1022,7 +1022,6 @@ Available servers: ${serversList}`;
       if (group) {
         const serverConfig = await getServerConfigInGroup(group, serverInfo.name);
         if (serverConfig && serverConfig.tools !== 'all' && Array.isArray(serverConfig.tools)) {
-          // Filter tools based on group configuration
           const allowedToolNames = serverConfig.tools.map(
             (toolName: string) => `${serverInfo.name}-${toolName}`,
           );

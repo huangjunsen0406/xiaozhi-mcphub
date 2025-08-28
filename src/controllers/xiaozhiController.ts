@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { xiaozhiClientService } from '../services/xiaozhiClientService.js';
 import { xiaozhiEndpointService } from '../services/xiaozhiEndpointService.js';
-import { loadSettings, saveSettings } from '../config/index.js';
-import { XiaozhiConfig, XiaozhiEndpoint } from '../types/index.js';
+// import { XiaozhiConfig } from '../types/index.js';
+import { getXiaozhiConfigRepository } from '../db/repositories/index.js';
 
 // 获取小智客户端状态
 export const getXiaozhiStatus = async (req: Request, res: Response): Promise<void> => {
@@ -24,10 +24,11 @@ export const getXiaozhiStatus = async (req: Request, res: Response): Promise<voi
 // 获取小智客户端配置（兼容老API）
 export const getXiaozhiConfig = async (req: Request, res: Response): Promise<void> => {
   try {
-    const settings = loadSettings();
-    const config = settings.xiaozhi || {
-      enabled: false,
-      endpoints: [],
+    const configRepo = getXiaozhiConfigRepository();
+    const dbConfig = await configRepo.getConfig();
+    const config = {
+      enabled: dbConfig?.enabled ?? false,
+      endpoints: xiaozhiEndpointService.getAllEndpoints(),
     };
 
     // 为了兼容老的前端，如果有端点，返回第一个端点的信息作为单端点模式
@@ -65,21 +66,12 @@ export const getXiaozhiConfig = async (req: Request, res: Response): Promise<voi
 export const updateXiaozhiConfig = async (req: Request, res: Response): Promise<void> => {
   try {
     const { enabled } = req.body;
+    const configRepo = getXiaozhiConfigRepository();
+    const currentEnabled = (await configRepo.getConfig())?.enabled ?? false;
+    const targetEnabled = enabled ?? currentEnabled;
 
-    const settings = loadSettings();
-    const currentConfig = settings.xiaozhi || {
-      enabled: false,
-      endpoints: [],
-    };
-
-    // 只更新enabled状态，端点管理使用专门的端点API
-    const updatedConfig: XiaozhiConfig = {
-      ...currentConfig,
-      enabled: enabled ?? currentConfig.enabled,
-    };
-
-    // 验证：如果要启用小智客户端，必须有至少一个端点
-    if (updatedConfig.enabled && updatedConfig.endpoints.length === 0) {
+    // 验证：如果要启用小智客户端，必须有至少一个端点（从服务读取）
+    if (targetEnabled && xiaozhiEndpointService.getAllEndpoints().length === 0) {
       res.status(400).json({
         success: false,
         message: '启用小智客户端时，必须至少配置一个端点',
@@ -87,15 +79,7 @@ export const updateXiaozhiConfig = async (req: Request, res: Response): Promise<
       return;
     }
 
-    settings.xiaozhi = updatedConfig;
-
-    if (!saveSettings(settings)) {
-      res.status(500).json({
-        success: false,
-        message: '保存配置失败',
-      });
-      return;
-    }
+    await configRepo.saveConfig({ enabled: targetEnabled });
 
     // 配置保存成功后，重新加载小智客户端服务配置
     try {
