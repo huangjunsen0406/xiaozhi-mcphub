@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useRef, useCallback, useCont
 import { useTranslation } from 'react-i18next';
 import { Server, ApiResponse } from '@/types';
 import { apiGet, apiPost, apiDelete } from '../utils/fetchInterceptor';
+import { useAuth } from './AuthContext';
 
 // Configuration options
 const CONFIG = {
@@ -24,6 +25,7 @@ interface ServerContextType {
   isLoading: boolean;
   fetchAttempts: number;
   triggerRefresh: () => void;
+  refreshIfNeeded: () => void; // Smart refresh with debounce
   handleServerAdd: () => void;
   handleServerEdit: (server: Server) => Promise<any>;
   handleServerRemove: (serverName: string) => Promise<boolean>;
@@ -36,6 +38,7 @@ const ServerContext = createContext<ServerContextType | undefined>(undefined);
 // Provider component
 export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
+  const { auth } = useAuth();
   const [servers, setServers] = useState<Server[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -46,6 +49,10 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   // Track current attempt count to avoid dependency cycles
   const attemptsRef = useRef<number>(0);
+  // Track last fetch time to implement smart refresh
+  const lastFetchTimeRef = useRef<number>(0);
+  // Minimum interval between manual refreshes (5 seconds in dev, 3 seconds in prod)
+  const MIN_REFRESH_INTERVAL = process.env.NODE_ENV === 'development' ? 5000 : 3000;
 
   // Clear the timer
   const clearTimer = () => {
@@ -56,13 +63,18 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Start normal polling
-  const startNormalPolling = useCallback(() => {
+  const startNormalPolling = useCallback((options?: { immediate?: boolean }) => {
+    const immediate = options?.immediate ?? true;
     // Ensure no other timers are running
     clearTimer();
 
     const fetchServers = async () => {
       try {
+        console.log('[ServerContext] Fetching servers from API...');
         const data = await apiGet('/servers');
+        
+        // Update last fetch time
+        lastFetchTimeRef.current = Date.now();
 
         if (data && data.success && Array.isArray(data.data)) {
           setServers(data.data);
@@ -92,14 +104,38 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
 
-    // Execute immediately
-    fetchServers();
+    // Execute immediately unless explicitly skipped
+    if (immediate) {
+      fetchServers();
+    }
 
     // Set up regular polling
     intervalRef.current = setInterval(fetchServers, CONFIG.normal.pollingInterval);
   }, [t]);
 
+  // Watch for authentication status changes
   useEffect(() => {
+    if (auth.isAuthenticated) {
+      console.log('[ServerContext] User authenticated, triggering refresh');
+      // When user logs in, trigger a refresh to load servers
+      setRefreshKey((prevKey) => prevKey + 1);
+    } else {
+      console.log('[ServerContext] User not authenticated, clearing data and stopping polling');
+      // When user logs out, clear data and stop polling
+      clearTimer();
+      setServers([]);
+      setIsInitialLoading(false);
+      setError(null);
+    }
+  }, [auth.isAuthenticated]);
+
+  useEffect(() => {
+    // If not authenticated, don't poll
+    if (!auth.isAuthenticated) {
+      console.log('[ServerContext] User not authenticated, skipping polling setup');
+      return;
+    }
+
     // Reset attempt count
     if (refreshKey > 0) {
       attemptsRef.current = 0;
@@ -109,29 +145,33 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Initialization phase request function
     const fetchInitialData = async () => {
       try {
+        console.log('[ServerContext] Initial fetch - attempt', attemptsRef.current + 1);
         const data = await apiGet('/servers');
+        
+        // Update last fetch time
+        lastFetchTimeRef.current = Date.now();
 
         // Handle API response wrapper object, extract data field
         if (data && data.success && Array.isArray(data.data)) {
           setServers(data.data);
           setIsInitialLoading(false);
-          // Initialization successful, start normal polling
-          startNormalPolling();
+          // Initialization successful, start normal polling (skip immediate to avoid duplicate fetch)
+          startNormalPolling({ immediate: false });
           return true;
         } else if (data && Array.isArray(data)) {
           // Compatibility handling, if API directly returns array
           setServers(data);
           setIsInitialLoading(false);
-          // Initialization successful, start normal polling
-          startNormalPolling();
+          // Initialization successful, start normal polling (skip immediate to avoid duplicate fetch)
+          startNormalPolling({ immediate: false });
           return true;
         } else {
           // If data format is not as expected, set to empty array
           console.error('Invalid server data format:', data);
           setServers([]);
           setIsInitialLoading(false);
-          // Initialization successful but data is empty, start normal polling
-          startNormalPolling();
+          // Initialization successful but data is empty, start normal polling (skip immediate)
+          startNormalPolling({ immediate: false });
           return true;
         }
       } catch (err) {
@@ -185,7 +225,7 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [refreshKey, t, isInitialLoading, startNormalPolling]);
 
-  // Manually trigger refresh
+  // Manually trigger refresh (always refreshes)
   const triggerRefresh = useCallback(() => {
     // Clear current timer
     clearTimer();
@@ -200,6 +240,23 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Change in refreshKey will trigger useEffect to run again
     setRefreshKey((prevKey) => prevKey + 1);
   }, [isInitialLoading]);
+
+  // Smart refresh with debounce (only refresh if enough time has passed)
+  const refreshIfNeeded = useCallback(() => {
+    const now = Date.now();
+    const timeSinceLastFetch = now - lastFetchTimeRef.current;
+    
+    // Log who is calling this
+    console.log('[ServerContext] refreshIfNeeded called, time since last fetch:', timeSinceLastFetch, 'ms');
+    
+    // Only refresh if enough time has passed since last fetch
+    if (timeSinceLastFetch >= MIN_REFRESH_INTERVAL) {
+      console.log('[ServerContext] Triggering refresh (exceeded MIN_REFRESH_INTERVAL:', MIN_REFRESH_INTERVAL, 'ms)');
+      triggerRefresh();
+    } else {
+      console.log('[ServerContext] Skipping refresh (MIN_REFRESH_INTERVAL:', MIN_REFRESH_INTERVAL, 'ms, time since last:', timeSinceLastFetch, 'ms)');
+    }
+  }, [triggerRefresh]);
 
   // Server related operations
   const handleServerAdd = useCallback(() => {
@@ -269,6 +326,7 @@ export const ServerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isLoading: isInitialLoading,
     fetchAttempts,
     triggerRefresh,
+    refreshIfNeeded,
     handleServerAdd,
     handleServerEdit,
     handleServerRemove,

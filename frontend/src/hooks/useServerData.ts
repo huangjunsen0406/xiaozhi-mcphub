@@ -7,3 +7,6 @@ export const useServerData = () => {
   // This maintains backward compatibility with existing code
   return useServerContext();
 };
+
+// Re-export for convenience
+export { useServerDataWithRefresh } from './useServerDataWithRefresh';
