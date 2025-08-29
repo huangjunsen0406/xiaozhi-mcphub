@@ -1,12 +1,34 @@
 version: "3.8"
 
 services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: xiaozhi
+      POSTGRES_PASSWORD: xiaozhi123456
+      POSTGRES_DB: xiaozhi_mcphub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
   mcphub:
-    image: huangjunsen/xiaozhi-mcphub:latest
+    image: xiaozhi-mcphub:local
     container_name: xiaozhi-mcphub
+    depends_on:
+      - db
     ports:
       - "3000:3000"
+    environment:
+      # 只用 DATABASE_URL
+      DATABASE_URL: postgres://xiaozhi:xiaozhi123456@db:5432/xiaozhi_mcphub
+      NODE_ENV: production
+      SMART_ROUTING_ENABLED: "false"
     volumes:
-      - ./mcp_settings.json:/app/mcp_settings.json
       - ./data:/app/data
     restart: unless-stopped
+
+volumes:
+  pgdata:

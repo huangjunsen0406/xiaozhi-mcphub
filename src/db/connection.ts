@@ -26,7 +26,7 @@ const createRequiredExtensions = async (dataSource: DataSource): Promise<void> =
 
 // Get database URL from environment variable or use default
 const getDatabaseUrl = (): string => {
-  return process.env.DATABASE_URL || process.env.DB_URL || 'postgres://xiaozhi:xiaozhi123@localhost:5432/xiaozhi_mcphub';
+  return process.env.DATABASE_URL || 'postgres://xiaozhi:xiaozhi123@localhost:5432/xiaozhi_mcphub';
 };
 
 // Default database configuration

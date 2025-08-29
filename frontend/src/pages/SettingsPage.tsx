@@ -36,17 +36,6 @@ const SettingsPage: React.FC = () => {
     openaiApiEmbeddingModel: '',
   });
 
-  const [tempMCPRouterConfig, setTempMCPRouterConfig] = useState<{
-    apiKey: string;
-    referer: string;
-    title: string;
-    baseUrl: string;
-  }>({
-    apiKey: '',
-    referer: 'https://www.mcphubx.com',
-    title: 'MCPHub',
-    baseUrl: 'https://api.mcprouter.to/v1',
-  });
 
 
   const {
@@ -55,14 +44,12 @@ const SettingsPage: React.FC = () => {
     setTempRoutingConfig,
     installConfig: savedInstallConfig,
     smartRoutingConfig,
-    mcpRouterConfig,
     loading,
     updateRoutingConfig,
     updateRoutingConfigBatch,
     updateInstallConfig,
     updateSmartRoutingConfig,
     updateSmartRoutingConfigBatch,
-    updateMCPRouterConfig,
   } = useSettingsData();
 
   // Update local installConfig when savedInstallConfig changes
@@ -84,28 +71,16 @@ const SettingsPage: React.FC = () => {
     }
   }, [smartRoutingConfig]);
 
-  // Update local tempMCPRouterConfig when mcpRouterConfig changes
-  useEffect(() => {
-    if (mcpRouterConfig) {
-      setTempMCPRouterConfig({
-        apiKey: mcpRouterConfig.apiKey || '',
-        referer: mcpRouterConfig.referer || 'https://www.mcphubx.com',
-        title: mcpRouterConfig.title || 'MCPHub',
-        baseUrl: mcpRouterConfig.baseUrl || 'https://api.mcprouter.to/v1',
-      });
-    }
-  }, [mcpRouterConfig]);
 
 
   const [sectionsVisible, setSectionsVisible] = useState({
     routingConfig: false,
     installConfig: false,
     smartRoutingConfig: false,
-    mcpRouterConfig: false,
     password: false
   });
 
-  const toggleSection = (section: 'routingConfig' | 'installConfig' | 'smartRoutingConfig' | 'mcpRouterConfig' | 'password') => {
+  const toggleSection = (section: 'routingConfig' | 'installConfig' | 'smartRoutingConfig' | 'password') => {
     setSectionsVisible(prev => ({
       ...prev,
       [section]: !prev[section]
@@ -172,16 +147,6 @@ const SettingsPage: React.FC = () => {
     await updateSmartRoutingConfig(key, tempSmartRoutingConfig[key]);
   };
 
-  const handleMCPRouterConfigChange = (key: 'apiKey' | 'referer' | 'title' | 'baseUrl', value: string) => {
-    setTempMCPRouterConfig({
-      ...tempMCPRouterConfig,
-      [key]: value
-    });
-  };
-
-  const saveMCPRouterConfig = async (key: 'apiKey' | 'referer' | 'title' | 'baseUrl') => {
-    await updateMCPRouterConfig(key, tempMCPRouterConfig[key]);
-  };
 
 
   const handleSmartRoutingEnabledChange = async (value: boolean) => {
@@ -362,74 +327,6 @@ const SettingsPage: React.FC = () => {
           )}
         </div>
       </PermissionChecker>
-
-      {/* MCPRouter Configuration Settings */}
-      <PermissionChecker permissions={PERMISSIONS.SETTINGS_INSTALL_CONFIG}>
-        <div className="bg-white shadow rounded-lg py-4 px-6 mb-6 page-card dashboard-card">
-          <div
-            className="flex justify-between items-center cursor-pointer transition-colors duration-200 hover:text-blue-600"
-            onClick={() => toggleSection('mcpRouterConfig')}
-          >
-            <h2 className="font-semibold text-gray-800">{t('settings.mcpRouterConfig')}</h2>
-            <span className="text-gray-500 transition-transform duration-200">
-              {sectionsVisible.mcpRouterConfig ? '▼' : '►'}
-            </span>
-          </div>
-
-          {sectionsVisible.mcpRouterConfig && (
-            <div className="space-y-4 mt-4">
-              <div className="p-3 bg-gray-50 rounded-md">
-                <div className="mb-2">
-                  <h3 className="font-medium text-gray-700">{t('settings.mcpRouterApiKey')}</h3>
-                  <p className="text-sm text-gray-500">{t('settings.mcpRouterApiKeyDescription')}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="password"
-                    value={tempMCPRouterConfig.apiKey}
-                    onChange={(e) => handleMCPRouterConfigChange('apiKey', e.target.value)}
-                    placeholder={t('settings.mcpRouterApiKeyPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
-                    disabled={loading}
-                  />
-                  <button
-                    onClick={() => saveMCPRouterConfig('apiKey')}
-                    disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
-                  >
-                    {t('common.save')}
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-3 bg-gray-50 rounded-md">
-                <div className="mb-2">
-                  <h3 className="font-medium text-gray-700">{t('settings.mcpRouterBaseUrl')}</h3>
-                  <p className="text-sm text-gray-500">{t('settings.mcpRouterBaseUrlDescription')}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={tempMCPRouterConfig.baseUrl}
-                    onChange={(e) => handleMCPRouterConfigChange('baseUrl', e.target.value)}
-                    placeholder={t('settings.mcpRouterBaseUrlPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
-                    disabled={loading}
-                  />
-                  <button
-                    onClick={() => saveMCPRouterConfig('baseUrl')}
-                    disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
-                  >
-                    {t('common.save')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </PermissionChecker>
-
 
       {/* Route Configuration Settings */}
       <div className="bg-white shadow rounded-lg py-4 px-6 mb-6 dashboard-card">

@@ -10,7 +10,6 @@
   "files": [
     "dist",
     "bin",
-    "mcp_settings.json",
     "servers.json",
     "frontend/dist",
     "README.md",

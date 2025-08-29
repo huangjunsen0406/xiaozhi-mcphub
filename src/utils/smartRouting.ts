@@ -39,7 +39,7 @@ export async function getSmartRoutingConfig(): Promise<SmartRoutingConfig> {
     ),
 
     // Database configuration
-    dbUrl: getConfigValue([process.env.DB_URL], smartRoutingSettings.dbUrl, '', expandEnvVars),
+    dbUrl: getConfigValue([process.env.DATABASE_URL], smartRoutingSettings.dbUrl, '', expandEnvVars),
 
     // OpenAI API configuration
     openaiApiBaseUrl: getConfigValue(

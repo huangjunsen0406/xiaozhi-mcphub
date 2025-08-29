@@ -20,7 +20,8 @@
     "newVersionAvailable": "New version {{version}} is available",
     "viewOnGitHub": "View on GitHub",
     "checkForUpdates": "Check for Updates",
-    "checking": "Checking for updates..."
+    "checking": "Checking for updates...",
+    "description": "Xiaozhi-MCPHub is an MCP server orchestration and governance platform by huangjunsen0406 that uses policy-based routing to organize, monitor, and scale multiple MCP servers, providing a stable and reliable MCP entry point for Xiaozhi."
   },
   "profile": {
     "viewProfile": "View profile",

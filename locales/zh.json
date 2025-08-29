@@ -20,7 +20,8 @@
     "newVersionAvailable": "新版本 {{version}} 已发布",
     "viewOnGitHub": "在 GitHub 上查看",
     "checkForUpdates": "检查更新",
-    "checking": "检查更新中..."
+    "checking": "检查更新中...",
+    "description": "Xiaozhi-MCPHub 是由 huangjunsen0406 二次开发的 MCP 服务器治理平台，通过灵活路由统一组织、监控并扩展多台 MCP 服务器，为「小智」提供稳定可靠的 MCP 服务入口。"
   },
   "profile": {
     "viewProfile": "查看个人中心",
