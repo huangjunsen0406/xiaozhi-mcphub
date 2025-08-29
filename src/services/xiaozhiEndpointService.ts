@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 import { XiaozhiEndpoint, XiaozhiConfig, XiaozhiEndpointStatus } from '../types/index.js';
 import { handleListToolsRequest, handleCallToolRequest } from './mcpService.js';
 import { getSmartRoutingConfig } from '../utils/smartRouting.js';
-import { getXiaozhiConfigRepository, getXiaozhiEndpointRepository, getGroupRepository } from '../db/repositories/index.js';
+import { getXiaozhiConfigRepository, getXiaozhiEndpointRepository } from '../db/repositories/index.js';
 
 interface EndpointConnection {
   ws: WebSocket;
@@ -10,14 +10,32 @@ interface EndpointConnection {
   reconnectTimer?: NodeJS.Timeout;
   reconnectAttempts: number;
   isInInfiniteReconnectMode?: boolean; // 是否进入无限重连模式
+  infiniteRetryCount?: number; // 无限重连的次数
+  isInSleepMode?: boolean; // 是否进入休眠模式
 }
 
 export class XiaozhiEndpointService {
   private connections: Map<string, EndpointConnection> = new Map();
   private config: XiaozhiConfig | null = null;
+  private aggressiveReconnect: boolean;
+  private reconnectInterval: number;
+  private maxInfiniteRetries: number;
+  private sleepThreshold: number;
+  private sleepInterval: number;
 
   constructor() {
     // 延迟加载，避免在数据库初始化前访问仓储
+    // 读取环境变量配置
+    this.aggressiveReconnect = process.env.XIAOZHI_AGGRESSIVE_RECONNECT === 'true';
+    this.reconnectInterval = parseInt(process.env.XIAOZHI_RECONNECT_INTERVAL || '2000', 10);
+    this.maxInfiniteRetries = parseInt(process.env.XIAOZHI_MAX_INFINITE_RETRIES || '48', 10); // 默认48次（24小时）
+    this.sleepThreshold = parseInt(process.env.XIAOZHI_SLEEP_THRESHOLD || '12', 10); // 默认12次后休眠
+    this.sleepInterval = parseInt(process.env.XIAOZHI_SLEEP_INTERVAL || '7200000', 10); // 默认2小时
+    
+    if (this.aggressiveReconnect) {
+      console.log(`小智端点启用快速重连模式，重连间隔：${this.reconnectInterval}ms`);
+    }
+    console.log(`小智端点重连配置：最大无限重连次数=${this.maxInfiniteRetries}，休眠阈值=${this.sleepThreshold}，休眠间隔=${this.sleepInterval}ms`);
   }
 
   private async loadConfig(): Promise<void> {
@@ -89,7 +107,9 @@ export class XiaozhiEndpointService {
       ws,
       endpoint: { ...endpoint },
       reconnectAttempts: 0,
-      isInInfiniteReconnectMode: false
+      isInInfiniteReconnectMode: false,
+      infiniteRetryCount: 0,
+      isInSleepMode: false
     };
 
     this.connections.set(endpoint.id, connection);
@@ -100,6 +120,8 @@ export class XiaozhiEndpointService {
       this.updateEndpointStatus(endpoint.id, 'connected');
       connection.reconnectAttempts = 0; // 重置重连次数
       connection.isInInfiniteReconnectMode = false; // 重置无限重连模式
+      connection.infiniteRetryCount = 0; // 重置无限重连计数
+      connection.isInSleepMode = false; // 重置休眠模式
 
       // 连接建立后立即通知工具列表可能已更新，确保首次连接即可看到工具
       try {
@@ -204,28 +226,6 @@ export class XiaozhiEndpointService {
     }
   }
 
-  // 根据分组过滤工具
-  private async filterToolsByGroup(response: any, groupId: string): Promise<any> {
-    const groupRepo = getGroupRepository();
-    const group = await groupRepo.findById(groupId);
-
-    if (!group || !response.tools || !Array.isArray(response.tools)) {
-      return response;
-    }
-
-    const filteredTools = response.tools.filter((tool: any) => {
-      return (group.servers || []).some((server: any) => {
-        if (typeof server === 'string') return true;
-        if ((server as any).tools === 'all') return true;
-        if (Array.isArray((server as any).tools)) {
-          return (server as any).tools.includes(tool.name);
-        }
-        return false;
-      });
-    });
-
-    return { ...response, tools: filteredTools };
-  }
 
   // 发送响应到指定端点
   private async sendResponse(endpointId: string, messageId: any, result: any): Promise<void> {
@@ -248,6 +248,27 @@ export class XiaozhiEndpointService {
   private scheduleReconnect(connection: EndpointConnection): void {
     const { endpoint } = connection;
     
+    // 如果启用了快速重连模式，直接使用固定间隔重连
+    if (this.aggressiveReconnect) {
+      if (connection.reconnectTimer) {
+        clearTimeout(connection.reconnectTimer);
+      }
+
+      console.log(`端点 ${endpoint.name} 将在 ${this.reconnectInterval}ms 后重连（快速重连模式）`);
+
+      connection.reconnectTimer = setTimeout(async () => {
+        try {
+          await this.connectEndpoint(endpoint);
+        } catch (error) {
+          console.error(`端点 ${endpoint.name} 重连失败:`, error);
+          // 继续调度下次重连
+          this.scheduleReconnect(connection);
+        }
+      }, this.reconnectInterval);
+      return;
+    }
+    
+    // 原有的重连逻辑（指数退避）
     // 检查是否已达到快速重连上限
     if (connection.reconnectAttempts >= endpoint.reconnect.maxAttempts) {
       // 如果启用了无限重连，进入无限重连模式
@@ -288,16 +309,39 @@ export class XiaozhiEndpointService {
   private scheduleInfiniteReconnect(connection: EndpointConnection): void {
     const { endpoint } = connection;
     
+    // 增加无限重连计数
+    connection.infiniteRetryCount = (connection.infiniteRetryCount || 0) + 1;
+    
+    // 检查是否超过最大重连次数
+    if (this.maxInfiniteRetries > 0 && connection.infiniteRetryCount > this.maxInfiniteRetries) {
+      console.log(`端点 ${endpoint.name} 已达到最大无限重连次数 ${this.maxInfiniteRetries}，停止重连`);
+      this.updateEndpointStatus(endpoint.id, 'disconnected');
+      return;
+    }
+    
     if (connection.reconnectTimer) {
       clearTimeout(connection.reconnectTimer);
     }
 
-    const delay = endpoint.reconnect.infiniteRetryDelay || 1800000; // 默认30分钟
+    // 确定延迟时间
+    let delay: number;
     
-    console.log(`端点 ${endpoint.name} 将在 ${Math.round(delay / 60000)}分钟 后进行无限重连尝试`);
+    // 检查是否应该进入休眠模式
+    if (connection.infiniteRetryCount >= this.sleepThreshold && !connection.isInSleepMode) {
+      connection.isInSleepMode = true;
+      console.log(`端点 ${endpoint.name} 连续失败 ${this.sleepThreshold} 次，进入休眠模式`);
+    }
+    
+    if (connection.isInSleepMode) {
+      delay = this.sleepInterval; // 休眠模式使用更长的间隔
+      console.log(`端点 ${endpoint.name} 处于休眠模式，将在 ${Math.round(delay / 60000)}分钟 后重连（第${connection.infiniteRetryCount}次）`);
+    } else {
+      delay = endpoint.reconnect.infiniteRetryDelay || 1800000; // 正常的30分钟间隔
+      console.log(`端点 ${endpoint.name} 将在 ${Math.round(delay / 60000)}分钟 后进行无限重连（第${connection.infiniteRetryCount}次）`);
+    }
 
     connection.reconnectTimer = setTimeout(async () => {
-      console.log(`端点 ${endpoint.name} 进行无限重连尝试...`);
+      console.log(`端点 ${endpoint.name} 进行无限重连尝试（第${connection.infiniteRetryCount}/${this.maxInfiniteRetries || '∞'}次）...`);
       try {
         await this.connectEndpoint(endpoint);
       } catch (error) {
