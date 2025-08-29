@@ -94,6 +94,9 @@ export class XiaozhiEndpointService {
 
   // 连接单个端点
   private async connectEndpoint(endpoint: XiaozhiEndpoint): Promise<void> {
+    // 在断开前保留旧连接的重连状态，避免计数被重置
+    const prevConnection = this.connections.get(endpoint.id);
+
     // 如果已经存在连接，先断开
     await this.disconnectEndpoint(endpoint.id);
 
@@ -106,10 +109,11 @@ export class XiaozhiEndpointService {
     const connection: EndpointConnection = {
       ws,
       endpoint: { ...endpoint },
-      reconnectAttempts: 0,
-      isInInfiniteReconnectMode: false,
-      infiniteRetryCount: 0,
-      isInSleepMode: false
+      // 继承旧连接的重连状态，确保日志中的“第N次尝试”累计正确
+      reconnectAttempts: prevConnection?.reconnectAttempts ?? 0,
+      isInInfiniteReconnectMode: prevConnection?.isInInfiniteReconnectMode ?? false,
+      infiniteRetryCount: prevConnection?.infiniteRetryCount ?? 0,
+      isInSleepMode: prevConnection?.isInSleepMode ?? false
     };
 
     this.connections.set(endpoint.id, connection);
@@ -247,13 +251,13 @@ export class XiaozhiEndpointService {
   // 调度重连
   private scheduleReconnect(connection: EndpointConnection): void {
     const { endpoint } = connection;
+    // 若已存在重连定时器，则避免因 error 与 close 双触发而重复调度与重复日志
+    if (connection.reconnectTimer) {
+      return;
+    }
     
     // 如果启用了快速重连模式，直接使用固定间隔重连
     if (this.aggressiveReconnect) {
-      if (connection.reconnectTimer) {
-        clearTimeout(connection.reconnectTimer);
-      }
-
       console.log(`端点 ${endpoint.name} 将在 ${this.reconnectInterval}ms 后重连（快速重连模式）`);
 
       connection.reconnectTimer = setTimeout(async () => {
@@ -282,10 +286,6 @@ export class XiaozhiEndpointService {
         console.log(`端点 ${endpoint.name} 重连次数已达上限，停止重连`);
       }
       return;
-    }
-
-    if (connection.reconnectTimer) {
-      clearTimeout(connection.reconnectTimer);
     }
 
     const delay = Math.min(

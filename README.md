@@ -1,186 +1,143 @@
-# xiaozhi-mcphub: Intelligent MCP Tool Bridge for Xiaozhi AI Platform
+# xiaozhi-mcphub: MCP tool bridge and console optimized for the Xiaozhi AI platform
 
-[English] | [中文版](README.zh.md)
+[中文版](README.zh.md) | English
 
-**xiaozhi-mcphub** is an intelligent MCP (Model Context Protocol) tool bridge that seamlessly connects Xiaozhi AI platform with powerful tool ecosystems. Built upon the excellent [MCPHub](https://github.com/samanhappy/mcphub) foundation, xiaozhi-mcphub adds enhanced Xiaozhi platform integration and intelligent tool synchronization.
+**xiaozhi-mcphub** is a second-stage development based on [MCPHub](https://github.com/samanhappy/mcphub). It enhances integration with the Xiaozhi AI platform and provides multi-endpoint management, automatic reconnection, vector-based smart routing, and OpenAPI-compatible access.
 
 ![Dashboard Preview](assets/dashboard.png)
 
 ## 🚀 Key Features
 
-### 🤖 **Xiaozhi AI Platform Integration** *(New!)*
-- **Native Xiaozhi Connection**: WebSocket connection with automatic tool synchronization
-- **Real-time Tool Updates**: Intelligent reconnection when tool states change
-- **Protocol Bridge**: Seamless MCP protocol translation for Xiaozhi platform
-- **Tool Discovery**: Smart routing with vector-based tool search
+- **Enhanced Xiaozhi Integration**:
+  - **Multi-endpoint management**: Bidirectional WebSocket connections with multiple Xiaozhi endpoints (enable/disable, edit, reconnect, status query).
+  - **Smart reconnection**: Fast reconnect mode, exponential backoff, infinite retries with sleep window — all configurable via environment variables.
+  - **Tool synchronization**: Xiaozhi endpoints are notified when server tools change to keep tool lists up-to-date.
+  - **Grouping and smart routing**: Endpoints can bind to groups or use `$smart` intelligent routing.
 
-### 🛠️ **Enhanced MCP Management** *(Based on MCPHub)*
-- **Broadened MCP Server Support**: Seamlessly integrate any MCP server with minimal configuration
-- **Centralized Dashboard**: Monitor real-time status and performance metrics from one sleek web UI
-- **Flexible Protocol Handling**: Full compatibility with stdio, SSE, and HTTP MCP protocols
-- **Hot-Swappable Configuration**: Add, remove, or update MCP servers on the fly — no downtime required
-- **Group-Based Access Control**: Organize servers into customizable groups for streamlined permissions management
-- **Secure Authentication**: Built-in user management with role-based access powered by JWT and bcrypt
-- **Docker-Ready**: Deploy instantly with our containerized setup
+- **MCP Management (inherited and enhanced)**:
+  - Manage standard MCP servers (stdio / SSE / HTTP modes).
+  - Enable/disable servers, tools, and prompts with descriptions and grouping.
+  - Unified MCP entry, group entry, and server-specific endpoints.
 
-## 🎯 What Makes xiaozhi-mcphub Special
+- **Console & Authentication**:
+  - Frontend console (React + Vite + Tailwind) to manage Servers, Groups, Users, Logs, Settings, Xiaozhi Endpoints, and Market.
+  - JWT-based authentication with user context middleware and a built-in admin account.
 
-Unlike the original MCPHub which focuses on server management, **xiaozhi-mcphub** is specifically optimized for Xiaozhi AI platform integration:
+- **OpenAPI & Direct Tool Access**:
+  - Expose OpenAPI documentation and statistics endpoints.
+  - Call specific server tools via OpenAPI-compatible endpoints.
 
-✅ **Automatic Tool Synchronization** - Tools are automatically synced to Xiaozhi when enabled/disabled  
-✅ **Intelligent Reconnection** - Smart reconnection logic ensures Xiaozhi always has the latest tool state  
-✅ **Xiaozhi-First Design** - WebSocket-based architecture optimized for Xiaozhi platform communication  
-✅ **Enhanced Logging** - Detailed logs for Xiaozhi platform interactions and tool usage  
+## 🧩 Main Differences from Upstream
+
+- New Xiaozhi endpoint multi-endpoint management and status (backward compatible, focusing on multi-endpoints).
+- New per-endpoint reconnection strategies and global fast-reconnect switch.
+- Enhanced `$smart` intelligent routing (optional) with automatic Xiaozhi linkage.
+- Database uses **PostgreSQL + pgvector**, initializing sample servers and admin by default.
 
 ## 🔧 Quick Start
 
-### Xiaozhi Integration Setup
-
-1. **Configure Xiaozhi Connection**:
-```json
-{
-  "xiaozhi": {
-    "enabled": true,
-    "webSocketUrl": "wss://api.xiaozhi.me/mcp/?token=your-jwt-token",
-    "reconnect": {
-      "maxAttempts": 10,
-      "initialDelay": 2000,
-      "maxDelay": 60000,
-      "backoffMultiplier": 2
-    }
-  }
-}
-```
-
-2. **Add to mcp_settings.json**:
-```json
-{
-  "mcpServers": {
-    "amap": {
-      "command": "npx",
-      "args": ["-y", "@amap/amap-maps-mcp-server"],
-      "env": {
-        "AMAP_MAPS_API_KEY": "your-api-key"
-      }
-    },
-    "playwright": {
-      "command": "npx", 
-      "args": ["@playwright/mcp@latest", "--headless"]
-    },
-    "fetch": {
-      "command": "uvx",
-      "args": ["mcp-server-fetch"]
-    },
-    "slack": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-slack"],
-      "env": {
-        "SLACK_BOT_TOKEN": "your-bot-token",
-        "SLACK_TEAM_ID": "your-team-id"
-      }
-    }
-  },
-  "xiaozhi": {
-    "enabled": true,
-    "webSocketUrl": "wss://api.xiaozhi.me/mcp/?token=your-jwt-token"
-  }
-}
-```
-
-### Docker Deployment
+### Method 1: Use DockerHub image (recommended)
 
 ```bash
-# With custom configuration
-docker run -p 3000:3000 \
-  -v ./mcp_settings.json:/app/mcp_settings.json \
-  -v ./data:/app/data \
-  huangjunsen/xiaozhi-mcphub
+# Pull the image
+docker pull huangjunsen/xiaozhi-mcphub:latest
 
-# With default settings
-docker run -p 3000:3000 huangjunsen/xiaozhi-mcphub
+# Run (adjust DB URL and password to your environment)
+docker run -d \
+  --name xiaozhi-mcphub \
+  -p 3000:3000 \
+  -e DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub" \
+  -e SMART_ROUTING_ENABLED="false" \
+  -v $(pwd)/data:/app/data \
+  huangjunsen/xiaozhi-mcphub:latest
+
+# Open the dashboard
+# http://localhost:3000
 ```
 
-### Access the Dashboard
+Optional environment variables:
 
-Open `http://localhost:3000` and log in with default credentials: `admin` / `admin123`
+- `BASE_PATH`: Deploy under a sub-path (e.g., `/mcphub`).
+- `JWT_SECRET`: JWT secret (recommended to set explicitly in production).
+- `SMART_ROUTING_ENABLED`: Enable/disable smart routing (default "false").
+- `OPENAI_API_KEY`, `OPENAI_API_BASE_URL`, `OPENAI_API_EMBEDDING_MODEL`: Required when enabling smart routing.
 
-**New Xiaozhi Platform Features**:
-- 🔌 Xiaozhi connection status and management
-- ⚡ Real-time tool synchronization monitoring  
-- 🔄 Automatic reconnection controls
-- 📊 Xiaozhi platform usage statistics
+Default admin: `admin` / `admin123` (please change after first login).
 
-## 🌐 API Endpoints
+### Method 2: Docker Compose one-click
 
-### Traditional MCP Endpoints
-```
-http://localhost:3000/mcp          # Unified endpoint for all servers
-http://localhost:3000/mcp/$smart   # Smart routing with vector search  
-http://localhost:3000/mcp/{group}  # Group-specific endpoints
-http://localhost:3000/mcp/{server} # Server-specific endpoints
-```
+This repository ships with `docker-compose.yml` including both `pgvector` and the app:
 
-### Xiaozhi Platform Management *(New!)*
-```
-GET    /api/xiaozhi/status     # Get connection status
-GET    /api/xiaozhi/config     # Get configuration (token masked)
-PUT    /api/xiaozhi/config     # Update configuration
-POST   /api/xiaozhi/restart    # Restart client connection
-POST   /api/xiaozhi/start      # Start client
-POST   /api/xiaozhi/stop       # Stop client
+```bash
+docker compose up -d
+
+# View logs (optional)
+docker compose logs -f mcphub
 ```
 
-## 🧑‍💻 Local Development
+Key variables (edit in compose if needed):
+
+- `DATABASE_URL`: `postgres://xiaozhi:<password>@db:5432/xiaozhi_mcphub`
+- `SMART_ROUTING_ENABLED`: Enable/disable smart routing (default "false").
+- Optional: `BASE_PATH`, `JWT_SECRET`, `OPENAI_API_KEY`, etc. (see above)
+
+### Method 3: Local development
+
+Requirements: Node.js 18+/20+, pnpm, PostgreSQL 16+ (recommended to use the `db` service from the repo's compose).
 
 ```bash
 git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
 cd xiaozhi-mcphub
 pnpm install
+
+# Start local database (optional, reuse compose's db)
+docker compose up -d db
+
+# Set database connection (or write to .env)
+export DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
+
+# Start both backend (:3000) and frontend (Vite :5173)
 pnpm dev
 ```
 
-This starts both frontend and backend in development mode with hot-reloading.
+Access the frontend dev server at `http://localhost:5173` (the frontend proxies to backend `:3000`).
 
-## 📊 Xiaozhi Tool Integration
+## 🗺️ Smart Routing (optional)
 
-xiaozhi-mcphub successfully exposes powerful tools to Xiaozhi AI platform:
+Set `SMART_ROUTING_ENABLED` to `true` and provide `OPENAI_API_KEY` to enable it. The system uses `pgvector` for vector storage and indexing. If no vectors exist, index building will be skipped and later populated by vector services.
 
-### 🎭 Web Automation (Playwright)
-- Browser control, page interaction, content capture
-- Screenshot and PDF generation  
-- Tab management and automation testing
+## 🖥️ Console Features (Frontend)
 
-### 🌐 Network Tools (Fetch)
-- Web content fetching with markdown conversion
+- Dashboard: Overview and status
+- Servers: Server and tool management
+- Groups: Grouping and assignment
+- Users: User and permissions (admin)
+- Logs: Real-time and historical logs
+- Settings: System configuration (including smart routing)
+- Xiaozhi Endpoints: Xiaozhi endpoint management
+- Market: Search and install MCP servers from the community
 
-### 💬 Communication (Slack)  
-- Channel management, messaging, user interaction
-- Thread replies and reactions
+## 📦 Defaults & Initialization
 
-### 🗺️ Location Services (Amap)
-- Geocoding, search, routing, weather
-- Point-of-interest discovery
+- Default admin: `admin` / `admin123`
+- Default MCP servers: amap / playwright / fetch / slack (can be modified in the console and configured via ENV)
 
-## 📄 Attribution
+## 📄 License & Attribution (Apache License 2.0)
 
-This project is based on [MCPHub](https://github.com/samanhappy/mcphub) by samanhappy and contributors, licensed under Apache License 2.0.
+This project is a derivative work of [MCPHub](https://github.com/samanhappy/mcphub) and follows the **Apache License 2.0**:
 
-**Major enhancements in xiaozhi-mcphub:**
-- ✨ Xiaozhi AI platform integration  
-- 🔄 Enhanced tool synchronization mechanism
-- 🔗 Improved reconnection logic for Xiaozhi clients
-- 📡 Extended API endpoints for Xiaozhi platform management
+- Keep upstream and project license and notice files, including `LICENSE` and `NOTICE`.
+- If you modify and redistribute the source or binaries, indicate the changes.
+- Include the license and disclaimer in redistribution; do not imply endorsement by original authors.
 
-## 📜 License
-
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) file for details.
+See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) for details.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please open issues/PRs for improvements.
 
 ## 🔗 Links
 
-- [Original MCPHub Project](https://github.com/samanhappy/mcphub)
-- [Xiaozhi AI Platform](https://xiaozhi.me)
-- [Model Context Protocol](https://modelcontextprotocol.io)
+- Upstream project: <https://github.com/samanhappy/mcphub>
+- Xiaozhi AI Platform: <https://xiaozhi.me>
+- Model Context Protocol: <https://modelcontextprotocol.io>

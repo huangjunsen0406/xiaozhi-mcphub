@@ -15,17 +15,25 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   mcphub:
-    image: xiaozhi-mcphub:local
+    image: huangjunsen/xiaozhi-mcphub:latest
     container_name: xiaozhi-mcphub
     depends_on:
       - db
     ports:
       - "3000:3000"
     environment:
-      # 只用 DATABASE_URL
+      # 必需
       DATABASE_URL: postgres://xiaozhi:xiaozhi123456@db:5432/xiaozhi_mcphub
       NODE_ENV: production
       SMART_ROUTING_ENABLED: "false"
+      # 可选（按需开启并提供 OPENAI_API_KEY 等）
+      # OPENAI_API_KEY: ""
+      # OPENAI_API_BASE_URL: "https://api.openai.com/v1"
+      # OPENAI_API_EMBEDDING_MODEL: "text-embedding-3-large"
+      # 可选：自定义二级路径
+      # BASE_PATH: "/mcphub"
+      # 可选：生产环境建议手动设置固定 JWT 密钥
+      # JWT_SECRET: "please-change-me"
     volumes:
       - ./data:/app/data
     restart: unless-stopped

@@ -1,186 +1,142 @@
-# xiaozhi-mcphub：为小智AI平台优化的MCP工具桥接系统
+# xiaozhi-mcphub：为小智AI平台优化的 MCP 工具桥接与控制台
 
 [English Version](README.md) | 中文版
 
-**xiaozhi-mcphub** 是一个专为小智AI平台优化的智能MCP（Model Context Protocol）工具桥接系统。基于优秀的 [MCPHub](https://github.com/samanhappy/mcphub) 项目开发，增加了小智平台集成和智能工具同步功能。
+**xiaozhi-mcphub** 是在 [MCPHub](https://github.com/samanhappy/mcphub) 基础上二次开发的 MCP（Model Context Protocol）桥接与管理平台，重点增强与小智 AI 平台的集成能力，并提供多端点管理、自动重连、向量智能路由、OpenAPI 兼容访问等特性。
 
-![控制面板预览](assets/dashboard.png)
+![控制面板预览](assets/dashboard.zh.png)
 
-## 🚀 核心功能
+## 🚀 功能概览
 
-### 🤖 **小智AI平台集成** *(新功能!)*
-- **原生小智连接**：通过WebSocket实现自动工具同步
-- **实时工具更新**：工具状态变化时智能重连
-- **协议桥接**：为小智平台提供无缝的MCP协议转换
-- **工具发现**：基于向量的智能工具搜索路由
+- **小智平台集成（增强）**：
+  - **多端点管理**：通过 WebSocket 与多个小智端点双向通信（支持启用/禁用、编辑、重连、状态查询）。
+  - **智能重连**：支持快速重连模式、指数退避、无限重连与休眠窗口，可通过环境变量精细化控制。
+  - **工具同步**：服务器工具变化可通知小智端点，保证工具列表与状态及时更新。
+  - **分组与智能路由**：端点可绑定到指定分组，或启用 `$smart` 智能路由。
 
-### 🛠️ **增强的MCP管理** *(基于MCPHub)*
-- **广泛的MCP服务器支持**：无缝集成任何MCP服务器，配置简单
-- **集中式管理控制台**：在一个简洁的Web UI中实时监控所有服务器的状态和性能指标
-- **灵活的协议兼容**：完全支持stdio、SSE和HTTP MCP协议
-- **热插拔式配置**：在运行时动态添加、移除或更新服务器配置，无需停机
-- **基于分组的访问控制**：自定义分组并管理服务器访问权限
-- **安全认证机制**：内置用户管理，基于JWT和bcrypt，实现角色权限控制
-- **Docker就绪**：提供容器化镜像，快速部署
+- **MCP 管理（继承并增强）**：
+  - 标准 MCP 服务器统一管理（支持 stdio / SSE / HTTP 访问模式）。
+  - 服务器/工具/提示词开关、描述与分组化管理。
+  - 提供统一 MCP 入口、分组入口和按服务器的专用入口。
 
-## 🎯 xiaozhi-mcphub的独特优势
+- **控制台与鉴权**：
+  - 前端控制台（React + Vite + Tailwind）一站式管理 Servers、Groups、Users、Logs、Settings、Xiaozhi Endpoints、Market 等。
+  - 基于 JWT 的认证与用户上下文中间件，内置管理员默认账户。
 
-与原始MCPHub专注于服务器管理不同，**xiaozhi-mcphub** 专门为小智AI平台集成进行了优化：
+- **OpenAPI 与工具直连**：
+  - 暴露 OpenAPI 文档与统计端点。
+  - 通过 OpenAPI 兼容端点直接调用指定服务器的工具。
 
-✅ **自动工具同步** - 工具启用/禁用时自动同步到小智平台  
-✅ **智能重连机制** - 确保小智平台始终获得最新的工具状态  
-✅ **小智优先设计** - 基于WebSocket的架构专为小智平台通信优化  
-✅ **增强日志记录** - 详细记录小智平台交互和工具使用情况  
+## 🧩 与上游项目的主要差异
+
+- 新增小智端点的**多端点管理与状态**能力，兼容老接口但以多端点为主。
+- 新增端点级**重连策略**与全局**快速重连**开关。
+- 增强 `$smart` 智能路由接入（可选），并与小智端点自动联动。
+- 数据库使用 **PostgreSQL + pgvector**，默认会初始化示例服务器与管理员账户。
 
 ## 🔧 快速开始
 
-### 小智集成设置
-
-1. **配置小智连接**：
-```json
-{
-  "xiaozhi": {
-    "enabled": true,
-    "webSocketUrl": "wss://api.xiaozhi.me/mcp/?token=your-jwt-token",
-    "reconnect": {
-      "maxAttempts": 10,
-      "initialDelay": 2000,
-      "maxDelay": 60000,
-      "backoffMultiplier": 2
-    }
-  }
-}
-```
-
-2. **添加到 mcp_settings.json**：
-```json
-{
-  "mcpServers": {
-    "amap": {
-      "command": "npx",
-      "args": ["-y", "@amap/amap-maps-mcp-server"],
-      "env": {
-        "AMAP_MAPS_API_KEY": "your-api-key"
-      }
-    },
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--headless"]
-    },
-    "fetch": {
-      "command": "uvx",
-      "args": ["mcp-server-fetch"]
-    },
-    "slack": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-slack"],
-      "env": {
-        "SLACK_BOT_TOKEN": "your-bot-token",
-        "SLACK_TEAM_ID": "your-team-id"
-      }
-    }
-  },
-  "xiaozhi": {
-    "enabled": true,
-    "webSocketUrl": "wss://api.xiaozhi.me/mcp/?token=your-jwt-token"
-  }
-}
-```
-
-### Docker 部署
+### 方式一：使用 DockerHub 镜像（推荐）
 
 ```bash
-# 使用自定义配置
-docker run -p 3000:3000 \
-  -v ./mcp_settings.json:/app/mcp_settings.json \
-  -v ./data:/app/data \
-  huangjunsen/xiaozhi-mcphub
+# 获取镜像
+docker pull huangjunsen/xiaozhi-mcphub:latest
 
-# 使用默认配置
-docker run -p 3000:3000 huangjunsen/xiaozhi-mcphub
+# 运行（请按需修改数据库地址与口令）
+docker run -d \
+  --name xiaozhi-mcphub \
+  -p 3000:3000 \
+  -e DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub" \
+  -e SMART_ROUTING_ENABLED="false" \
+  -v $(pwd)/data:/app/data \
+  huangjunsen/xiaozhi-mcphub:latest
+
+# 访问控制台
+# http://localhost:3000
 ```
 
-### 访问控制台
+- 可选环境变量：
+  - `BASE_PATH`：二级路径部署（如 `/mcphub`）。
+  - `JWT_SECRET`：JWT 密钥（生产环境建议手动设置）。
+  - `SMART_ROUTING_ENABLED`：是否开启智能路由（默认 "false"）。
+  - `OPENAI_API_KEY`、`OPENAI_API_BASE_URL`、`OPENAI_API_EMBEDDING_MODEL`：开启智能路由时所需。
 
-打开 `http://localhost:3000`，使用默认凭据登录：`admin` / `admin123`
+默认管理员：`admin` / `admin123`（首次登录后请修改密码）。
 
-**新增小智平台功能**：
-- 🔌 小智连接状态和管理
-- ⚡ 实时工具同步监控  
-- 🔄 自动重连控制
-- 📊 小智平台使用统计
+### 方式二：Docker Compose 一键启动
 
-## 🌐 API 端点
+仓库已提供 `docker-compose.yml`，包含 `pgvector` 与应用服务：
 
-### 传统MCP端点
-```
-http://localhost:3000/mcp          # 统一端点，支持所有服务器
-http://localhost:3000/mcp/$smart   # 基于向量搜索的智能路由  
-http://localhost:3000/mcp/{group}  # 分组特定端点
-http://localhost:3000/mcp/{server} # 服务器特定端点
-```
+```bash
+docker compose up -d
 
-### 小智平台管理 *(新功能!)*
-```
-GET    /api/xiaozhi/status     # 获取连接状态
-GET    /api/xiaozhi/config     # 获取配置（token已遮盖）
-PUT    /api/xiaozhi/config     # 更新配置
-POST   /api/xiaozhi/restart    # 重启客户端连接
-POST   /api/xiaozhi/start      # 启动客户端
-POST   /api/xiaozhi/stop       # 停止客户端
+# 查看日志（可选）
+docker compose logs -f mcphub
 ```
 
-## 🧑‍💻 本地开发
+关键变量（可在 compose 中修改）
+
+- `DATABASE_URL`: `postgres://xiaozhi:密码@db:5432/xiaozhi_mcphub`
+- `SMART_ROUTING_ENABLED`: 开启/关闭智能路由（默认 "false"）
+- 可选：`BASE_PATH`、`JWT_SECRET`、`OPENAI_API_KEY` 等（见上）
+
+### 方式三：本地开发
+
+依赖：Node.js 18+/20+、pnpm、PostgreSQL 16+（推荐使用 compose 中的 `db` 服务）。
 
 ```bash
 git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
 cd xiaozhi-mcphub
 pnpm install
+
+# 启动本地数据库（可选，使用仓库 compose 的 db）
+docker compose up -d db
+
+# 设置数据库连接（或写入 .env）
+export DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
+
+# 同时启动后端（:3000）与前端（Vite :5173）
 pnpm dev
 ```
 
-此命令将在开发模式下启动前后端，并启用热重载。
+访问前端开发站点：`http://localhost:5173`（前端通过代理访问后端 `:3000`）。
 
-## 📊 小智工具集成
+## 🗺️ 智能路由（可选）
 
-xiaozhi-mcphub 成功为小智AI平台提供强大的工具支持：
+将 `SMART_ROUTING_ENABLED` 设为 `true` 并提供 `OPENAI_API_KEY` 即可启用。系统会使用 `pgvector` 进行向量存储与索引，在无向量数据时自动跳过索引构建，后续由向量服务补足。
 
-### 🎭 网页自动化 (Playwright)
-- 浏览器控制、页面交互、内容捕获
-- 截图和PDF生成  
-- 标签页管理和自动化测试
+## 🖥️ 控制台功能（前端）
 
-### 🌐 网络工具 (Fetch)
-- 网页内容获取和Markdown转换
+- Dashboard：概览与状态
+- Servers：服务器与工具管理
+- Groups：分组与分配
+- Users：用户与权限（管理员）
+- Logs：实时与历史日志
+- Settings：系统配置（含智能路由）
+- Xiaozhi Endpoints：小智端点管理
+- Market：从社区市场检索与安装 MCP 服务器
 
-### 💬 通信工具 (Slack)  
-- 频道管理、消息发送、用户交互
-- 线程回复和表情反应
+## 📦 默认内容与初始化
 
-### 🗺️ 位置服务 (Amap)
-- 地理编码、搜索、路由、天气
-- 兴趣点发现
+- 默认管理员：`admin` / `admin123`
+- 默认 MCP 服务器：amap / playwright / fetch / slack（可在控制台修改与配置 ENV）
 
-## 📄 项目归属
+## 📄 许可与归属（Apache License 2.0）
 
-本项目基于 [MCPHub](https://github.com/samanhappy/mcphub)（由 samanhappy 和贡献者开发）进行开发，遵循 Apache License 2.0 许可证。
+本项目在 [MCPHub](https://github.com/samanhappy/mcphub) 基础上二次开发，遵循 **Apache License 2.0**：
 
-**xiaozhi-mcphub 的主要增强功能：**
-- ✨ 小智AI平台集成  
-- 🔄 增强的工具同步机制
-- 🔗 改进的小智客户端重连逻辑
-- 📡 扩展的小智平台管理API端点
+- 保留上游与本项目的版权与许可声明，包含 `LICENSE` 与 `NOTICE`。
+- 若修改并再分发源代码或二进制，请在告知性文件中注明变更。
+- 需在再分发中附带许可证与免责声明，不得暗示原作者为你的修改背书。
 
-## 📜 许可证
-
-本项目采用 Apache License 2.0 许可证。详见 [LICENSE](LICENSE) 文件。
+详情请查阅仓库中的 [`LICENSE`](LICENSE) 与 [`NOTICE`](NOTICE)。
 
 ## 🤝 贡献
 
-欢迎提交 Pull Request 来改进项目！
+欢迎提交 Issue / PR 改进功能与文档。提交前请先阅读代码风格与测试约定。
 
 ## 🔗 相关链接
 
-- [原始 MCPHub 项目](https://github.com/samanhappy/mcphub)
-- [小智AI平台](https://xiaozhi.me)
-- [Model Context Protocol](https://modelcontextprotocol.io)
+- 上游项目：<https://github.com/samanhappy/mcphub>
+- 小智 AI 平台：<https://xiaozhi.me>
+- Model Context Protocol：<https://modelcontextprotocol.io>
