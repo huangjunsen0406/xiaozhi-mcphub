@@ -31,24 +31,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20.x"
+          cache: pnpm
+          cache-dependency-path: documents/pnpm-lock.yaml
           
       # 启用 corepack 来管理包管理器版本
       - name: Enable corepack
         run: corepack enable
-        continue-on-error: true
-
-      # 确保 pnpm 可用 (如果已存在则跳过)
-      - name: Install pnpm
-        run: npm install -g pnpm@10.11.0
-        continue-on-error: true
 
       # 如果缓存没有命中，安装依赖
       - name: Install dependencies
-        run: cd documents && pnpm install
+        run: pnpm --dir documents install --frozen-lockfile
 
       # 生成静态文件
       - name: Build
-        run: cd documents && pnpm docs:build
+        run: pnpm --dir documents docs:build
 
       # 部署到 GitHub Pages
       - name: Deploy

@@ -2,8 +2,8 @@ import { generateOpenAPISpec, getToolStats } from '../../src/services/openApiGen
 
 describe('OpenAPI Generator Service', () => {
   describe('generateOpenAPISpec', () => {
-    it('should generate a valid OpenAPI specification', () => {
-      const spec = generateOpenAPISpec();
+    it('should generate a valid OpenAPI specification', async () => {
+      const spec = await generateOpenAPISpec();
       
       // Check basic structure
       expect(spec).toHaveProperty('openapi');
@@ -28,7 +28,7 @@ describe('OpenAPI Generator Service', () => {
       expect(spec.components?.securitySchemes).toHaveProperty('bearerAuth');
     });
 
-    it('should generate spec with custom options', () => {
+    it('should generate spec with custom options', async () => {
       const options = {
         title: 'Custom API',
         description: 'Custom description',
@@ -36,16 +36,16 @@ describe('OpenAPI Generator Service', () => {
         serverUrl: 'https://custom.example.com'
       };
       
-      const spec = generateOpenAPISpec(options);
+      const spec = await generateOpenAPISpec(options);
       
       expect(spec.info.title).toBe('Custom API');
       expect(spec.info.description).toBe('Custom description');
       expect(spec.info.version).toBe('2.0.0');
-      expect(spec.servers[0].url).toContain('https://custom.example.com');
+      expect(spec.servers && spec.servers[0] && spec.servers[0].url).toContain('https://custom.example.com');
     });
     
-    it('should handle empty server list gracefully', () => {
-      const spec = generateOpenAPISpec();
+    it('should handle empty server list gracefully', async () => {
+      const spec = await generateOpenAPISpec();
       
       // Should not throw and should have valid structure
       expect(spec).toHaveProperty('paths');
@@ -54,8 +54,8 @@ describe('OpenAPI Generator Service', () => {
   });
 
   describe('getToolStats', () => {
-    it('should return valid tool statistics', () => {
-      const stats = getToolStats();
+    it('should return valid tool statistics', async () => {
+      const stats = await getToolStats();
       
       expect(stats).toHaveProperty('totalServers');
       expect(stats).toHaveProperty('totalTools');

@@ -2,6 +2,7 @@ import { IGroup, IGroupServerConfig } from '../types/index.js';
 import { GroupRepository, getGroupRepository } from '../db/repositories/GroupRepository.js';
 import { McpServerRepository, getMcpServerRepository } from '../db/repositories/McpServerRepository.js';
 import { notifyToolChanged } from './mcpService.js';
+import { isDatabaseConnected } from '../db/connection.js';
 import { getSystemConfigService } from './systemConfigService.js';
 
 class GroupService {
@@ -15,6 +16,7 @@ class GroupService {
 
   // Get all groups
   async getAllGroups(): Promise<IGroup[]> {
+    if (!isDatabaseConnected()) return [];
     const groups = await this.groupRepository.findAll();
     return groups.map(group => ({
       id: group.id,
@@ -27,6 +29,7 @@ class GroupService {
 
   // Get group by ID or name
   async getGroupByIdOrName(key: string): Promise<IGroup | undefined> {
+    if (!isDatabaseConnected()) return undefined;
     const systemConfigService = getSystemConfigService();
     const systemConfig = await systemConfigService.getSystemConfig();
     const routingConfig = systemConfig?.routing || {
@@ -60,6 +63,7 @@ class GroupService {
     owner?: string,
   ): Promise<IGroup | null> {
     try {
+      if (!isDatabaseConnected()) return null;
       // Check if group with same name already exists
       const existingGroup = await this.groupRepository.findByName(name);
       if (existingGroup) {
@@ -98,6 +102,7 @@ class GroupService {
   // Update an existing group
   async updateGroup(id: string, data: Partial<IGroup>): Promise<IGroup | null> {
     try {
+      if (!isDatabaseConnected()) return null;
       // Check if group exists
       const existingGroup = await this.groupRepository.findById(id);
       if (!existingGroup) {
@@ -151,6 +156,7 @@ class GroupService {
     servers: IGroupServerConfig[],
   ): Promise<IGroup | null> {
     try {
+      if (!isDatabaseConnected()) return null;
       // Check if group exists
       const existingGroup = await this.groupRepository.findById(groupId);
       if (!existingGroup) {
@@ -188,6 +194,7 @@ class GroupService {
   // Delete a group
   async deleteGroup(id: string): Promise<boolean> {
     try {
+      if (!isDatabaseConnected()) return false;
       return await this.groupRepository.delete(id);
     } catch (error) {
       console.error(`Failed to delete group ${id}:`, error);
@@ -198,6 +205,7 @@ class GroupService {
   // Add server to group
   async addServerToGroup(groupId: string, serverName: string): Promise<IGroup | null> {
     try {
+      if (!isDatabaseConnected()) return null;
       const group = await this.groupRepository.findById(groupId);
       if (!group) {
         return null;
@@ -244,6 +252,7 @@ class GroupService {
   // Remove server from group
   async removeServerFromGroup(groupId: string, serverName: string): Promise<IGroup | null> {
     try {
+      if (!isDatabaseConnected()) return null;
       const group = await this.groupRepository.findById(groupId);
       if (!group) {
         return null;
@@ -301,6 +310,7 @@ class GroupService {
     tools: string[] | 'all',
   ): Promise<IGroup | null> {
     try {
+      if (!isDatabaseConnected()) return null;
       const group = await this.groupRepository.findById(groupId);
       if (!group) {
         return null;

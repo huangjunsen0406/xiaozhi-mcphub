@@ -1,11 +1,12 @@
 // Global test setup
 import 'reflect-metadata';
 
-// Mock environment variables for testing
+// Mock environment variables for testing (PostgreSQL only)
 Object.assign(process.env, {
   NODE_ENV: 'test',
   JWT_SECRET: 'test-jwt-secret-key',
-  DATABASE_URL: 'sqlite::memory:',
+  // Use test database; CI will provide a running postgres service with this database
+  DATABASE_URL: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/mcphub_test',
 });
 
 // Global test utilities

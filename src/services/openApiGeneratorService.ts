@@ -3,6 +3,7 @@ import { Tool } from '../types/index.js';
 import { getServersInfo } from './mcpService.js';
 import config from '../config/index.js';
 import { getSystemConfigService } from './systemConfigService.js';
+import { isDatabaseConnected } from '../db/connection.js';
 
 /**
  * Service for generating OpenAPI 3.x specifications from MCP tools
@@ -199,9 +200,17 @@ export async function generateOpenAPISpec(options: OpenAPIGenerationOptions = {}
     paths[pathName][method] = operation;
   }
 
-  // Get system configuration from database
-  const systemConfigService = getSystemConfigService();
-  const systemConfig = await systemConfigService.getSystemConfig();
+  // Get system configuration from database (only if DB is available)
+  let systemConfig: any = null;
+  try {
+    if (isDatabaseConnected()) {
+      const systemConfigService = getSystemConfigService();
+      systemConfig = await systemConfigService.getSystemConfig();
+    }
+  } catch {
+    // Ignore DB errors in spec generation when DB is not ready in test/CI
+    systemConfig = null;
+  }
   
   // Get server URL
   const baseUrl =

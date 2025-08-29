@@ -1,4 +1,5 @@
 import { McpServerRepository } from '../db/repositories/McpServerRepository.js';
+import { isDatabaseConnected } from '../db/connection.js';
 import { McpServer } from '../db/entities/McpServer.js';
 import { ServerConfig } from '../types/index.js';
 
@@ -17,6 +18,7 @@ export class McpServerService {
    * Get all servers
    */
   async getAllServers(): Promise<McpServer[]> {
+    if (!isDatabaseConnected()) return [];
     return this.mcpServerRepository.findAll();
   }
 
@@ -25,6 +27,7 @@ export class McpServerService {
    * @param name Server name
    */
   async getServerByName(name: string): Promise<McpServer | null> {
+    if (!isDatabaseConnected()) return null;
     return this.mcpServerRepository.findByName(name);
   }
 
@@ -32,6 +35,7 @@ export class McpServerService {
    * Get enabled servers
    */
   async getEnabledServers(): Promise<McpServer[]> {
+    if (!isDatabaseConnected()) return [];
     return this.mcpServerRepository.findEnabled();
   }
 
@@ -41,6 +45,7 @@ export class McpServerService {
    * @param config Server configuration
    */
   async createServer(name: string, config: ServerConfig): Promise<McpServer> {
+    if (!isDatabaseConnected()) throw new Error('Database not connected');
     const serverEntity: Partial<McpServer> = {
       name,
       type: config.type || 'stdio',
@@ -67,6 +72,7 @@ export class McpServerService {
    * @param config Partial server configuration
    */
   async updateServer(name: string, config: Partial<ServerConfig>): Promise<boolean> {
+    if (!isDatabaseConnected()) return false;
     const updateData: Partial<McpServer> = {};
 
     // Map configuration fields to entity fields
@@ -92,6 +98,7 @@ export class McpServerService {
    * @param name Server name
    */
   async deleteServer(name: string): Promise<boolean> {
+    if (!isDatabaseConnected()) return false;
     return this.mcpServerRepository.deleteByName(name);
   }
 
@@ -101,6 +108,7 @@ export class McpServerService {
    * @param enabled Enabled status
    */
   async toggleServer(name: string, enabled: boolean): Promise<boolean> {
+    if (!isDatabaseConnected()) return false;
     return this.mcpServerRepository.updateEnabledStatus(name, enabled);
   }
 
@@ -109,6 +117,7 @@ export class McpServerService {
    * @param name Server name
    */
   async serverExists(name: string): Promise<boolean> {
+    if (!isDatabaseConnected()) return false;
     return this.mcpServerRepository.exists(name);
   }
 
@@ -117,6 +126,7 @@ export class McpServerService {
    * @param owner Owner username
    */
   async getServersByOwner(owner: string): Promise<McpServer[]> {
+    if (!isDatabaseConnected()) return [];
     return this.mcpServerRepository.findByOwner(owner);
   }
 

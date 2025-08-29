@@ -4,7 +4,6 @@ import { McpSettings } from '../../src/types/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMockSettings } from './mockSettings.js';
-import { clearSettingsCache } from '../../src/config/index.js';
 
 /**
  * Test server helper class for managing AppServer instances during testing
@@ -104,9 +103,6 @@ export class TestServerHelper {
 
     // Override the settings path for the test
     process.env.MCPHUB_SETTING_PATH = this.testConfigPath;
-
-    // Clear settings cache to force re-reading from the new config file
-    clearSettingsCache();
 
     console.log(`Set test config path: ${this.testConfigPath}`);
   }

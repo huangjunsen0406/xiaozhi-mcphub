@@ -20,6 +20,7 @@ import { OpenAPIClient } from '../clients/openapi.js';
 import { getDataService } from './services.js';
 import { getSystemConfigService } from './systemConfigService.js';
 import { getMcpServerService } from './mcpServerService.js';
+import { isDatabaseConnected } from '../db/connection.js';
 
 const servers: { [sessionId: string]: Server } = {};
 
@@ -696,8 +697,10 @@ export const registerAllTools = async (isInit: boolean, serverName?: string): Pr
 
 // Get all server information
 export const getServersInfo = async (): Promise<Omit<ServerInfo, 'client' | 'transport'>[]> => {
-  const mcpServerService = getMcpServerService();
-  const serverConfigs = await mcpServerService.getServersAsConfig();
+  // Avoid DB access if not connected (e.g., during unit tests)
+  const serverConfigs = isDatabaseConnected()
+    ? await getMcpServerService().getServersAsConfig()
+    : {} as Record<string, any>;
   const dataService = getDataService();
   const filterServerInfos: ServerInfo[] = dataService.filterData
     ? dataService.filterData(serverInfos)

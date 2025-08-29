@@ -1,5 +1,6 @@
 import { SystemConfig } from '../db/entities/SystemConfig.js';
 import { SystemConfigRepository, getSystemConfigRepository } from '../db/repositories/SystemConfigRepository.js';
+import { isDatabaseConnected } from '../db/connection.js';
 
 /**
  * SystemConfigService - Business logic layer for system configuration
@@ -16,6 +17,7 @@ export class SystemConfigService {
    * Get system configuration from database
    */
   async getSystemConfig(): Promise<SystemConfig | null> {
+    if (!isDatabaseConnected()) return null;
     return await this.systemConfigRepository.getConfig();
   }
 
@@ -29,6 +31,7 @@ export class SystemConfigService {
     mcpRouter?: Partial<SystemConfig['mcpRouter']>;
   }): Promise<SystemConfig> {
     // Get current config from database
+    if (!isDatabaseConnected()) throw new Error('Database not connected');
     let config = await this.systemConfigRepository.getConfig();
     
     if (!config) {
@@ -53,6 +56,7 @@ export class SystemConfigService {
    * Update routing configuration only
    */
   async updateRouting(routing: Partial<SystemConfig['routing']>): Promise<SystemConfig | null> {
+    if (!isDatabaseConnected()) return null;
     return await this.systemConfigRepository.updateRouting(routing);
   }
 
@@ -60,6 +64,7 @@ export class SystemConfigService {
    * Update install configuration only
    */
   async updateInstall(install: Partial<SystemConfig['install']>): Promise<SystemConfig | null> {
+    if (!isDatabaseConnected()) return null;
     return await this.systemConfigRepository.updateInstall(install);
   }
 
@@ -67,6 +72,7 @@ export class SystemConfigService {
    * Update smart routing configuration only
    */
   async updateSmartRouting(smartRouting: Partial<SystemConfig['smartRouting']>): Promise<SystemConfig | null> {
+    if (!isDatabaseConnected()) return null;
     return await this.systemConfigRepository.updateSmartRouting(smartRouting);
   }
 
@@ -74,6 +80,7 @@ export class SystemConfigService {
    * Update MCP router configuration only
    */
   async updateMcpRouter(mcpRouter: Partial<SystemConfig['mcpRouter']>): Promise<SystemConfig | null> {
+    if (!isDatabaseConnected()) return null;
     return await this.systemConfigRepository.updateMcpRouter(mcpRouter);
   }
 
@@ -106,6 +113,7 @@ export class SystemConfigService {
    */
   async initialize(): Promise<void> {
     try {
+      if (!isDatabaseConnected()) return;
       // Ensure we have a config in database
       const config = await this.systemConfigRepository.getConfig();
       if (!config) {
