@@ -57,7 +57,7 @@ jobs:
           cp package.json pnpm-lock.yaml "$PACKAGE_DIR/"
           cp README.md README.zh.md LICENSE "$PACKAGE_DIR/"
           cp docker-compose.yml Dockerfile entrypoint.sh "$PACKAGE_DIR/"
-          cp nginx.conf.example mcp_settings.json servers.json "$PACKAGE_DIR/"
+          cp nginx.conf.example servers.json "$PACKAGE_DIR/"
           
           # 创建安装脚本
           cat > "$PACKAGE_DIR/install.sh" << 'EOF'
