@@ -6,7 +6,7 @@ import { getSystemConfigService } from '../services/systemConfigService.js';
  */
 export interface SmartRoutingConfig {
   enabled: boolean;
-  dbUrl: string;
+  dbUrl: string; // 保留字段以兼容，但实际使用内置数据库
   openaiApiBaseUrl: string;
   openaiApiKey: string;
   openaiApiEmbeddingModel: string;
@@ -38,8 +38,9 @@ export async function getSmartRoutingConfig(): Promise<SmartRoutingConfig> {
       parseBooleanEnvVar,
     ),
 
-    // Database configuration
-    dbUrl: getConfigValue([process.env.DATABASE_URL], smartRoutingSettings.dbUrl, '', expandEnvVars),
+    // Database configuration - 使用内置的数据库连接
+    // 保留 dbUrl 字段以兼容，但实际会使用内置的 DATABASE_URL
+    dbUrl: process.env.DATABASE_URL || 'internal', // 标记为使用内置数据库
 
     // OpenAI API configuration
     openaiApiBaseUrl: getConfigValue(

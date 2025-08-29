@@ -25,12 +25,10 @@ const SettingsPage: React.FC = () => {
   });
 
   const [tempSmartRoutingConfig, setTempSmartRoutingConfig] = useState<{
-    dbUrl: string;
     openaiApiBaseUrl: string;
     openaiApiKey: string;
     openaiApiEmbeddingModel: string;
   }>({
-    dbUrl: '',
     openaiApiBaseUrl: '',
     openaiApiKey: '',
     openaiApiEmbeddingModel: '',
@@ -63,7 +61,6 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     if (smartRoutingConfig) {
       setTempSmartRoutingConfig({
-        dbUrl: smartRoutingConfig.dbUrl || '',
         openaiApiBaseUrl: smartRoutingConfig.openaiApiBaseUrl || '',
         openaiApiKey: smartRoutingConfig.openaiApiKey || '',
         openaiApiEmbeddingModel: smartRoutingConfig.openaiApiEmbeddingModel || '',
@@ -136,14 +133,14 @@ const SettingsPage: React.FC = () => {
     await updateInstallConfig(key, installConfig[key]);
   };
 
-  const handleSmartRoutingConfigChange = (key: 'dbUrl' | 'openaiApiBaseUrl' | 'openaiApiKey' | 'openaiApiEmbeddingModel', value: string) => {
+  const handleSmartRoutingConfigChange = (key: 'openaiApiBaseUrl' | 'openaiApiKey' | 'openaiApiEmbeddingModel', value: string) => {
     setTempSmartRoutingConfig({
       ...tempSmartRoutingConfig,
       [key]: value
     });
   };
 
-  const saveSmartRoutingConfig = async (key: 'dbUrl' | 'openaiApiBaseUrl' | 'openaiApiKey' | 'openaiApiEmbeddingModel') => {
+  const saveSmartRoutingConfig = async (key: 'openaiApiBaseUrl' | 'openaiApiKey' | 'openaiApiEmbeddingModel') => {
     await updateSmartRoutingConfig(key, tempSmartRoutingConfig[key]);
   };
 
@@ -152,16 +149,11 @@ const SettingsPage: React.FC = () => {
   const handleSmartRoutingEnabledChange = async (value: boolean) => {
     // If enabling Smart Routing, validate required fields and save any unsaved changes
     if (value) {
-      const currentDbUrl = tempSmartRoutingConfig.dbUrl || smartRoutingConfig.dbUrl;
       const currentOpenaiApiKey = tempSmartRoutingConfig.openaiApiKey || smartRoutingConfig.openaiApiKey;
 
-      if (!currentDbUrl || !currentOpenaiApiKey) {
-        const missingFields = [];
-        if (!currentDbUrl) missingFields.push(t('settings.dbUrl'));
-        if (!currentOpenaiApiKey) missingFields.push(t('settings.openaiApiKey'));
-
+      if (!currentOpenaiApiKey) {
         showToast(t('settings.smartRoutingValidationError', {
-          fields: missingFields.join(', ')
+          fields: t('settings.openaiApiKey')
         }));
         return;
       }
@@ -170,9 +162,6 @@ const SettingsPage: React.FC = () => {
       const updates: any = { enabled: value };
 
       // Check for unsaved changes and include them in the batch update
-      if (tempSmartRoutingConfig.dbUrl !== smartRoutingConfig.dbUrl) {
-        updates.dbUrl = tempSmartRoutingConfig.dbUrl;
-      }
       if (tempSmartRoutingConfig.openaiApiBaseUrl !== smartRoutingConfig.openaiApiBaseUrl) {
         updates.openaiApiBaseUrl = tempSmartRoutingConfig.openaiApiBaseUrl;
       }
@@ -228,28 +217,15 @@ const SettingsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="p-3 bg-gray-50 rounded-md">
-                <div className="mb-2">
-                  <h3 className="font-medium text-gray-700">
-                    <span className="text-red-500 px-1">*</span>{t('settings.dbUrl')}
-                  </h3>
-                </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={tempSmartRoutingConfig.dbUrl}
-                    onChange={(e) => handleSmartRoutingConfigChange('dbUrl', e.target.value)}
-                    placeholder={t('settings.dbUrlPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
-                    disabled={loading}
-                  />
-                  <button
-                    onClick={() => saveSmartRoutingConfig('dbUrl')}
-                    disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
-                  >
-                    {t('common.save')}
-                  </button>
+              {/* 数据库连接已内置，无需用户配置 */}
+              <div className="p-3 bg-blue-50 rounded-md">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-blue-800">
+                    {t('settings.dbBuiltIn')}
+                  </p>
                 </div>
               </div>
 
