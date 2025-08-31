@@ -524,7 +524,7 @@ export const updateToolDescription = async (req: Request, res: Response): Promis
 
 export const updateSystemConfig = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { routing, install, smartRouting, mcpRouter } = req.body;
+    const { routing, install, smartRouting, mcpRouter, modelscope } = req.body;
 
     if (
       (!routing ||
@@ -547,7 +547,8 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
         (typeof mcpRouter.apiKey !== 'string' &&
           typeof mcpRouter.referer !== 'string' &&
           typeof mcpRouter.title !== 'string' &&
-          typeof mcpRouter.baseUrl !== 'string'))
+          typeof mcpRouter.baseUrl !== 'string')) &&
+      (!modelscope || typeof modelscope.apiKey !== 'string')
     ) {
       res.status(400).json({
         success: false,
@@ -565,7 +566,8 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
         routing,
         install,
         smartRouting,
-        mcpRouter
+        mcpRouter,
+        modelscope
       });
 
       res.json({

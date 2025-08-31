@@ -94,6 +94,18 @@ export class SystemConfigRepository extends BaseRepository<SystemConfig> {
   }
 
   /**
+   * Update modelscope configuration only
+   */
+  async updateModelScope(modelscope: Partial<SystemConfig['modelscope']>): Promise<SystemConfig | null> {
+    const config = await this.getConfig();
+    if (!config) {
+      return await this.saveConfig({ modelscope });
+    }
+    const updated = { ...config.modelscope, ...modelscope };
+    return await this.saveConfig({ modelscope: updated });
+  }
+
+  /**
    * Initialize default configuration if none exists
    */
   async initializeDefaults(): Promise<SystemConfig> {
@@ -131,6 +143,9 @@ export class SystemConfigRepository extends BaseRepository<SystemConfig> {
         referer: 'https://www.mcphubx.com',
         title: 'MCPHub',
         baseUrl: 'https://api.mcprouter.to/v1'
+      },
+      modelscope: {
+        apiKey: ''
       }
     };
 

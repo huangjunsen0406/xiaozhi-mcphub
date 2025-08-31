@@ -275,6 +275,21 @@ const createTransportFromConfig = async (name: string, conf: ServerConfig): Prom
         headers: conf.headers,
       };
     }
+    // 自动为 ModelScope 域名附加 Bearer token（若数据库配置了 modelscope.apiKey）
+    try {
+      const systemConfigService = getSystemConfigService();
+      const systemConfig = await systemConfigService.getSystemConfig();
+      const token = systemConfig?.modelscope?.apiKey;
+      if (token && (conf.url || '').includes('mcp.api-inference.modelscope.net')) {
+        options.requestInit = options.requestInit || {};
+        options.requestInit.headers = {
+          ...(options.requestInit.headers || {}),
+          Authorization: `Bearer ${token}`,
+        };
+      }
+    } catch (e) {
+      // ignore modelscope auto header errors
+    }
     transport = new StreamableHTTPClientTransport(new URL(conf.url || ''), options);
   } else if (conf.url) {
     // SSE transport
@@ -286,6 +301,32 @@ const createTransportFromConfig = async (name: string, conf: ServerConfig): Prom
       options.requestInit = {
         headers: conf.headers,
       };
+    }
+    // 自动为 ModelScope SSE 附加 Bearer token（若数据库配置了 modelscope.apiKey），且未手动提供 Authorization
+    try {
+      const systemConfigService = getSystemConfigService();
+      const systemConfig = await systemConfigService.getSystemConfig();
+      const token = systemConfig?.modelscope?.apiKey;
+      if (token && conf.url.includes('mcp.api-inference.modelscope.net')) {
+        options.eventSourceInit = options.eventSourceInit || {};
+        const hasAuth1 = options.eventSourceInit.headers && (options.eventSourceInit.headers as any)['Authorization'];
+        if (!hasAuth1) {
+          options.eventSourceInit.headers = {
+            ...(options.eventSourceInit.headers || {}),
+            Authorization: `Bearer ${token}`,
+          };
+        }
+        options.requestInit = options.requestInit || {};
+        const hasAuth2 = options.requestInit.headers && (options.requestInit.headers as any)['Authorization'];
+        if (!hasAuth2) {
+          options.requestInit.headers = {
+            ...(options.requestInit.headers || {}),
+            Authorization: `Bearer ${token}`,
+          };
+        }
+      }
+    } catch (e) {
+      // ignore modelscope auto header errors
     }
     transport = new SSEClientTransport(new URL(conf.url), options);
   } else if (conf.command && conf.args) {

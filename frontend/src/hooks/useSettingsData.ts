@@ -27,11 +27,16 @@ interface SmartRoutingConfig {
   openaiApiEmbeddingModel: string;
 }
 
+interface ModelscopeConfig {
+  apiKey: string;
+}
+
 
 interface SystemSettings {
   routing?: RoutingConfig;
   install?: InstallConfig;
   smartRouting?: SmartRoutingConfig;
+  modelscope?: ModelscopeConfig;
 }
 
 interface TempRoutingConfig {
@@ -66,6 +71,10 @@ export const useSettingsData = () => {
     openaiApiBaseUrl: '',
     openaiApiKey: '',
     openaiApiEmbeddingModel: '',
+  });
+
+  const [modelscopeConfig, setModelscopeConfig] = useState<ModelscopeConfig>({
+    apiKey: '',
   });
 
 
@@ -111,6 +120,9 @@ export const useSettingsData = () => {
           openaiApiEmbeddingModel:
             data.data.smartRouting.openaiApiEmbeddingModel || '',
         });
+      }
+      if (data.success && data.data?.modelscope) {
+        setModelscopeConfig({ apiKey: data.data.modelscope.apiKey || '' });
       }
     } catch (error) {
       console.error('Failed to fetch settings:', error);
@@ -181,6 +193,34 @@ export const useSettingsData = () => {
     } catch (error) {
       console.error('Failed to update system config:', error);
       setError(error instanceof Error ? error.message : 'Failed to update system config');
+      showToast(t('errors.failedToUpdateSystemConfig'));
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update modelscope configuration
+  const updateModelscopeConfig = async (apiKey: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await apiPut('/system-config', {
+        modelscope: { apiKey },
+      });
+
+      if (data.success) {
+        setModelscopeConfig({ apiKey });
+        showToast(t('settings.systemConfigUpdated'));
+        return true;
+      } else {
+        showToast(data.message || t('errors.failedToUpdateSystemConfig'));
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to update modelscope config:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update modelscope config');
       showToast(t('errors.failedToUpdateSystemConfig'));
       return false;
     } finally {
@@ -311,6 +351,7 @@ export const useSettingsData = () => {
     setTempRoutingConfig,
     installConfig,
     smartRoutingConfig,
+    modelscopeConfig,
     loading,
     error,
     setError,
@@ -318,6 +359,7 @@ export const useSettingsData = () => {
     fetchSettings,
     updateRoutingConfig,
     updateInstallConfig,
+    updateModelscopeConfig,
     updateSmartRoutingConfig,
     updateSmartRoutingConfigBatch,
     updateRoutingConfigBatch,

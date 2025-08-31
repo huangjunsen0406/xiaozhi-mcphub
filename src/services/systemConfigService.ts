@@ -29,6 +29,7 @@ export class SystemConfigService {
     install?: Partial<SystemConfig['install']>;
     smartRouting?: Partial<SystemConfig['smartRouting']>;
     mcpRouter?: Partial<SystemConfig['mcpRouter']>;
+    modelscope?: Partial<SystemConfig['modelscope']>;
   }): Promise<SystemConfig> {
     // Get current config from database
     if (!isDatabaseConnected()) throw new Error('Database not connected');
@@ -45,6 +46,7 @@ export class SystemConfigService {
       install: updates.install ? { ...config.install, ...updates.install } : config.install,
       smartRouting: updates.smartRouting ? { ...config.smartRouting, ...updates.smartRouting } : config.smartRouting,
       mcpRouter: updates.mcpRouter ? { ...config.mcpRouter, ...updates.mcpRouter } : config.mcpRouter,
+      modelscope: updates.modelscope ? { ...config.modelscope, ...updates.modelscope } : config.modelscope,
     };
 
     // Save to database

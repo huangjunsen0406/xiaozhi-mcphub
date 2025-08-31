@@ -47,6 +47,11 @@ export class SystemConfig {
     baseUrl?: string;
   };
 
+  @Column({ type: 'simple-json', name: 'modelscope', nullable: true })
+  modelscope: {
+    apiKey?: string;
+  };
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 

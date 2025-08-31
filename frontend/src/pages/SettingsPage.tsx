@@ -48,6 +48,8 @@ const SettingsPage: React.FC = () => {
     updateInstallConfig,
     updateSmartRoutingConfig,
     updateSmartRoutingConfigBatch,
+    modelscopeConfig,
+    updateModelscopeConfig,
   } = useSettingsData();
 
   // Update local installConfig when savedInstallConfig changes
@@ -74,10 +76,11 @@ const SettingsPage: React.FC = () => {
     routingConfig: false,
     installConfig: false,
     smartRoutingConfig: false,
-    password: false
+    password: false,
+    modelscope: false,
   });
 
-  const toggleSection = (section: 'routingConfig' | 'installConfig' | 'smartRoutingConfig' | 'password') => {
+  const toggleSection = (section: 'routingConfig' | 'installConfig' | 'smartRoutingConfig' | 'password' | 'modelscope') => {
     setSectionsVisible(prev => ({
       ...prev,
       [section]: !prev[section]
@@ -188,13 +191,13 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="container mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">{t('pages.settings.title')}</h1>
+      <h1 className="mb-8 text-2xl font-bold text-gray-900">{t('pages.settings.title')}</h1>
 
       {/* Smart Routing Configuration Settings */}
       <PermissionChecker permissions={PERMISSIONS.SETTINGS_SMART_ROUTING}>
-        <div className="bg-white shadow rounded-lg py-4 px-6 mb-6 page-card dashboard-card">
+        <div className="px-6 py-4 mb-6 bg-white rounded-lg shadow page-card dashboard-card">
           <div
-            className="flex justify-between items-center cursor-pointer transition-colors duration-200 hover:text-blue-600"
+            className="flex items-center justify-between transition-colors duration-200 cursor-pointer hover:text-blue-600"
             onClick={() => toggleSection('smartRoutingConfig')}
           >
             <h2 className="font-semibold text-gray-800">{t('pages.settings.smartRouting')}</h2>
@@ -204,8 +207,8 @@ const SettingsPage: React.FC = () => {
           </div>
 
           {sectionsVisible.smartRoutingConfig && (
-            <div className="space-y-4 mt-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-md bg-gray-50">
                 <div>
                   <h3 className="font-medium text-gray-700">{t('settings.enableSmartRouting')}</h3>
                   <p className="text-sm text-gray-500">{t('settings.enableSmartRoutingDescription')}</p>
@@ -218,7 +221,7 @@ const SettingsPage: React.FC = () => {
               </div>
 
               {/* 数据库连接已内置，无需用户配置 */}
-              <div className="p-3 bg-blue-50 rounded-md">
+              <div className="p-3 rounded-md bg-blue-50">
                 <div className="flex items-center gap-2">
                   <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -229,10 +232,10 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-3 bg-gray-50 rounded-md">
+              <div className="p-3 rounded-md bg-gray-50">
                 <div className="mb-2">
                   <h3 className="font-medium text-gray-700">
-                    <span className="text-red-500 px-1">*</span>{t('settings.openaiApiKey')}
+                    <span className="px-1 text-red-500">*</span>{t('settings.openaiApiKey')}
                   </h3>
                 </div>
                 <div className="flex items-center gap-3">
@@ -241,20 +244,20 @@ const SettingsPage: React.FC = () => {
                     value={tempSmartRoutingConfig.openaiApiKey}
                     onChange={(e) => handleSmartRoutingConfigChange('openaiApiKey', e.target.value)}
                     placeholder={t('settings.openaiApiKeyPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300"
+                    className="flex-1 block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     disabled={loading}
                   />
                   <button
                     onClick={() => saveSmartRoutingConfig('openaiApiKey')}
                     disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
+                    className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
                   >
                     {t('common.save')}
                   </button>
                 </div>
               </div>
 
-              <div className="p-3 bg-gray-50 rounded-md">
+              <div className="p-3 rounded-md bg-gray-50">
                 <div className="mb-2">
                   <h3 className="font-medium text-gray-700">{t('settings.openaiApiBaseUrl')}</h3>
                 </div>
@@ -264,20 +267,20 @@ const SettingsPage: React.FC = () => {
                     value={tempSmartRoutingConfig.openaiApiBaseUrl}
                     onChange={(e) => handleSmartRoutingConfigChange('openaiApiBaseUrl', e.target.value)}
                     placeholder={t('settings.openaiApiBaseUrlPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                    className="flex-1 block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
                     disabled={loading}
                   />
                   <button
                     onClick={() => saveSmartRoutingConfig('openaiApiBaseUrl')}
                     disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
+                    className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
                   >
                     {t('common.save')}
                   </button>
                 </div>
               </div>
 
-              <div className="p-3 bg-gray-50 rounded-md">
+              <div className="p-3 rounded-md bg-gray-50">
                 <div className="mb-2">
                   <h3 className="font-medium text-gray-700">{t('settings.openaiApiEmbeddingModel')}</h3>
                 </div>
@@ -287,13 +290,13 @@ const SettingsPage: React.FC = () => {
                     value={tempSmartRoutingConfig.openaiApiEmbeddingModel}
                     onChange={(e) => handleSmartRoutingConfigChange('openaiApiEmbeddingModel', e.target.value)}
                     placeholder={t('settings.openaiApiEmbeddingModelPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                    className="flex-1 block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
                     disabled={loading}
                   />
                   <button
                     onClick={() => saveSmartRoutingConfig('openaiApiEmbeddingModel')}
                     disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
+                    className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
                   >
                     {t('common.save')}
                   </button>
@@ -305,9 +308,9 @@ const SettingsPage: React.FC = () => {
       </PermissionChecker>
 
       {/* Route Configuration Settings */}
-      <div className="bg-white shadow rounded-lg py-4 px-6 mb-6 dashboard-card">
+      <div className="px-6 py-4 mb-6 bg-white rounded-lg shadow dashboard-card">
         <div
-          className="flex justify-between items-center cursor-pointer"
+          className="flex items-center justify-between cursor-pointer"
           onClick={() => toggleSection('routingConfig')}
         >
           <h2 className="font-semibold text-gray-800">{t('pages.settings.routeConfig')}</h2>
@@ -317,8 +320,8 @@ const SettingsPage: React.FC = () => {
         </div>
 
         {sectionsVisible.routingConfig && (
-          <div className="space-y-4 mt-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+          <div className="mt-4 space-y-4">
+            <div className="flex items-center justify-between p-3 rounded-md bg-gray-50">
               <div>
                 <h3 className="font-medium text-gray-700">{t('settings.enableBearerAuth')}</h3>
                 <p className="text-sm text-gray-500">{t('settings.enableBearerAuthDescription')}</p>
@@ -331,7 +334,7 @@ const SettingsPage: React.FC = () => {
             </div>
 
             {routingConfig.enableBearerAuth && (
-              <div className="p-3 bg-gray-50 rounded-md">
+              <div className="p-3 rounded-md bg-gray-50">
                 <div className="mb-2">
                   <h3 className="font-medium text-gray-700">{t('settings.bearerAuthKey')}</h3>
                   <p className="text-sm text-gray-500">{t('settings.bearerAuthKeyDescription')}</p>
@@ -342,13 +345,13 @@ const SettingsPage: React.FC = () => {
                     value={tempRoutingConfig.bearerAuthKey}
                     onChange={(e) => handleBearerAuthKeyChange(e.target.value)}
                     placeholder={t('settings.bearerAuthKeyPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                    className="flex-1 block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
                     disabled={loading || !routingConfig.enableBearerAuth}
                   />
                   <button
                     onClick={saveBearerAuthKey}
                     disabled={loading || !routingConfig.enableBearerAuth}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
+                    className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
                   >
                     {t('common.save')}
                   </button>
@@ -356,7 +359,7 @@ const SettingsPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+            <div className="flex items-center justify-between p-3 rounded-md bg-gray-50">
               <div>
                 <h3 className="font-medium text-gray-700">{t('settings.enableGlobalRoute')}</h3>
                 <p className="text-sm text-gray-500">{t('settings.enableGlobalRouteDescription')}</p>
@@ -368,7 +371,7 @@ const SettingsPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+            <div className="flex items-center justify-between p-3 rounded-md bg-gray-50">
               <div>
                 <h3 className="font-medium text-gray-700">{t('settings.enableGroupNameRoute')}</h3>
                 <p className="text-sm text-gray-500">{t('settings.enableGroupNameRouteDescription')}</p>
@@ -381,7 +384,7 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <PermissionChecker permissions={PERMISSIONS.SETTINGS_SKIP_AUTH}>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+              <div className="flex items-center justify-between p-3 rounded-md bg-gray-50">
                 <div>
                   <h3 className="font-medium text-gray-700">{t('settings.skipAuth')}</h3>
                   <p className="text-sm text-gray-500">{t('settings.skipAuthDescription')}</p>
@@ -400,9 +403,9 @@ const SettingsPage: React.FC = () => {
 
       {/* Installation Configuration Settings */}
       <PermissionChecker permissions={PERMISSIONS.SETTINGS_INSTALL_CONFIG}>
-        <div className="bg-white shadow rounded-lg py-4 px-6 mb-6 dashboard-card">
+        <div className="px-6 py-4 mb-6 bg-white rounded-lg shadow dashboard-card">
           <div
-            className="flex justify-between items-center cursor-pointer"
+            className="flex items-center justify-between cursor-pointer"
             onClick={() => toggleSection('installConfig')}
           >
             <h2 className="font-semibold text-gray-800">{t('settings.installConfig')}</h2>
@@ -412,8 +415,8 @@ const SettingsPage: React.FC = () => {
           </div>
 
           {sectionsVisible.installConfig && (
-            <div className="space-y-4 mt-4">
-              <div className="p-3 bg-gray-50 rounded-md">
+            <div className="mt-4 space-y-4">
+              <div className="p-3 rounded-md bg-gray-50">
                 <div className="mb-2">
                   <h3 className="font-medium text-gray-700">{t('settings.baseUrl')}</h3>
                   <p className="text-sm text-gray-500">{t('settings.baseUrlDescription')}</p>
@@ -424,20 +427,20 @@ const SettingsPage: React.FC = () => {
                     value={installConfig.baseUrl}
                     onChange={(e) => handleInstallConfigChange('baseUrl', e.target.value)}
                     placeholder={t('settings.baseUrlPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                    className="flex-1 block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
                     disabled={loading}
                   />
                   <button
                     onClick={() => saveInstallConfig('baseUrl')}
                     disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
+                    className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
                   >
                     {t('common.save')}
                   </button>
                 </div>
               </div>
 
-              <div className="p-3 bg-gray-50 rounded-md">
+              <div className="p-3 rounded-md bg-gray-50">
                 <div className="mb-2">
                   <h3 className="font-medium text-gray-700">{t('settings.pythonIndexUrl')}</h3>
                   <p className="text-sm text-gray-500">{t('settings.pythonIndexUrlDescription')}</p>
@@ -448,20 +451,20 @@ const SettingsPage: React.FC = () => {
                     value={installConfig.pythonIndexUrl}
                     onChange={(e) => handleInstallConfigChange('pythonIndexUrl', e.target.value)}
                     placeholder={t('settings.pythonIndexUrlPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                    className="flex-1 block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
                     disabled={loading}
                   />
                   <button
                     onClick={() => saveInstallConfig('pythonIndexUrl')}
                     disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
+                    className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
                   >
                     {t('common.save')}
                   </button>
                 </div>
               </div>
 
-              <div className="p-3 bg-gray-50 rounded-md">
+              <div className="p-3 rounded-md bg-gray-50">
                 <div className="mb-2">
                   <h3 className="font-medium text-gray-700">{t('settings.npmRegistry')}</h3>
                   <p className="text-sm text-gray-500">{t('settings.npmRegistryDescription')}</p>
@@ -472,13 +475,13 @@ const SettingsPage: React.FC = () => {
                     value={installConfig.npmRegistry}
                     onChange={(e) => handleInstallConfigChange('npmRegistry', e.target.value)}
                     placeholder={t('settings.npmRegistryPlaceholder')}
-                    className="flex-1 mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                    className="flex-1 block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
                     disabled={loading}
                   />
                   <button
                     onClick={() => saveInstallConfig('npmRegistry')}
                     disabled={loading}
-                    className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 btn-primary"
+                    className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
                   >
                     {t('common.save')}
                   </button>
@@ -489,10 +492,51 @@ const SettingsPage: React.FC = () => {
         </div>
       </PermissionChecker>
 
-      {/* Change Password */}
-      <div className="bg-white shadow rounded-lg py-4 px-6 mb-6 dashboard-card">
+      {/* ModelScope 配置 */}
+      <div className="px-6 py-4 mb-6 bg-white rounded-lg shadow dashboard-card">
         <div
-          className="flex justify-between items-center cursor-pointer"
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => toggleSection('modelscope')}
+        >
+          <h2 className="font-semibold text-gray-800">魔搭社区</h2>
+          <span className="text-gray-500">{sectionsVisible.modelscope ? '▼' : '►'}</span>
+        </div>
+
+        {sectionsVisible.modelscope && (
+          <div className="mt-4 space-y-4">
+            <div className="p-3 rounded-md bg-gray-50">
+              <div className="mb-2">
+                <h3 className="font-medium text-gray-700">API Key</h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="password"
+                  defaultValue={modelscopeConfig?.apiKey || ''}
+                  onBlur={(e) => updateModelscopeConfig(e.target.value)}
+                  placeholder="在 modelscope.cn 获取并填写"
+                  className="flex-1 block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                  disabled={loading}
+                />
+                <button
+                  onClick={(e) => {
+                    const input = (e.currentTarget.previousSibling as HTMLInputElement);
+                    updateModelscopeConfig(input.value);
+                  }}
+                  disabled={loading}
+                  className="px-4 py-2 mt-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 btn-primary"
+                >
+                  {t('common.save')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Change Password */}
+      <div className="px-6 py-4 mb-6 bg-white rounded-lg shadow dashboard-card">
+        <div
+          className="flex items-center justify-between cursor-pointer"
           onClick={() => toggleSection('password')}
         >
           <h2 className="font-semibold text-gray-800">{t('auth.changePassword')}</h2>
