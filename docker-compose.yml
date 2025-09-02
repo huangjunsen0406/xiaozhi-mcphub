@@ -1,5 +1,9 @@
 version: "3.8"
 
+volumes:
+  pgdata:
+  appdata:
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -9,34 +13,33 @@ services:
       POSTGRES_USER: xiaozhi
       POSTGRES_PASSWORD: xiaozhi123456
       POSTGRES_DB: xiaozhi_mcphub
+    # 更安全：仅本机能连数据库；如果完全不需要宿主访问，可删掉 ports 行
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xiaozhi -d xiaozhi_mcphub -h 127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   mcphub:
     image: huangjunsen/xiaozhi-mcphub:latest
     container_name: xiaozhi-mcphub
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      # 必需
-      DATABASE_URL: postgres://xiaozhi:xiaozhi123456@db:5432/xiaozhi_mcphub
+      DATABASE_URL: "postgres://xiaozhi:xiaozhi123456@db:5432/xiaozhi_mcphub"
       NODE_ENV: production
       SMART_ROUTING_ENABLED: "false"
-      # 可选（按需开启并提供 OPENAI_API_KEY 等）
-      # OPENAI_API_KEY: ""
-      # OPENAI_API_BASE_URL: "https://api.openai.com/v1"
-      # OPENAI_API_EMBEDDING_MODEL: "text-embedding-3-large"
-      # 可选：自定义二级路径
-      # BASE_PATH: "/mcphub"
-      # 可选：生产环境建议手动设置固定 JWT 密钥
-      # JWT_SECRET: "please-change-me"
+      # 生产建议开启：
+      # JWT_SECRET: "请改成一串长随机值"
+      # BASE_PATH: "/mcphub"   # 如需挂到子路径
+      # OPENAI_API_KEY: "sk-..."
     volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-
-volumes:
-  pgdata:
+      - appdata:/app/data
