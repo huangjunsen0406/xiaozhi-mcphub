@@ -1,6 +1,6 @@
 {
   "name": "@huangjunsen0406/xiaozhi-mcphub",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "MCPHub enhanced with Xiaozhi AI platform integration - 为小智AI平台优化的MCP工具桥接系统",
   "main": "dist/index.js",
   "type": "module",
