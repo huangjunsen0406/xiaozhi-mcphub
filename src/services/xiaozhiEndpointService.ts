@@ -54,6 +54,7 @@ export class XiaozhiEndpointService {
         webSocketUrl: ep.webSocketUrl,
         description: ep.description || '',
         groupId: ep.groupId || undefined,
+        useSmartRouting: (ep as any).useSmartRouting || false,
         reconnect: ep.reconnect || {
           maxAttempts: 10,
           infiniteReconnect: true,
@@ -189,17 +190,16 @@ export class XiaozhiEndpointService {
       if (message.method === 'tools/list') {
         const smartRoutingConfig = await getSmartRoutingConfig();
         const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
-        
-        if (smartRoutingConfig.enabled) {
+
+        // 端点级：仅当全局开启 且 端点选择使用智能路由 时，才切到 $smart
+        if (smartRoutingConfig.enabled && (endpoint as any).useSmartRouting) {
           extraParams.group = '$smart';
         } else if (endpoint.groupId && endpoint.groupId.trim() !== '') {
           extraParams.group = endpoint.groupId;
         }
-        
-        console.log(`小智端点 ${endpoint.name} 请求工具列表，分组: ${endpoint.groupId && endpoint.groupId.trim() !== '' ? endpoint.groupId : '全部'}`);
-        console.log(`extraParams:`, JSON.stringify(extraParams, null, 2));
+
+        console.log(`小智端点 ${endpoint.name} 请求工具列表，模式: ${(smartRoutingConfig.enabled && (endpoint as any).useSmartRouting) ? '智能路由' : (endpoint.groupId && endpoint.groupId.trim() !== '' ? `分组(${endpoint.groupId})` : '全部')}`);
         const response = await handleListToolsRequest(message.params || {}, extraParams);
-        // mcpService 已基于分组做过过滤，这里直接返回，避免二次过滤造成前缀不一致
         await this.sendResponse(endpoint.id, message.id, response);
         return;
       }
@@ -209,16 +209,21 @@ export class XiaozhiEndpointService {
         const smartRoutingConfig = await getSmartRoutingConfig();
         const toolName = message.params?.name;
         const isSmartRoutingTool = toolName === 'search_tools' || toolName === 'call_tool';
-        
+
         const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
-        
-        if (smartRoutingConfig.enabled && isSmartRoutingTool) {
+
+        // 端点级：仅当全局开启 且 端点选择使用智能路由 且 调用的是智能路由虚拟工具 时
+        if (smartRoutingConfig.enabled && (endpoint as any).useSmartRouting && isSmartRoutingTool) {
           extraParams.group = '$smart';
+          // 若端点配置了分组，则把该分组内的服务器名单透传，供向量检索范围过滤
+          if (endpoint.groupId && endpoint.groupId.trim() !== '') {
+            extraParams.serverNamesScope = await (await import('./groupService.js')).getServersInGroup(endpoint.groupId);
+          }
         } else if (endpoint.groupId && endpoint.groupId.trim() !== '') {
           extraParams.group = endpoint.groupId;
         }
-        
-        console.log(`小智端点 ${endpoint.name} 调用工具: ${toolName}`);
+
+        console.log(`小智端点 ${endpoint.name} 调用工具: ${toolName}，模式: ${(smartRoutingConfig.enabled && (endpoint as any).useSmartRouting && isSmartRoutingTool) ? '智能路由' : (endpoint.groupId && endpoint.groupId.trim() !== '' ? `分组(${endpoint.groupId})` : '全部')}`);
         const response = await handleCallToolRequest(message, extraParams);
         await this.sendResponse(endpoint.id, message.id, response);
         return;
@@ -421,6 +426,7 @@ export class XiaozhiEndpointService {
       description: endpoint.description || '',
       groupId: endpoint.groupId || null as any,
       reconnect: endpoint.reconnect,
+      useSmartRouting: (endpoint as any).useSmartRouting || false,
       status: endpoint.status,
     } as any);
 

@@ -12,6 +12,7 @@ export interface XiaozhiEndpoint {
   webSocketUrl: string;
   description?: string;
   groupId?: string;
+  useSmartRouting?: boolean;
   reconnect: {
     maxAttempts: number;
     initialDelay: number;
@@ -42,6 +43,7 @@ export interface CreateEndpointData {
   webSocketUrl: string;
   description?: string;
   groupId?: string;
+  useSmartRouting?: boolean;
 }
 
 export interface UpdateEndpointData extends Partial<Omit<XiaozhiEndpoint, 'id' | 'createdAt'>> {}
@@ -298,7 +300,7 @@ export const useXiaozhiEndpoints = () => {
       
       if (response.success) {
         setConfig(prev => ({ ...prev, ...configData }));
-        showToast(t('settings.xiaozhiConfigUpdated', 'Xiaozhi configuration updated'));
+        showToast(t('api.success.xiaozhiConfigUpdated', 'Xiaozhi configuration updated'));
         triggerRefresh();
         return true;
       } else {

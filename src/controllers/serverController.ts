@@ -560,6 +560,8 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
     // Use the system config service to update configuration in database
     const { getSystemConfigService } = await import('../services/systemConfigService.js');
     const systemConfigService = getSystemConfigService();
+    // 获取更新前配置，用于变更对比
+    const prevConfig = await systemConfigService.getSystemConfig();
     
     try {
       const updatedConfig = await systemConfigService.updateSystemConfig({
@@ -575,6 +577,31 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
         data: updatedConfig,
         message: 'System configuration updated successfully'
       });
+
+      // 智能路由：启用或配置变更后触发全量向量同步
+      try {
+        const wasEnabled = prevConfig?.smartRouting?.enabled ?? false;
+        const nowEnabled = updatedConfig.smartRouting?.enabled ?? false;
+
+        const prevSR = prevConfig?.smartRouting || {} as any;
+        const nowSR = updatedConfig.smartRouting || {} as any;
+
+        const configChanged =
+          prevSR.dbUrl !== nowSR.dbUrl ||
+          prevSR.openaiApiBaseUrl !== nowSR.openaiApiBaseUrl ||
+          prevSR.openaiApiKey !== nowSR.openaiApiKey ||
+          prevSR.openaiApiEmbeddingModel !== nowSR.openaiApiEmbeddingModel;
+
+        if ((!wasEnabled && nowEnabled) || (nowEnabled && configChanged)) {
+          const { syncAllServerToolsEmbeddings } = await import('../services/vectorSearchService.js');
+          // 后台异步执行，不阻塞响应
+          syncAllServerToolsEmbeddings().catch((e) => {
+            console.error('Failed to sync server tools embeddings:', e);
+          });
+        }
+      } catch (e) {
+        console.warn('Post-update smart routing sync failed to schedule:', (e as any)?.message || e);
+      }
     } catch (error: any) {
       console.error('Failed to update system config:', error);
       res.status(500).json({

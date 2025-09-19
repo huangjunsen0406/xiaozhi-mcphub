@@ -26,6 +26,9 @@ export class XiaozhiEndpoint {
   @Column({ type: 'varchar', name: 'group_id', nullable: true })
   groupId: string; // Associated group ID
 
+  @Column({ type: 'boolean', name: 'use_smart_routing', default: false })
+  useSmartRouting: boolean; // Endpoint-level smart routing toggle
+
   @Column({ type: 'simple-json', nullable: true })
   reconnect: {
     maxAttempts?: number;

@@ -105,6 +105,20 @@ export const initUpstreamServers = async (): Promise<void> => {
   } catch (error) {
     console.error('小智客户端服务启动失败:', error);
   }
+
+  // 兜底：如果已开启智能路由，完成初始化后触发一次全量向量同步
+  try {
+    const { getSmartRoutingConfig } = await import('../utils/smartRouting.js');
+    const { syncAllServerToolsEmbeddings } = await import('./vectorSearchService.js');
+    const sr = await getSmartRoutingConfig();
+    if (sr.enabled) {
+      syncAllServerToolsEmbeddings().catch((e) => {
+        console.error('Failed to run fallback smart routing sync:', e);
+      });
+    }
+  } catch (e) {
+    console.warn('Fallback smart routing sync scheduling error:', (e as any)?.message || e);
+  }
 };
 
 export const getMcpServer = async (sessionId?: string, group?: string): Promise<Server> => {
@@ -1121,7 +1135,10 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
       }
 
       console.log(`Using similarity threshold: ${thresholdNum} for query: "${query}"`);
-      const servers = undefined; // No server filtering
+      // 支持端点/分组透传的限制范围
+      const servers: string[] | undefined = Array.isArray(extra?.serverNamesScope) && extra.serverNamesScope.length > 0
+        ? extra.serverNamesScope
+        : undefined;
 
       const searchResults = await searchToolsByVector(query, limitNum, thresholdNum, servers);
       console.log(`Search results: ${JSON.stringify(searchResults)}`);

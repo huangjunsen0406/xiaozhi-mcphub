@@ -216,7 +216,7 @@ export const getXiaozhiEndpoint = (req: Request, res: Response): void => {
 // 创建小智端点
 export const createXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, webSocketUrl, description, groupId } = req.body;
+    const { name, webSocketUrl, description, groupId, useSmartRouting } = req.body;
 
     if (!name || !webSocketUrl) {
       res.status(400).json({ 
@@ -240,6 +240,7 @@ export const createXiaozhiEndpoint = async (req: Request, res: Response): Promis
       webSocketUrl,
       description: description || '',
       groupId: groupId || null,
+      useSmartRouting: !!useSmartRouting,
       enabled: true,
       reconnect: {
         maxAttempts: 10,

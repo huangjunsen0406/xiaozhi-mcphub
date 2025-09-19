@@ -33,6 +33,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
     description: endpoint?.description || '',
     groupId: endpoint?.groupId || '',
     enabled: endpoint?.enabled ?? true,
+    useSmartRouting: endpoint?.useSmartRouting ?? false,
     reconnect: {
       maxAttempts: endpoint?.reconnect.maxAttempts || 10,
       initialDelay: endpoint?.reconnect.initialDelay || 2000,
@@ -52,6 +53,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
         description: endpoint.description || '',
         groupId: endpoint.groupId || '',
         enabled: endpoint.enabled,
+        useSmartRouting: endpoint.useSmartRouting ?? false,
         reconnect: endpoint.reconnect,
       });
     }
@@ -115,6 +117,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
           description: '',
           groupId: '',
           enabled: true,
+          useSmartRouting: false,
           reconnect: {
             maxAttempts: 10,
             initialDelay: 2000,
@@ -211,7 +214,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
               rows={3}
-              className="px-3 py-2 w-full rounded-md border border-gray-300 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               placeholder={t('xiaozhi.form.descriptionPlaceholder', 'Optional description for this endpoint')}
             />
           </div>
@@ -223,7 +226,7 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
             <select
               value={formData.groupId}
               onChange={(e) => handleInputChange('groupId', e.target.value)}
-              className="px-3 py-2 w-full rounded-md border border-gray-300 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
               <option value="">{t('xiaozhi.form.noGroup', 'No Group (All Tools)')}</option>
               {groups.map((group) => (
@@ -235,17 +238,34 @@ const XiaozhiEndpointForm: React.FC<XiaozhiEndpointFormProps> = ({
           </div>
 
           <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="enabled"
-              checked={formData.enabled}
-              onChange={(e) => handleInputChange('enabled', e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-            />
-            <label htmlFor="enabled" className="block ml-2 text-sm text-gray-700 dark:text-gray-300">
+            <label htmlFor="enabled" className="block mr-3 text-sm text-gray-700 dark:text-gray-300">
               {t('xiaozhi.form.enabled', 'Enable this endpoint')}
             </label>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={formData.enabled}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.enabled ? 'bg-blue-200' : 'bg-gray-100'}`}
+              onClick={() => handleInputChange('enabled', !formData.enabled)}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
           </div>
+
+        <div className="flex items-center">
+          <label htmlFor="useSmartRouting" className="block mr-3 text-sm text-gray-700 dark:text-gray-300">
+            {t('xiaozhi.form.useSmartRouting', 'Use Smart Routing')}
+          </label>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={formData.useSmartRouting}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.useSmartRouting ? 'bg-blue-200' : 'bg-gray-100'}`}
+            onClick={() => handleInputChange('useSmartRouting', !formData.useSmartRouting)}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.useSmartRouting ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
         </div>
 
         {/* Reconnection Settings */}

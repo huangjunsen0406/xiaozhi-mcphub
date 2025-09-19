@@ -30,9 +30,9 @@ export async function getSmartRoutingConfig(): Promise<SmartRoutingConfig> {
     systemConfig?.smartRouting || {};
 
   return {
-    // Enabled status - check multiple environment variables
+    // 是否启用：仅以数据库配置为准（忽略环境变量覆盖）
     enabled: getConfigValue(
-      [process.env.SMART_ROUTING_ENABLED],
+      [],
       smartRoutingSettings.enabled,
       false,
       parseBooleanEnvVar,

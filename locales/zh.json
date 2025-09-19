@@ -620,7 +620,8 @@
         "initialDelayRange": "初始延迟必须在 100 到 60000 毫秒之间",
         "maxDelayGreater": "最大延迟必须大于初始延迟",
         "backoffRange": "退避倍数必须在 1 到 10 之间"
-      }
+      },
+      "useSmartRouting": "使用智能路由"
     }
   }
 }

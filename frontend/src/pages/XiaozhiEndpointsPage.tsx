@@ -92,7 +92,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
     <div className="p-6">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               {t('xiaozhi.title', 'Xiaozhi Endpoints')}
@@ -109,8 +109,8 @@ const XiaozhiEndpointsPage: React.FC = () => {
 
         {/* Status Overview */}
         <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-4">
-          <div className="p-4 bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-            <div className="flex justify-between items-center">
+          <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {t('xiaozhi.status.service', 'Service Status')}
@@ -119,32 +119,33 @@ const XiaozhiEndpointsPage: React.FC = () => {
                   {config.enabled ? t('xiaozhi.status.enabled', 'Enabled') : t('xiaozhi.status.disabled', 'Disabled')}
                 </p>
               </div>
-              <label className="inline-flex items-center">
-                <input
-                  type="checkbox"
-                  checked={config.enabled}
-                  onChange={(e) => handleToggleService(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 transition duration-150 ease-in-out form-checkbox"
-                />
-              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.enabled}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enabled ? 'bg-blue-200' : 'bg-gray-100'}`}
+                onClick={() => handleToggleService(!config.enabled)}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
             </div>
           </div>
 
-          <div className="p-4 bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('xiaozhi.status.totalEndpoints', 'Total Endpoints')}
             </p>
             <p className="text-2xl font-bold text-blue-600">{endpoints.length}</p>
           </div>
 
-          <div className="p-4 bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('xiaozhi.status.enabled', 'Enabled')}
             </p>
             <p className="text-2xl font-bold text-green-600">{getEnabledCount()}</p>
           </div>
 
-          <div className="p-4 bg-white rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('xiaozhi.status.connected', 'Connected')}
             </p>
@@ -155,7 +156,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
 
       {/* Error Display */}
       {error && (
-        <div className="p-4 mb-6 bg-red-50 rounded-lg border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div className="p-4 mb-6 border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20 dark:border-red-800">
           <p className="text-red-800 dark:text-red-400">{error}</p>
         </div>
       )}
@@ -170,10 +171,10 @@ const XiaozhiEndpointsPage: React.FC = () => {
           </div>
         ) : endpoints.length === 0 ? (
           <div className="py-12 text-center">
-            <div className="mx-auto max-w-md">
+            <div className="max-w-md mx-auto">
               <div className="mb-4">
                 <svg
-                  className="mx-auto w-12 h-12 text-gray-400"
+                  className="w-12 h-12 mx-auto text-gray-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"

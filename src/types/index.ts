@@ -132,6 +132,7 @@ export interface XiaozhiEndpoint {
   webSocketUrl: string; // 完整的 WebSocket URL (包含token)
   description?: string;
   groupId?: string; // null表示使用全部工具
+  useSmartRouting?: boolean; // 端点是否使用智能路由
   reconnect: {
     maxAttempts: number;
     infiniteReconnect?: boolean;   // 是否启用无限重连

@@ -617,7 +617,8 @@
         "initialDelayRange": "Initial delay must be between 100ms and 60000ms",
         "maxDelayGreater": "Max delay must be greater than initial delay",
         "backoffRange": "Backoff multiplier must be between 1 and 10"
-      }
+      },
+      "useSmartRouting": "Use Smart Routing"
     }
   }
 }
