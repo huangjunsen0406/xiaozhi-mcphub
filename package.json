@@ -85,7 +85,7 @@
     "@swc/core": "^1.13.5",
     "@swc/jest": "^0.2.39",
     "@tailwindcss/line-clamp": "^0.4.4",
-    "@tailwindcss/postcss": "^4.1.12",
+    "@tailwindcss/postcss": "^4.1.13",
     "@tailwindcss/vite": "^4.1.12",
     "@types/bcryptjs": "^3.0.0",
     "@types/cors": "^2.8.19",
