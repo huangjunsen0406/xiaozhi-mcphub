@@ -93,7 +93,7 @@
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.17.2",
-    "@types/react": "^19.1.11",
+    "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.7",
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
