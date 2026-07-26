@@ -209,6 +209,23 @@ jest.mock('../../src/controllers/contextCostController.js', () => ({
   getGroupCostsHandler: routeHandler,
 }));
 
+jest.mock('../../src/controllers/xiaozhiController.js', () => ({
+  getXiaozhiStatus: routeHandler,
+  getXiaozhiConfig: routeHandler,
+  updateXiaozhiConfig: routeHandler,
+  restartXiaozhiClient: routeHandler,
+  stopXiaozhiClient: routeHandler,
+  startXiaozhiClient: routeHandler,
+  getXiaozhiEndpoints: routeHandler,
+  getXiaozhiEndpoint: routeHandler,
+  createXiaozhiEndpoint: routeHandler,
+  updateXiaozhiEndpoint: routeHandler,
+  deleteXiaozhiEndpoint: routeHandler,
+  reconnectXiaozhiEndpoint: routeHandler,
+  getXiaozhiEndpointStatus: routeHandler,
+  getAllXiaozhiEndpointStatus: routeHandler,
+}));
+
 jest.mock('../../src/middlewares/auth.js', () => ({
   auth: authMiddleware,
 }));

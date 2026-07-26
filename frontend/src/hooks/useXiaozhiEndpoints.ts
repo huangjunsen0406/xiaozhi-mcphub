@@ -46,7 +46,7 @@ export interface CreateEndpointData {
   useSmartRouting?: boolean;
 }
 
-export interface UpdateEndpointData extends Partial<Omit<XiaozhiEndpoint, 'id' | 'createdAt'>> {}
+export type UpdateEndpointData = Partial<Omit<XiaozhiEndpoint, 'id' | 'createdAt'>>;
 
 export const useXiaozhiEndpoints = () => {
   const { t } = useTranslation();

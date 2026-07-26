@@ -303,7 +303,16 @@ export const initUpstreamServers = async (): Promise<void> => {
   // Initialize smart routing service with references to mcpService functions
   initSmartRoutingService(() => serverInfos, filterToolsByConfig, filterToolsByGroup);
 
-  // 等待所有 MCP 服务器完全初始化后再启动小智客户端
+  // 小智客户端需等待上游服务器稳定后再连接，但不能阻塞 initUpstreamServers —
+  // 调用方要等它 resolve 后才注册 /mcp 与 /sse 路由。
+  void startXiaozhiWhenServersSettle();
+};
+
+/**
+ * Waits for every upstream server to settle (connected or disconnected), then brings up
+ * the Xiaozhi client so it advertises a complete tool list. Runs detached from startup.
+ */
+const startXiaozhiWhenServersSettle = async (): Promise<void> => {
   const maxWaitTime = 30000; // 最多等待30秒
   const checkInterval = 1000; // 每1秒检查一次
   let waited = 0;
@@ -572,31 +581,33 @@ export const notifyToolChanged = async (
   await registerAllTools(false, name, options);
   broadcastToolListChanged();
 
-  // 在所有服务器状态稳定后，重连小智客户端以同步最新工具列表
+  // 重连小智以同步最新工具列表。这里不能 await —— notifyToolChanged 由增删服务器的
+  // API 请求直接调用，重连耗时会转嫁成请求延迟。
+  void reconnectXiaozhiForToolSync();
+};
+
+/** Reconnects the Xiaozhi client so it picks up the current tool list. Fire-and-forget. */
+const reconnectXiaozhiForToolSync = async (): Promise<void> => {
   try {
     const { xiaozhiClientService } = await import('./xiaozhiClientService.js');
-    if (xiaozhiClientService.isEnabled()) {
-      console.log('MCP服务器状态已稳定，重连小智客户端以同步最新工具列表...');
-
-      // 先断开连接
-      await xiaozhiClientService.disconnect();
-
-      // 等待一小段时间确保断开完成
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // 重新初始化连接
-      await xiaozhiClientService.initialize();
-
-      // 连接成功后通知工具列表已更新
-      setTimeout(async () => {
-        try {
-          await xiaozhiClientService.notifyToolsChanged();
-          console.log('小智客户端已重连并同步最新工具列表');
-        } catch (error) {
-          console.error('重连后通知小智工具列表失败:', error);
-        }
-      }, 1000);
+    if (!xiaozhiClientService.isEnabled()) {
+      return;
     }
+    console.log('MCP服务器状态已稳定，重连小智客户端以同步最新工具列表...');
+
+    // 先断开连接
+    await xiaozhiClientService.disconnect();
+
+    // 等待一小段时间确保断开完成
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // 重新初始化连接
+    await xiaozhiClientService.initialize();
+
+    // 连接建立后再通知工具列表已更新
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await xiaozhiClientService.notifyToolsChanged();
+    console.log('小智客户端已重连并同步最新工具列表');
   } catch (error) {
     console.error('重连小智客户端失败:', error);
   }
