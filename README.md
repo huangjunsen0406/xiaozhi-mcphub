@@ -1,165 +1,143 @@
-# MCPHub: The Unified Hub for Model Context Protocol (MCP) Servers
+# xiaozhi-mcphub: MCP tool bridge and console optimized for the Xiaozhi AI platform
 
-English | [Français](README.fr.md) | [中文版](README.zh.md)
+[中文版](README.zh.md) | English
 
-MCPHub makes it easy to manage and scale multiple MCP (Model Context Protocol) servers by organizing them into flexible Streamable HTTP (SSE) endpoints—supporting access to all servers, individual servers, or logical server groups.
+**xiaozhi-mcphub** is a second-stage development based on [MCPHub](https://github.com/samanhappy/mcphub). It enhances integration with the Xiaozhi AI platform and provides multi-endpoint management, automatic reconnection, vector-based smart routing, and OpenAPI-compatible access.
 
 ![Dashboard Preview](assets/dashboard.png)
 
-## 🌐 Live Demo & Docs
+## 🚀 Key Features
 
-- **Documentation**: [docs.mcphub.app](https://docs.mcphub.app/)
-- **Demo Environment**: [demo.mcphub.app](https://demo.mcphub.app/)
+- **Enhanced Xiaozhi Integration**:
+  - **Multi-endpoint management**: Bidirectional WebSocket connections with multiple Xiaozhi endpoints (enable/disable, edit, reconnect, status query).
+  - **Smart reconnection**: Fast reconnect mode, exponential backoff, infinite retries with sleep window — all configurable via environment variables.
+  - **Tool synchronization**: Xiaozhi endpoints are notified when server tools change to keep tool lists up-to-date.
+  - **Grouping and smart routing**: Endpoints can bind to groups or use `$smart` intelligent routing.
 
-## 🚀 Features
+- **MCP Management (inherited and enhanced)**:
+  - Manage standard MCP servers (stdio / SSE / HTTP modes).
+  - Enable/disable servers, tools, and prompts with descriptions and grouping.
+  - Unified MCP entry, group entry, and server-specific endpoints.
 
-- **Centralized Management** - Monitor and control all MCP servers from a unified dashboard
-- **Flexible Routing** - Access all servers, specific groups, or individual servers via HTTP/SSE
-- **Granular Group Visibility** - Control Tool, Prompt, and Resource visibility independently for each server inside a group
-- **Smart Routing** - AI-powered tool discovery using vector semantic search ([Learn more](https://docs.mcphub.app/features/smart-routing))
-- **MCP Apps Proxy** - Transparently forward interactive MCP Apps on single-server routes ([Learn more](https://docs.mcphub.app/features/mcp-apps))
-- **Tool Result Compression** - Transparently reduce large text tool outputs before they reach clients
-- **Hot-Swappable Config** - Add, remove, or update servers without downtime
-- **OAuth 2.0 Support** - Both client and server modes for secure authentication ([Learn more](https://docs.mcphub.app/features/oauth))
-- **Social Login** - Seamless GitHub and Google login support with Better Auth integration (requires Database Mode)
-- **Database Mode** - Store configuration in PostgreSQL for production environments ([Learn more](https://docs.mcphub.app/configuration/database-configuration))
-- **Docker-Ready** - Deploy instantly with containerized setup
+- **Console & Authentication**:
+  - Frontend console (React + Vite + Tailwind) to manage Servers, Groups, Users, Logs, Settings, Xiaozhi Endpoints, and Market.
+  - JWT-based authentication with user context middleware and a built-in admin account.
+
+- **OpenAPI & Direct Tool Access**:
+  - Expose OpenAPI documentation and statistics endpoints.
+  - Call specific server tools via OpenAPI-compatible endpoints.
+
+## 🧩 Main Differences from Upstream
+
+- New Xiaozhi endpoint multi-endpoint management and status (backward compatible, focusing on multi-endpoints).
+- New per-endpoint reconnection strategies and global fast-reconnect switch.
+- Enhanced `$smart` intelligent routing (optional) with automatic Xiaozhi linkage.
+- Database uses **PostgreSQL + pgvector**, initializing sample servers and admin by default.
 
 ## 🔧 Quick Start
 
-### Configuration
-
-Create a `mcp_settings.json` file:
-
-```json
-{
-  "mcpServers": {
-    "time": {
-      "command": "npx",
-      "args": ["-y", "time-mcp"]
-    },
-    "fetch": {
-      "command": "uvx",
-      "args": ["mcp-server-fetch"]
-    }
-  }
-}
-```
-
-📖 See [Configuration Guide](https://docs.mcphub.app/configuration/mcp-settings) for full options including OAuth, environment variables, and more.
-
-### Docker Deployment
+### Method 1: Use DockerHub image (recommended)
 
 ```bash
-# Run with custom config (recommended)
-docker run -p 3000:3000 -v ./mcp_settings.json:/app/mcp_settings.json -v ./data:/app/data samanhappy/mcphub
+# Pull the image
+docker pull huangjunsen/xiaozhi-mcphub:latest
 
-# Or run with default settings (also mount ./data so credentials and state survive restarts)
-docker run -p 3000:3000 -v ./data:/app/data samanhappy/mcphub
+# Run (adjust DB URL and password to your environment)
+docker run -d \
+  --name xiaozhi-mcphub \
+  -p 3000:3000 \
+  -e DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub" \
+  -e SMART_ROUTING_ENABLED="false" \
+  -v $(pwd)/data:/app/data \
+  huangjunsen/xiaozhi-mcphub:latest
+
+# Open the dashboard
+# http://localhost:3000
 ```
 
-Two image variants are published under `samanhappy/mcphub`:
+Optional environment variables:
 
-- **`latest`** — the default image. Includes Node.js/pnpm, Python, uv/uvx, Git, and build tools. Covers most MCP servers.
-- **`latest-full`** — the extended image. Adds Rust toolchain (Cargo/rustc), Docker Engine, and Playwright browsers (Chrome + Firefox, amd64 only). Use this for Rust-based servers or container-in-container workflows. Larger download.
+- `BASE_PATH`: Deploy under a sub-path (e.g., `/mcphub`).
+- `JWT_SECRET`: JWT secret (recommended to set explicitly in production).
+- `SMART_ROUTING_ENABLED`: Enable/disable smart routing (default "false").
+- `OPENAI_API_KEY`, `OPENAI_API_BASE_URL`, `OPENAI_API_EMBEDDING_MODEL`: Required when enabling smart routing.
 
-See [Docker Setup](https://docs.mcphub.app/configuration/docker-setup) for build options and Docker-in-Docker configuration.
+Default admin: `admin` / `admin123` (please change after first login).
 
-### Access Dashboard
+### Method 2: Docker Compose one-click
 
-Open `http://localhost:3000` and log in with username `admin`. On first launch, if no `ADMIN_PASSWORD` environment variable is set, a random password is generated and printed to the server logs. You can also pre-set the password:
+This repository ships with `docker-compose.yml` including both `pgvector` and the app:
 
 ```bash
-# Docker: set admin password via environment variable
-docker run -p 3000:3000 -e ADMIN_PASSWORD=your-secure-password samanhappy/mcphub
+docker compose up -d
+
+# View logs (optional)
+docker compose logs -f mcphub
 ```
 
-> **Tip:** Change the admin password after first login for security.
+Key variables (edit in compose if needed):
 
-> **Headless mode:** Set `DISABLE_WEB=true` to skip serving the bundled dashboard UI and run MCPHub with only the backend/API and MCP endpoints. This is useful when you want to manage servers directly from `mcp_settings.json`.
+- `DATABASE_URL`: `postgres://xiaozhi:<password>@db:5432/xiaozhi_mcphub`
+- `SMART_ROUTING_ENABLED`: Enable/disable smart routing (default "false").
+- Optional: `BASE_PATH`, `JWT_SECRET`, `OPENAI_API_KEY`, etc. (see above)
 
-### Connect AI Clients
+### Method 3: Local development
 
-Connect AI clients (Claude Desktop, Cursor, etc.) via:
-
-```
-http://localhost:3000/mcp           # All servers
-http://localhost:3000/mcp/{group}   # Specific group
-http://localhost:3000/mcp/{server}  # Specific server
-http://localhost:3000/mcp/$smart    # Smart routing
-http://localhost:3000/mcp/$smart/{group}  # Smart routing within group
-```
-
-> **Security note**: MCP endpoints require authentication by default to prevent accidental exposure. To allow unauthenticated MCP access, disable **Enable Bearer Authentication** in the Keys section. **Skip Authentication** only affects dashboard login. Use only in trusted environments.
-
-📖 See [API Reference](https://docs.mcphub.app/api-reference) for detailed endpoint documentation.
-
-### Manage From the Terminal
-
-The same `mcphub` binary doubles as a CLI for the running hub — no extra install needed.
+Requirements: Node.js 18+/20+, pnpm, PostgreSQL 16+ (recommended to use the `db` service from the repo's compose).
 
 ```bash
-mcphub login --url http://localhost:3000 --username admin
-mcphub servers list
-mcphub servers add fetch --type stdio --command uvx --arg mcp-server-fetch
-mcphub tools list                              # discover what tools are available
-mcphub tools get fetch_url                     # see required params + sample command
-mcphub call fetch_url url=https://example.com --json
-mcphub keys create --name ci --access-type all
-```
-
-It also speaks the public marketplace API (`mcphub discover`, `mcphub install ...`) so server lookup and one-command install work against any hub with discovery enabled.
-
-📖 See [CLI Guide](https://docs.mcphub.app/features/cli) for every subcommand, profiles, and CI usage.
-
-## 📚 Documentation
-
-| Topic                                                                          | Description                       |
-| ------------------------------------------------------------------------------ | --------------------------------- |
-| [Quick Start](https://docs.mcphub.app/quickstart)                             | Get started in 5 minutes          |
-| [Configuration](https://docs.mcphub.app/configuration/mcp-settings)           | MCP server configuration options  |
-| [Database Mode](https://docs.mcphub.app/configuration/database-configuration) | PostgreSQL setup for production   |
-| [OAuth](https://docs.mcphub.app/features/oauth)                               | OAuth 2.0 client and server setup |
-| [Smart Routing](https://docs.mcphub.app/features/smart-routing)               | AI-powered tool discovery         |
-| [MCP Apps](https://docs.mcphub.app/features/mcp-apps)                         | Interactive Apps transparent proxy |
-| [CLI Guide](https://docs.mcphub.app/features/cli)                             | Manage and call the hub from a terminal |
-| [Docker Setup](https://docs.mcphub.app/configuration/docker-setup)            | Docker deployment guide           |
-
-## 🧑‍💻 Local Development
-
-```bash
-git clone https://github.com/samanhappy/mcphub.git
-cd mcphub
+git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
+cd xiaozhi-mcphub
 pnpm install
+
+# Start local database (optional, reuse compose's db)
+docker compose up -d db
+
+# Set database connection (or write to .env)
+export DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
+
+# Start both backend (:3000) and frontend (Vite :5173)
 pnpm dev
 ```
 
-Local development uses `admin` / `admin123` and stores its writable settings copy at `data/mcp_settings.dev.json`, so the repository `mcp_settings.json` stays credential-free.
+Access the frontend dev server at `http://localhost:5173` (the frontend proxies to backend `:3000`).
 
-> For Windows users, start backend and frontend separately: `pnpm backend:dev`, `pnpm frontend:dev`
+## 🗺️ Smart Routing (optional)
 
-📖 See [Development Guide](https://docs.mcphub.app/development) for detailed setup instructions.
+Set `SMART_ROUTING_ENABLED` to `true` and provide `OPENAI_API_KEY` to enable it. The system uses `pgvector` for vector storage and indexing. If no vectors exist, index building will be skipped and later populated by vector services.
 
-## 🔍 Tech Stack
+## 🖥️ Console Features (Frontend)
 
-- **Backend**: Node.js, Express, TypeScript (ESM)
-- **Frontend**: React, Vite, Tailwind CSS
-- **Storage**: file-based `mcp_settings.json` by default; PostgreSQL via TypeORM with pgvector for Smart Routing
-- **Auth**: JWT + bcrypt for local accounts; bearer keys; built-in OAuth 2.0 server (`@node-oauth/oauth2-server`); optional Better Auth for GitHub/Google login
-- **Protocol**: Model Context Protocol SDK
+- Dashboard: Overview and status
+- Servers: Server and tool management
+- Groups: Grouping and assignment
+- Users: User and permissions (admin)
+- Logs: Real-time and historical logs
+- Settings: System configuration (including smart routing)
+- Xiaozhi Endpoints: Xiaozhi endpoint management
+- Market: Search and install MCP servers from the community
 
-## 👥 Contributing
+## 📦 Defaults & Initialization
 
-Contributions welcome! See our [Discord community](https://discord.gg/2BJehJZVH5) for discussions and support.
+- Default admin: `admin` / `admin123`
+- Default MCP servers: amap / playwright / fetch / slack (can be modified in the console and configured via ENV)
 
-## ❤️ Sponsor
+## 📄 License & Attribution (Apache License 2.0)
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/samanhappy)
+This project is a derivative work of [MCPHub](https://github.com/samanhappy/mcphub) and follows the **Apache License 2.0**:
 
-## 🌟 Star History
+- Keep upstream and project license and notice files, including `LICENSE` and `NOTICE`.
+- If you modify and redistribute the source or binaries, indicate the changes.
+- Include the license and disclaimer in redistribution; do not imply endorsement by original authors.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=samanhappy/mcphub&type=Date)](https://www.star-history.com/#samanhappy/mcphub&Date)
+See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) for details.
 
-## 📄 License
+## 🤝 Contributing
 
-Licensed under the [Apache 2.0 License](LICENSE).
+Contributions are welcome! Please open issues/PRs for improvements.
+
+## 🔗 Links
+
+- Upstream project: <https://github.com/samanhappy/mcphub>
+- Xiaozhi AI Platform: <https://xiaozhi.me>
+- Model Context Protocol: <https://modelcontextprotocol.io>

@@ -4,6 +4,12 @@ FROM python:3.13-slim-trixie AS base
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+# 添加 HTTP_PROXY 和 HTTPS_PROXY 环境变量
+ARG HTTP_PROXY=""
+ARG HTTPS_PROXY=""
+ENV HTTP_PROXY=$HTTP_PROXY
+ENV HTTPS_PROXY=$HTTPS_PROXY
+
 RUN apt-get update && apt-get install -y curl gnupg git build-essential \
   && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get install -y nodejs \
@@ -14,6 +20,12 @@ RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 ENV RUSTUP_HOME=/usr/local/rustup \
   CARGO_HOME=/usr/local/cargo \
   PATH=/usr/local/cargo/bin:$PATH
+
+ARG REQUEST_TIMEOUT=60000
+ENV REQUEST_TIMEOUT=$REQUEST_TIMEOUT
+
+ARG BASE_PATH=""
+ENV BASE_PATH=$BASE_PATH
 
 ARG INSTALL_EXT=false
 RUN if [ "$INSTALL_EXT" = "true" ]; then \

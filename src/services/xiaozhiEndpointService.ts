@@ -3,6 +3,7 @@ import { XiaozhiEndpoint, XiaozhiConfig, XiaozhiEndpointStatus } from '../types/
 import { handleListToolsRequest, handleCallToolRequest } from './mcpService.js';
 import { getSmartRoutingConfig } from '../utils/smartRouting.js';
 import { getXiaozhiConfigRepository, getXiaozhiEndpointRepository } from '../db/repositories/index.js';
+import { isDatabaseConnected } from '../db/connection.js';
 
 interface EndpointConnection {
   ws: WebSocket;
@@ -39,6 +40,15 @@ export class XiaozhiEndpointService {
   }
 
   private async loadConfig(): Promise<void> {
+    // 小智端点配置仅支持数据库存储；未启用数据库时保持禁用而非抛错
+    if (!isDatabaseConnected()) {
+      if (this.config === null) {
+        console.log('未启用数据库（DB_URL 未配置），小智端点功能不可用');
+      }
+      this.config = { enabled: false, endpoints: [] };
+      return;
+    }
+
     const configRepo = getXiaozhiConfigRepository();
     const endpointRepo = getXiaozhiEndpointRepository();
 

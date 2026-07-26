@@ -1,169 +1,142 @@
-# MCPHub：一站式 MCP 服务器聚合平台
+# xiaozhi-mcphub：为小智AI平台优化的 MCP 工具桥接与控制台
 
-[English](README.md) | [Français](README.fr.md) | 中文版
+[English Version](README.md) | 中文版
 
-MCPHub 通过将多个 MCP（Model Context Protocol）服务器组织为灵活的流式 HTTP（SSE）端点，简化了管理与扩展工作。系统支持按需访问全部服务器、单个服务器或按场景分组的服务器集合。
+**xiaozhi-mcphub** 是在 [MCPHub](https://github.com/samanhappy/mcphub) 基础上二次开发的 MCP（Model Context Protocol）桥接与管理平台，重点增强与小智 AI 平台的集成能力，并提供多端点管理、自动重连、向量智能路由、OpenAPI 兼容访问等特性。
 
 ![控制面板预览](assets/dashboard.zh.png)
 
-## 🌐 在线文档与演示
+## 🚀 功能概览
 
-- **文档地址**: [docs.mcphub.app](https://docs.mcphub.app/)
-- **演示环境**: [demo.mcphub.app](https://demo.mcphub.app/)
+- **小智平台集成（增强）**：
+  - **多端点管理**：通过 WebSocket 与多个小智端点双向通信（支持启用/禁用、编辑、重连、状态查询）。
+  - **智能重连**：支持快速重连模式、指数退避、无限重连与休眠窗口，可通过环境变量精细化控制。
+  - **工具同步**：服务器工具变化可通知小智端点，保证工具列表与状态及时更新。
+  - **分组与智能路由**：端点可绑定到指定分组，或启用 `$smart` 智能路由。
 
-## 🚀 功能亮点
+- **MCP 管理（继承并增强）**：
+  - 标准 MCP 服务器统一管理（支持 stdio / SSE / HTTP 访问模式）。
+  - 服务器/工具/提示词开关、描述与分组化管理。
+  - 提供统一 MCP 入口、分组入口和按服务器的专用入口。
 
-- **集中式管理** - 在统一控制台中监控和管理所有 MCP 服务器
-- **灵活路由** - 通过 HTTP/SSE 访问所有服务器、特定分组或单个服务器
-- **细粒度分组可见性** - 在分组中可独立控制每个服务器的 Tool、Prompt 与 Resource 是否对外暴露
-- **智能路由** - 基于向量语义搜索的 AI 工具发现 ([了解更多](https://docs.mcphub.app/zh/features/smart-routing))
-- **工具结果压缩** - 在返回客户端前透明压缩大型文本工具输出
-- **热插拔配置** - 无需停机即可添加、移除或更新服务器
-- **OAuth 2.0 支持** - 客户端和服务端模式，实现安全认证 ([了解更多](https://docs.mcphub.app/zh/features/oauth))
-- **社交一键登录** - 通过 Better Auth 集成支持 GitHub 和 Google 快捷登录（需启用数据库模式）
-- **数据库模式** - 将配置存储在 PostgreSQL 中，适用于生产环境 ([了解更多](https://docs.mcphub.app/zh/configuration/database-configuration))
-- **Docker 就绪** - 容器化部署，开箱即用
+- **控制台与鉴权**：
+  - 前端控制台（React + Vite + Tailwind）一站式管理 Servers、Groups、Users、Logs、Settings、Xiaozhi Endpoints、Market 等。
+  - 基于 JWT 的认证与用户上下文中间件，内置管理员默认账户。
+
+- **OpenAPI 与工具直连**：
+  - 暴露 OpenAPI 文档与统计端点。
+  - 通过 OpenAPI 兼容端点直接调用指定服务器的工具。
+
+## 🧩 与上游项目的主要差异
+
+- 新增小智端点的**多端点管理与状态**能力，兼容老接口但以多端点为主。
+- 新增端点级**重连策略**与全局**快速重连**开关。
+- 增强 `$smart` 智能路由接入（可选），并与小智端点自动联动。
+- 数据库使用 **PostgreSQL + pgvector**，默认会初始化示例服务器与管理员账户。
 
 ## 🔧 快速开始
 
-### 配置
-
-创建 `mcp_settings.json` 文件：
-
-```json
-{
-  "mcpServers": {
-    "time": {
-      "command": "npx",
-      "args": ["-y", "time-mcp"]
-    },
-    "fetch": {
-      "command": "uvx",
-      "args": ["mcp-server-fetch"]
-    }
-  }
-}
-```
-
-📖 查看[配置指南](https://docs.mcphub.app/zh/configuration/mcp-settings)了解完整选项，包括 OAuth、环境变量等。
-
-### Docker 部署
+### 方式一：使用 DockerHub 镜像（推荐）
 
 ```bash
-# 挂载自定义配置运行（推荐）
-docker run -p 3000:3000 -v ./mcp_settings.json:/app/mcp_settings.json -v ./data:/app/data samanhappy/mcphub
+# 获取镜像
+docker pull huangjunsen/xiaozhi-mcphub:latest
 
-# 或使用默认配置运行（仍建议挂载 ./data，避免容器删除后数据丢失）
-docker run -p 3000:3000 -v ./data:/app/data samanhappy/mcphub
+# 运行（请按需修改数据库地址与口令）
+docker run -d \
+  --name xiaozhi-mcphub \
+  -p 3000:3000 \
+  -e DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub" \
+  -e SMART_ROUTING_ENABLED="false" \
+  -v $(pwd)/data:/app/data \
+  huangjunsen/xiaozhi-mcphub:latest
+
+# 访问控制台
+# http://localhost:3000
 ```
 
-`samanhappy/mcphub` 提供两种镜像变体：
+- 可选环境变量：
+  - `BASE_PATH`：二级路径部署（如 `/mcphub`）。
+  - `JWT_SECRET`：JWT 密钥（生产环境建议手动设置）。
+  - `SMART_ROUTING_ENABLED`：是否开启智能路由（默认 "false"）。
+  - `OPENAI_API_KEY`、`OPENAI_API_BASE_URL`、`OPENAI_API_EMBEDDING_MODEL`：开启智能路由时所需。
 
-- **`latest`**（默认镜像）— 包含 Node.js/pnpm、Python、uv/uvx、Git、构建工具，覆盖大多数 MCP server 场景。
-- **`latest-full`**（扩展镜像）— 在 `latest` 基础上增加 Rust 工具链（Cargo/rustc）、Docker Engine，以及 Playwright 浏览器（Chrome + Firefox，仅限 amd64）。适合需要运行 Rust MCP server 或容器嵌套的场景。镜像体积更大。
+默认管理员：`admin` / `admin123`（首次登录后请修改密码）。
 
-构建选项与 Docker-in-Docker 配置详见 [Docker 部署文档](https://docs.mcphub.app/zh/configuration/docker-setup)。
+### 方式二：Docker Compose 一键启动
 
-### 访问控制台
-
-打开 `http://localhost:3000`，使用用户名 `admin` 登录。首次启动时，如果未设置 `ADMIN_PASSWORD` 环境变量，系统将自动生成随机密码并输出到服务器日志中。也可以预先设置密码：
+仓库已提供 `docker-compose.yml`，包含 `pgvector` 与应用服务：
 
 ```bash
-# Docker：通过环境变量设置管理员密码
-docker run -p 3000:3000 -e ADMIN_PASSWORD=your-secure-password samanhappy/mcphub
+docker compose up -d
+
+# 查看日志（可选）
+docker compose logs -f mcphub
 ```
 
-> **提示：** 首次登录后请及时修改管理员密码以确保安全。
+关键变量（可在 compose 中修改）
 
-> **无界面模式：** 设置 `DISABLE_WEB=true` 后，MCPHub 将不再提供内置控制台 UI，只保留后端/API 与 MCP 端点。适合直接通过 `mcp_settings.json` 管理服务的场景。
+- `DATABASE_URL`: `postgres://xiaozhi:密码@db:5432/xiaozhi_mcphub`
+- `SMART_ROUTING_ENABLED`: 开启/关闭智能路由（默认 "false"）
+- 可选：`BASE_PATH`、`JWT_SECRET`、`OPENAI_API_KEY` 等（见上）
 
-### 连接 AI 客户端
+### 方式三：本地开发
 
-通过以下地址连接 AI 客户端（Claude Desktop、Cursor 等）：
-
-```
-http://localhost:3000/mcp           # 所有服务器
-http://localhost:3000/mcp/{group}   # 特定分组
-http://localhost:3000/mcp/{server}  # 特定服务器
-http://localhost:3000/mcp/$smart    # 智能路由
-http://localhost:3000/mcp/$smart/{group}  # 智能路由（特定分组）
-```
-
-> **安全提示**：MCP 端点默认需要身份验证，以避免意外暴露。若需对 MCP 端点开放匿名访问，请在密钥设置中关闭 **启用 Bearer 认证**。**免登录开关**仅影响仪表盘登录。仅建议在受信任环境中使用。
-
-📖 查看 [API 参考](https://docs.mcphub.app/zh/api-reference)了解详细的端点文档。
-
-### 终端管理
-
-`mcphub` 同一个二进制兼任 CLI，无需额外安装。
+依赖：Node.js 18+/20+、pnpm、PostgreSQL 16+（推荐使用 compose 中的 `db` 服务）。
 
 ```bash
-mcphub login --url http://localhost:3000 --username admin
-mcphub servers list
-mcphub servers add fetch --type stdio --command uvx --arg mcp-server-fetch
-mcphub tools list                              # 看有哪些 tool 可调
-mcphub tools get fetch_url                     # 看必填参数和样例命令
-mcphub call fetch_url url=https://example.com --json
-mcphub keys create --name ci --access-type all
-```
-
-CLI 同样对接公共市场接口（`mcphub discover`、`mcphub install ...`），可对任意开启了 discovery 的 hub 做检索与一键安装。
-
-📖 查看 [CLI 指南](https://docs.mcphub.app/zh/features/cli)了解全部子命令、profile 管理与 CI 用法。
-
-## 📚 文档
-
-| 主题                                                                           | 描述                         |
-| ------------------------------------------------------------------------------ | ---------------------------- |
-| [快速开始](https://docs.mcphub.app/zh/quickstart)                             | 5 分钟快速上手               |
-| [配置指南](https://docs.mcphub.app/zh/configuration/mcp-settings)             | MCP 服务器配置选项           |
-| [数据库模式](https://docs.mcphub.app/zh/configuration/database-configuration) | PostgreSQL 生产环境配置      |
-| [OAuth](https://docs.mcphub.app/zh/features/oauth)                            | OAuth 2.0 客户端和服务端配置 |
-| [智能路由](https://docs.mcphub.app/zh/features/smart-routing)                 | AI 驱动的工具发现            |
-| [CLI 指南](https://docs.mcphub.app/zh/features/cli)                           | 终端管理与工具调用           |
-| [Docker 部署](https://docs.mcphub.app/zh/configuration/docker-setup)          | Docker 部署指南              |
-
-## 🧑‍💻 本地开发
-
-```bash
-git clone https://github.com/samanhappy/mcphub.git
-cd mcphub
+git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
+cd xiaozhi-mcphub
 pnpm install
+
+# 启动本地数据库（可选，使用仓库 compose 的 db）
+docker compose up -d db
+
+# 设置数据库连接（或写入 .env）
+export DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
+
+# 同时启动后端（:3000）与前端（Vite :5173）
 pnpm dev
 ```
 
-本地开发默认使用 `admin` / `admin123`，并将可写配置副本保存到 `data/mcp_settings.dev.json`，仓库里的 `mcp_settings.json` 不包含默认凭证。
+访问前端开发站点：`http://localhost:5173`（前端通过代理访问后端 `:3000`）。
 
-> Windows 用户需分别启动后端和前端：`pnpm backend:dev`，`pnpm frontend:dev`
+## 🗺️ 智能路由（可选）
 
-📖 查看[开发指南](https://docs.mcphub.app/zh/development)了解详细设置说明。
+将 `SMART_ROUTING_ENABLED` 设为 `true` 并提供 `OPENAI_API_KEY` 即可启用。系统会使用 `pgvector` 进行向量存储与索引，在无向量数据时自动跳过索引构建，后续由向量服务补足。
 
-## 🔍 技术栈
+## 🖥️ 控制台功能（前端）
 
-- **后端**：Node.js、Express、TypeScript（ESM）
-- **前端**：React、Vite、Tailwind CSS
-- **存储**：默认基于文件的 `mcp_settings.json`；可选 PostgreSQL（TypeORM + pgvector，用于智能路由）
-- **认证**：本地账号使用 JWT + bcrypt；支持 Bearer Key、内置 OAuth 2.0 服务端（`@node-oauth/oauth2-server`），以及可选的 Better Auth（GitHub/Google 一键登录）
-- **协议**：Model Context Protocol SDK
+- Dashboard：概览与状态
+- Servers：服务器与工具管理
+- Groups：分组与分配
+- Users：用户与权限（管理员）
+- Logs：实时与历史日志
+- Settings：系统配置（含智能路由）
+- Xiaozhi Endpoints：小智端点管理
+- Market：从社区市场检索与安装 MCP 服务器
 
-## 👥 贡献指南
+## 📦 默认内容与初始化
 
-欢迎加入企微交流共建群，由于群人数限制，有兴趣的同学可以扫码添加管理员为好友后拉入群聊。
+- 默认管理员：`admin` / `admin123`
+- 默认 MCP 服务器：amap / playwright / fetch / slack（可在控制台修改与配置 ENV）
 
-<img src="assets/wexin.png" width="350">
+## 📄 许可与归属（Apache License 2.0）
 
-如果觉得项目有帮助，不妨请我喝杯咖啡 ☕️
+本项目在 [MCPHub](https://github.com/samanhappy/mcphub) 基础上二次开发，遵循 **Apache License 2.0**：
 
-<img src="assets/reward.png" width="350">
+- 保留上游与本项目的版权与许可声明，包含 `LICENSE` 与 `NOTICE`。
+- 若修改并再分发源代码或二进制，请在告知性文件中注明变更。
+- 需在再分发中附带许可证与免责声明，不得暗示原作者为你的修改背书。
 
-## 致谢
+详情请查阅仓库中的 [`LICENSE`](LICENSE) 与 [`NOTICE`](NOTICE)。
 
-感谢以下朋友的赞赏：小白、唐秀川、琛、孔、黄祥取、兰军飞、无名之辈、Kyle，以及其他匿名支持者。
+## 🤝 贡献
 
-## 🌟 Star 历史趋势
+欢迎提交 Issue / PR 改进功能与文档。提交前请先阅读代码风格与测试约定。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=samanhappy/mcphub&type=Date)](https://www.star-history.com/#samanhappy/mcphub&Date)
+## 🔗 相关链接
 
-## 📄 许可证
-
-本项目采用 [Apache 2.0 许可证](LICENSE)。
+- 上游项目：<https://github.com/samanhappy/mcphub>
+- 小智 AI 平台：<https://xiaozhi.me>
+- Model Context Protocol：<https://modelcontextprotocol.io>

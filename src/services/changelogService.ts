@@ -1,7 +1,8 @@
 import { ChangelogUpdateInfo } from '../types/index.js';
 
 const DEFAULT_CHANGELOG_API_BASE = 'https://www.mcphub.app/api/v1/changelog';
-const DEFAULT_NPM_LATEST_URL = 'https://registry.npmjs.org/@samanhappy/mcphub/latest';
+const DEFAULT_NPM_LATEST_URL =
+  'https://registry.npmjs.org/@huangjunsen0406/xiaozhi-mcphub/latest';
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_CACHE_TTL_SECONDS = 21600;
 

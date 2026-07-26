@@ -850,7 +850,11 @@
     "dynamicRegistrationAllowedGrantTypesPlaceholder": "e.g. authorization_code, refresh_token",
     "dynamicRegistrationAuth": "Require Authentication",
     "dynamicRegistrationAuthDescription": "Protect the registration endpoint so only authenticated requests can register clients",
-    "invalidNumberInput": "Please enter a valid non-negative number"
+    "invalidNumberInput": "Please enter a valid non-negative number",
+    "modelscopeConfig": "ModelScope Configuration",
+    "modelscopeApiKey": "ModelScope API Key",
+    "modelscopeApiKeyDescription": "Automatically attached as a Bearer token to MCP servers hosted on mcp.api-inference.modelscope.net. A manually configured Authorization header takes precedence.",
+    "modelscopeApiKeyPlaceholder": "Get your API key at modelscope.cn"
   },
   "mcpb": {
     "upload": "Upload",

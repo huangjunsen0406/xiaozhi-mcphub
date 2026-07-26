@@ -188,6 +188,7 @@ import {
   getXiaozhiEndpointStatus,
   getAllXiaozhiEndpointStatus,
 } from '../controllers/xiaozhiController.js';
+import { requireDatabase } from '../middlewares/requireDatabase.js';
 
 const router = express.Router();
 const authenticatedRouter = express.Router();
@@ -350,6 +351,9 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
     exportGroupAsTemplate,
   );
   authenticatedRouter.post('/templates/import', templateRateLimiter, auth, importConfigTemplate);
+
+  // Xiaozhi routes are database-backed and unavailable in JSON-file mode
+  authenticatedRouter.use('/xiaozhi', requireDatabase);
 
   // Xiaozhi client management routes
   authenticatedRouter.get('/xiaozhi/status', getXiaozhiStatus);

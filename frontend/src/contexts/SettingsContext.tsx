@@ -102,6 +102,10 @@ interface BetterAuthConfig {
   };
 }
 
+interface ModelscopeConfig {
+  apiKey: string;
+}
+
 interface SystemSettings {
   systemConfig?: {
     routing?: RoutingConfig;
@@ -109,6 +113,7 @@ interface SystemSettings {
     smartRouting?: SmartRoutingConfig;
     toolResultCompression?: ToolResultCompressionConfig;
     mcpRouter?: MCPRouterConfig;
+    modelscope?: ModelscopeConfig;
     nameSeparator?: string;
     oauthServer?: OAuthServerConfig;
     auth?: {
@@ -136,6 +141,7 @@ interface SettingsContextValue {
   smartRoutingConfig: SmartRoutingConfig;
   toolResultCompressionConfig: ToolResultCompressionConfig;
   mcpRouterConfig: MCPRouterConfig;
+  modelscopeConfig: ModelscopeConfig;
   oauthServerConfig: OAuthServerConfig;
   betterAuthConfig: BetterAuthConfig;
   nameSeparator: string;
@@ -156,6 +162,7 @@ interface SettingsContextValue {
   updateSmartRoutingConfigBatch: (
     updates: Partial<SmartRoutingConfig>,
   ) => Promise<boolean | undefined>;
+  updateModelscopeConfig: (apiKey: string) => Promise<boolean | undefined>;
   updateToolResultCompressionConfig: (
     key: keyof ToolResultCompressionConfig,
     value: any,
@@ -374,6 +381,10 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     baseUrl: 'https://api.mcprouter.to/v1',
   });
 
+  const [modelscopeConfig, setModelscopeConfig] = useState<ModelscopeConfig>({
+    apiKey: '',
+  });
+
   const [oauthServerConfig, setOAuthServerConfig] = useState<OAuthServerConfig>(
     getDefaultOAuthServerConfig(),
   );
@@ -471,6 +482,9 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
           title: data.data.systemConfig.mcpRouter.title || 'MCPHub',
           baseUrl: data.data.systemConfig.mcpRouter.baseUrl || 'https://api.mcprouter.to/v1',
         });
+      }
+      if (data.success && data.data?.systemConfig?.modelscope) {
+        setModelscopeConfig({ apiKey: data.data.systemConfig.modelscope.apiKey || '' });
       }
       if (data.success) {
         if (data.data?.systemConfig?.oauthServer) {
@@ -785,6 +799,35 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
   };
 
   // Update MCP Router configuration
+  // Update ModelScope configuration
+  const updateModelscopeConfig = async (apiKey: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await apiPut('/system-config', {
+        modelscope: { apiKey },
+      });
+
+      if (data.success) {
+        setModelscopeConfig({ apiKey });
+        showToast(t('settings.systemConfigUpdated'));
+        return true;
+      } else {
+        setError(data.error || 'Failed to update ModelScope config');
+        showToast(data.error || t('errors.failedToUpdateSystemConfig'));
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to update ModelScope config', error);
+      setError(error instanceof Error ? error.message : 'Failed to update ModelScope config');
+      showToast(t('errors.failedToUpdateSystemConfig'));
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updateMCPRouterConfig = async (key: keyof MCPRouterConfig, value: any) => {
     setLoading(true);
     setError(null);
@@ -1151,6 +1194,7 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     smartRoutingConfig,
     toolResultCompressionConfig,
     mcpRouterConfig,
+    modelscopeConfig,
     oauthServerConfig,
     betterAuthConfig,
     nameSeparator,
@@ -1169,6 +1213,7 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     updateToolResultCompressionConfig,
     updateToolResultCompressionConfigBatch,
     updateRoutingConfigBatch,
+    updateModelscopeConfig,
     updateMCPRouterConfig,
     updateMCPRouterConfigBatch,
     updateOAuthServerConfig,

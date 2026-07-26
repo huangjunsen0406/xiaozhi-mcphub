@@ -468,6 +468,8 @@ const SettingsPage: React.FC = () => {
     baseUrl: 'https://api.mcprouter.to/v1',
   });
 
+  const [tempModelscopeApiKey, setTempModelscopeApiKey] = useState<string>('');
+
   const [tempOAuthServerConfig, setTempOAuthServerConfig] = useState<{
     accessTokenLifetime: string;
     refreshTokenLifetime: string;
@@ -514,6 +516,7 @@ const SettingsPage: React.FC = () => {
     smartRoutingConfig,
     toolResultCompressionConfig,
     mcpRouterConfig,
+    modelscopeConfig,
     oauthServerConfig,
     betterAuthConfig,
     nameSeparator,
@@ -528,6 +531,7 @@ const SettingsPage: React.FC = () => {
     updateToolResultCompressionConfig,
     updateToolResultCompressionConfigBatch,
     updateMCPRouterConfig,
+    updateModelscopeConfig,
     updateOAuthServerConfig,
     updateBetterAuthConfigBatch,
     updateNameSeparator,
@@ -601,6 +605,13 @@ const SettingsPage: React.FC = () => {
       });
     }
   }, [mcpRouterConfig]);
+
+  // Update local tempModelscopeApiKey when modelscopeConfig changes
+  useEffect(() => {
+    if (modelscopeConfig) {
+      setTempModelscopeApiKey(modelscopeConfig.apiKey || '');
+    }
+  }, [modelscopeConfig]);
 
   useEffect(() => {
     if (oauthServerConfig) {
@@ -685,6 +696,7 @@ const SettingsPage: React.FC = () => {
     oauthServerConfig: false,
     betterAuthConfig: false,
     mcpRouterConfig: false,
+    modelscopeConfig: false,
     nameSeparator: false,
     password: false,
     exportConfig: false,
@@ -700,6 +712,7 @@ const SettingsPage: React.FC = () => {
       | 'oauthServerConfig'
       | 'betterAuthConfig'
       | 'mcpRouterConfig'
+      | 'modelscopeConfig'
       | 'nameSeparator'
       | 'password'
       | 'exportConfig'
@@ -821,6 +834,10 @@ const SettingsPage: React.FC = () => {
 
   const saveMCPRouterConfig = async (key: 'apiKey' | 'referer' | 'title' | 'baseUrl') => {
     await updateMCPRouterConfig(key, tempMCPRouterConfig[key]);
+  };
+
+  const saveModelscopeConfig = async () => {
+    await updateModelscopeConfig(tempModelscopeApiKey);
   };
 
   type OAuthServerNumberField =
@@ -2957,6 +2974,56 @@ const SettingsPage: React.FC = () => {
                   />
                   <button
                     onClick={() => saveMCPRouterConfig('baseUrl')}
+                    disabled={loading}
+                    className="hub-btn primary"
+                  >
+                    {t('common.save')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </PermissionChecker>
+
+      {/* ModelScope Configuration Settings */}
+      <PermissionChecker permissions={PERMISSIONS.SETTINGS_INSTALL_CONFIG}>
+        <div className="hub-card mb-6 overflow-hidden">
+          <div
+            className="flex justify-between items-center cursor-pointer transition-colors hover:bg-[var(--hub-surface-hover)] py-3 px-5"
+            onClick={() => toggleSection('modelscopeConfig')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Cloud size={15} className="text-[var(--hub-ink-2)]" />
+              <h2 className="font-medium text-[var(--hub-ink)]">
+                {t('settings.modelscopeConfig')}
+              </h2>
+            </div>
+            <span className="text-[var(--hub-ink-3)]">
+              {sectionsVisible.modelscopeConfig ? '−' : '+'}
+            </span>
+          </div>
+
+          {sectionsVisible.modelscopeConfig && (
+            <div className="space-y-4 pb-4 px-6 pt-4 border-t border-[var(--hub-line-2)]">
+              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                <div className="mb-2">
+                  <h3 className="font-medium text-gray-700">{t('settings.modelscopeApiKey')}</h3>
+                  <p className="text-sm text-gray-500">
+                    {t('settings.modelscopeApiKeyDescription')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="password"
+                    value={tempModelscopeApiKey}
+                    onChange={(e) => setTempModelscopeApiKey(e.target.value)}
+                    placeholder={t('settings.modelscopeApiKeyPlaceholder')}
+                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading}
+                  />
+                  <button
+                    onClick={saveModelscopeConfig}
                     disabled={loading}
                     className="hub-btn primary"
                   >

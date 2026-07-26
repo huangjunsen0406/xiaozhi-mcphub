@@ -1,0 +1,13 @@
+xiaozhi-mcphub
+Copyright 2025 huangjunsen0406
+
+This product is based on MCPHub (https://github.com/samanhappy/mcphub),
+originally developed by samanhappy and contributors.
+
+Modifications made in this version:
+- Added Xiaozhi AI platform integration
+- Enhanced tool synchronization mechanism
+- Improved reconnection logic for AI clients
+- Extended API endpoints for AI platform management
+
+Original MCPHub is licensed under the Apache License 2.0. 

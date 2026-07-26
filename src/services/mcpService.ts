@@ -1272,6 +1272,37 @@ export const createRequestContextAwareFetch = (
   };
 };
 
+const MODELSCOPE_MCP_HOST = 'mcp.api-inference.modelscope.net';
+
+/**
+ * Returns the configured ModelScope API key when the target URL points at ModelScope's
+ * MCP inference host, so the Bearer token can be attached automatically.
+ */
+const getModelScopeToken = async (url: string | undefined): Promise<string | undefined> => {
+  if (!url || !url.includes(MODELSCOPE_MCP_HOST)) {
+    return undefined;
+  }
+  try {
+    const systemConfig = await getSystemConfigDao().get();
+    return systemConfig?.modelscope?.apiKey || undefined;
+  } catch {
+    // A missing or unreadable system config must not block transport creation
+    return undefined;
+  }
+};
+
+/** Adds an Authorization header unless the server config already provides one. */
+const withModelScopeAuth = (
+  existing: Record<string, any> | undefined,
+  token: string,
+): Record<string, any> => {
+  const headers = { ...(existing || {}) };
+  if (!headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
 // Helper function to create transport based on server configuration
 export const createTransportFromConfig = async (name: string, conf: ServerConfig): Promise<any> => {
   let transport;
@@ -1318,6 +1349,15 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
 
     options.fetch = requestAwareFetch;
 
+    // 自动为 ModelScope 域名附加 Bearer token
+    const modelScopeToken = await getModelScopeToken(conf.url);
+    if (modelScopeToken) {
+      options.requestInit = {
+        ...(options.requestInit || {}),
+        headers: withModelScopeAuth(options.requestInit?.headers as any, modelScopeToken),
+      };
+    }
+
     transport = new StreamableHTTPClientTransport(new URL(conf.url || ''), options);
   } else if (conf.url) {
     // SSE transport
@@ -1351,6 +1391,19 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
     }
 
     options.fetch = requestAwareFetch;
+
+    // 自动为 ModelScope 域名附加 Bearer token（不覆盖手动配置的 Authorization）
+    const modelScopeToken = await getModelScopeToken(conf.url);
+    if (modelScopeToken) {
+      options.eventSourceInit = {
+        ...(options.eventSourceInit || {}),
+        headers: withModelScopeAuth(options.eventSourceInit?.headers, modelScopeToken),
+      };
+      options.requestInit = {
+        ...(options.requestInit || {}),
+        headers: withModelScopeAuth(options.requestInit?.headers, modelScopeToken),
+      };
+    }
 
     transport = new SSEClientTransport(new URL(conf.url), options);
   } else if (conf.command && conf.args) {

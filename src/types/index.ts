@@ -290,6 +290,9 @@ export interface SystemConfig {
     title?: string; // Title header for MCPRouter API requests
     baseUrl?: string; // Base URL for MCPRouter API (default: https://api.mcprouter.to/v1)
   };
+  modelscope?: {
+    apiKey?: string; // Bearer token auto-attached to ModelScope MCP server requests
+  };
   nameSeparator?: string; // Separator used between server name and tool/prompt name (default: '-')
   oauth?: OAuthProviderConfig; // OAuth provider configuration for upstream MCP servers
   oauthServer?: OAuthServerConfig; // OAuth authorization server configuration for MCPHub itself

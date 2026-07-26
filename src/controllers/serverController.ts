@@ -1397,6 +1397,7 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       smartRouting,
       toolResultCompression,
       mcpRouter,
+      modelscope,
       nameSeparator,
       enableSessionRebuild,
       oauthServer,
@@ -1453,6 +1454,8 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
         typeof mcpRouter.title === 'string' ||
         typeof mcpRouter.baseUrl === 'string');
 
+    const hasModelscopeUpdate = modelscope && typeof modelscope.apiKey === 'string';
+
     const hasNameSeparatorUpdate = typeof nameSeparator === 'string';
 
     const hasSessionRebuildUpdate = typeof enableSessionRebuild === 'boolean';
@@ -1497,6 +1500,7 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       !hasSmartRoutingUpdate &&
       !hasToolResultCompressionUpdate &&
       !hasMcpRouterUpdate &&
+      !hasModelscopeUpdate &&
       !hasNameSeparatorUpdate &&
       !hasSessionRebuildUpdate &&
       !hasOAuthServerUpdate &&
@@ -1863,6 +1867,13 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       if (typeof mcpRouter.baseUrl === 'string') {
         systemConfig.mcpRouter.baseUrl = mcpRouter.baseUrl;
       }
+    }
+
+    if (modelscope && typeof modelscope.apiKey === 'string') {
+      systemConfig.modelscope = {
+        ...(systemConfig.modelscope || {}),
+        apiKey: modelscope.apiKey,
+      };
     }
 
     if (toolResultCompression) {

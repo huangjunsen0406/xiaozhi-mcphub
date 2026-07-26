@@ -853,7 +853,11 @@
     "dynamicRegistrationAllowedGrantTypesPlaceholder": "例如：authorization_code, refresh_token",
     "dynamicRegistrationAuth": "注册需要认证",
     "dynamicRegistrationAuthDescription": "开启后，注册端点需要认证请求才能创建客户端",
-    "invalidNumberInput": "请输入合法的非负数字"
+    "invalidNumberInput": "请输入合法的非负数字",
+    "modelscopeConfig": "ModelScope 配置",
+    "modelscopeApiKey": "ModelScope API Key",
+    "modelscopeApiKeyDescription": "将作为 Bearer token 自动附加到 mcp.api-inference.modelscope.net 的 MCP 服务请求中；若已手动配置 Authorization 请求头，则以手动配置为准。",
+    "modelscopeApiKeyPlaceholder": "在 modelscope.cn 获取并填写"
   },
   "mcpb": {
     "upload": "上传",

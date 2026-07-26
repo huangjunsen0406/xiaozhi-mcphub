@@ -24,6 +24,9 @@ export class SystemConfig {
   @Column({ type: 'simple-json', nullable: true })
   mcpRouter?: Record<string, any>;
 
+  @Column({ type: 'simple-json', nullable: true })
+  modelscope?: Record<string, any>;
+
   @Column({ type: 'varchar', length: 10, nullable: true })
   nameSeparator?: string;
 

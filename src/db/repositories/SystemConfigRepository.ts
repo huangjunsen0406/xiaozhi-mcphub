@@ -42,6 +42,7 @@ export class SystemConfigRepository {
         smartRouting: {},
         toolResultCompression: {},
         mcpRouter: {},
+        modelscope: {},
         nameSeparator: '-',
         oauth: {},
         oauthServer: cloneDefaultOAuthServerConfig(),
