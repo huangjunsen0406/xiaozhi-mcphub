@@ -225,6 +225,48 @@ export interface ToolResultCompressionConfig {
   strategy?: ToolResultCompressionStrategy;
 }
 
+// 小智端点配置
+export interface XiaozhiEndpoint {
+  id: string;
+  name: string;
+  enabled: boolean;
+  webSocketUrl: string; // 完整的 WebSocket URL (包含token)
+  description?: string;
+  groupId?: string; // null表示使用全部工具
+  useSmartRouting?: boolean; // 端点是否使用智能路由
+  reconnect: {
+    maxAttempts: number;
+    infiniteReconnect?: boolean; // 是否启用无限重连
+    infiniteRetryDelay?: number; // 无限重连模式的固定延迟(毫秒，默认30分钟)
+    initialDelay: number;
+    maxDelay: number;
+    backoffMultiplier: number;
+  };
+  createdAt: string;
+  lastConnected?: string;
+  status?: 'connected' | 'disconnected' | 'connecting';
+}
+
+// 小智端点状态信息
+export interface XiaozhiEndpointStatus {
+  endpoint: XiaozhiEndpoint;
+  connected: boolean;
+  connectionCount: number;
+  tools?: Tool[];
+  lastConnected?: string;
+  error?: string;
+}
+
+// 小智多端点配置
+export interface XiaozhiConfig {
+  enabled: boolean;
+  endpoints: XiaozhiEndpoint[];
+  loadBalancing?: {
+    enabled: boolean;
+    strategy: 'round-robin' | 'random' | 'least-connections';
+  };
+}
+
 export interface SystemConfig {
   routing?: {
     enableGlobalRoute?: boolean; // Controls whether the /sse endpoint without group is enabled

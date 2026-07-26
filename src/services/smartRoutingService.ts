@@ -389,6 +389,7 @@ export const handleSearchToolsRequest = async (
   query: string,
   limit: number,
   sessionId: string,
+  groupOverride?: string,
 ): Promise<any> => {
   if (!query || typeof query !== 'string') {
     throw new Error('Query parameter is required and must be a string');
@@ -411,8 +412,10 @@ export const handleSearchToolsRequest = async (
 
   console.log(`Using similarity threshold: ${thresholdNum} for query: "${query}"`);
 
-  // Determine server filtering based on group
-  let group = getGroup(sessionId);
+  // Determine server filtering based on group. groupOverride is supplied by callers
+  // without a registered transport (e.g. Xiaozhi WebSocket endpoints), where the
+  // session-based lookup cannot resolve the group.
+  let group = groupOverride || getGroup(sessionId);
   let servers: string[] | undefined = undefined; // No server filtering by default
   let serverConfigsByName = new Map<string, IGroupServerConfig>();
 
@@ -579,6 +582,7 @@ export const handleSearchToolsRequest = async (
 export const handleDescribeToolRequest = async (
   toolName: string,
   sessionId: string,
+  groupOverride?: string,
 ): Promise<any> => {
   if (!toolName || typeof toolName !== 'string') {
     throw new Error('toolName parameter is required and must be a string');
@@ -586,8 +590,8 @@ export const handleDescribeToolRequest = async (
 
   console.log(`Handling describe_tool request for: ${toolName}`);
 
-  // Determine group filtering
-  let group = getGroup(sessionId);
+  // Determine group filtering. See handleSearchToolsRequest for why groupOverride exists.
+  let group = groupOverride || getGroup(sessionId);
   const targetGroup = getSmartTargetGroup(group);
   const serverConfigsByName = await getGroupServerConfigMap(targetGroup);
   if (targetGroup) {

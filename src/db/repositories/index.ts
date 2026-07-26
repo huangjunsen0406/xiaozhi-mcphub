@@ -10,6 +10,11 @@ import { BearerKeyRepository } from './BearerKeyRepository.js';
 import { ActivityRepository } from './ActivityRepository.js';
 import { BuiltinPromptRepository } from './BuiltinPromptRepository.js';
 import { BuiltinResourceRepository } from './BuiltinResourceRepository.js';
+import {
+  XiaozhiEndpointRepository,
+  getXiaozhiEndpointRepository,
+} from './XiaozhiEndpointRepository.js';
+import { XiaozhiConfigRepository, getXiaozhiConfigRepository } from './XiaozhiConfigRepository.js';
 
 // Export all repositories
 export {
@@ -25,4 +30,8 @@ export {
   ActivityRepository,
   BuiltinPromptRepository,
   BuiltinResourceRepository,
+  XiaozhiEndpointRepository,
+  XiaozhiConfigRepository,
+  getXiaozhiEndpointRepository,
+  getXiaozhiConfigRepository,
 };

@@ -302,6 +302,58 @@ export const initUpstreamServers = async (): Promise<void> => {
 
   // Initialize smart routing service with references to mcpService functions
   initSmartRoutingService(() => serverInfos, filterToolsByConfig, filterToolsByGroup);
+
+  // 等待所有 MCP 服务器完全初始化后再启动小智客户端
+  const maxWaitTime = 30000; // 最多等待30秒
+  const checkInterval = 1000; // 每1秒检查一次
+  let waited = 0;
+
+  console.log('等待所有 MCP 服务器完全初始化...');
+  while (waited < maxWaitTime) {
+    const allConnected = serverInfos.every(
+      (server) => server.status === 'connected' || server.status === 'disconnected',
+    );
+
+    if (allConnected) {
+      const connectedServers = serverInfos.filter((server) => server.status === 'connected');
+      const totalTools = connectedServers.reduce(
+        (sum, server) => sum + (server.tools?.length || 0),
+        0,
+      );
+      console.log(
+        `所有 MCP 服务器初始化完成！连接的服务器: ${connectedServers.length}, 总工具数: ${totalTools}`,
+      );
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, checkInterval));
+    waited += checkInterval;
+  }
+
+  if (waited >= maxWaitTime) {
+    console.warn('等待 MCP 服务器初始化超时，继续启动小智客户端');
+  }
+
+  // 初始化小智客户端服务
+  try {
+    const { xiaozhiClientService } = await import('./xiaozhiClientService.js');
+    if (xiaozhiClientService.isEnabled()) {
+      await xiaozhiClientService.initialize();
+      console.log('小智客户端服务已启动');
+
+      // 在所有服务器稳定后，立即通知小智工具列表可用
+      try {
+        await xiaozhiClientService.notifyToolsChanged();
+        console.log('已通知小智初始工具列表');
+      } catch (error) {
+        console.error('通知小智初始工具列表失败:', error);
+      }
+    } else {
+      console.log('小智客户端服务未启用');
+    }
+  } catch (error) {
+    console.error('小智客户端服务启动失败:', error);
+  }
 };
 
 type McpServerDescriptor = {
@@ -519,6 +571,35 @@ export const notifyToolChanged = async (
 ) => {
   await registerAllTools(false, name, options);
   broadcastToolListChanged();
+
+  // 在所有服务器状态稳定后，重连小智客户端以同步最新工具列表
+  try {
+    const { xiaozhiClientService } = await import('./xiaozhiClientService.js');
+    if (xiaozhiClientService.isEnabled()) {
+      console.log('MCP服务器状态已稳定，重连小智客户端以同步最新工具列表...');
+
+      // 先断开连接
+      await xiaozhiClientService.disconnect();
+
+      // 等待一小段时间确保断开完成
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // 重新初始化连接
+      await xiaozhiClientService.initialize();
+
+      // 连接成功后通知工具列表已更新
+      setTimeout(async () => {
+        try {
+          await xiaozhiClientService.notifyToolsChanged();
+          console.log('小智客户端已重连并同步最新工具列表');
+        } catch (error) {
+          console.error('重连后通知小智工具列表失败:', error);
+        }
+      }, 1000);
+    }
+  } catch (error) {
+    console.error('重连小智客户端失败:', error);
+  }
 };
 
 const broadcastListChanged = (
@@ -2592,7 +2673,9 @@ const projectToolForDownstream = (
 
 export const handleListToolsRequest = async (_: any, extra: any) => {
   const sessionId = extra.sessionId || '';
-  const group = getGroup(sessionId);
+  // Use extra.group if provided (for Xiaozhi endpoints, which have no SSE transport
+  // registered and therefore cannot be resolved via session lookup)
+  const group = extra.group || getGroup(sessionId);
   console.log(`Handling ListToolsRequest for group: ${group}`);
 
   // Special handling for $smart group to return smart routing tools
@@ -2696,13 +2779,13 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
     // Special handling for smart routing tools
     if (request.params.name === 'search_tools') {
       const { query, limit = 10 } = request.params.arguments || {};
-      return await handleSearchToolsRequest(query, limit, sessionId);
+      return await handleSearchToolsRequest(query, limit, sessionId, group);
     }
 
     // Special handling for describe_tool (progressive disclosure mode)
     if (request.params.name === 'describe_tool') {
       const { toolName } = request.params.arguments || {};
-      return await handleDescribeToolRequest(toolName, sessionId);
+      return await handleDescribeToolRequest(toolName, sessionId, group);
     }
 
     // Special handling for call_tool

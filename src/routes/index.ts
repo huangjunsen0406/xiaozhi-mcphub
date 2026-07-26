@@ -171,6 +171,23 @@ import {
   templateRateLimiter,
   mcpConnectionRateLimiter,
 } from '../utils/rateLimit.js';
+import {
+  getXiaozhiStatus,
+  getXiaozhiConfig,
+  updateXiaozhiConfig,
+  restartXiaozhiClient,
+  stopXiaozhiClient,
+  startXiaozhiClient,
+  // 多端点管理API
+  getXiaozhiEndpoints,
+  getXiaozhiEndpoint,
+  createXiaozhiEndpoint,
+  updateXiaozhiEndpoint,
+  deleteXiaozhiEndpoint,
+  reconnectXiaozhiEndpoint,
+  getXiaozhiEndpointStatus,
+  getAllXiaozhiEndpointStatus,
+} from '../controllers/xiaozhiController.js';
 
 const router = express.Router();
 const authenticatedRouter = express.Router();
@@ -333,6 +350,24 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
     exportGroupAsTemplate,
   );
   authenticatedRouter.post('/templates/import', templateRateLimiter, auth, importConfigTemplate);
+
+  // Xiaozhi client management routes
+  authenticatedRouter.get('/xiaozhi/status', getXiaozhiStatus);
+  authenticatedRouter.get('/xiaozhi/config', getXiaozhiConfig);
+  authenticatedRouter.put('/xiaozhi/config', updateXiaozhiConfig);
+  authenticatedRouter.post('/xiaozhi/restart', restartXiaozhiClient);
+  authenticatedRouter.post('/xiaozhi/stop', stopXiaozhiClient);
+  authenticatedRouter.post('/xiaozhi/start', startXiaozhiClient);
+
+  // Xiaozhi endpoints management routes
+  authenticatedRouter.get('/xiaozhi/endpoints', getXiaozhiEndpoints);
+  authenticatedRouter.get('/xiaozhi/endpoints/:id', getXiaozhiEndpoint);
+  authenticatedRouter.post('/xiaozhi/endpoints', createXiaozhiEndpoint);
+  authenticatedRouter.put('/xiaozhi/endpoints/:id', updateXiaozhiEndpoint);
+  authenticatedRouter.delete('/xiaozhi/endpoints/:id', deleteXiaozhiEndpoint);
+  authenticatedRouter.post('/xiaozhi/endpoints/:id/reconnect', reconnectXiaozhiEndpoint);
+  authenticatedRouter.get('/xiaozhi/endpoints/:id/status', getXiaozhiEndpointStatus);
+  authenticatedRouter.get('/xiaozhi/endpoints/status/all', getAllXiaozhiEndpointStatus);
 
   // Tool management routes
   authenticatedRouter.post('/tools/call/:server', callTool);
