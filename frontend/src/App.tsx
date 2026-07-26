@@ -11,6 +11,10 @@ import EmbeddingSyncAlertListener from './components/EmbeddingSyncAlertListener'
 import { getBasePath } from './utils/runtime';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const DashboardPage = lazy(() => import('./pages/Dashboard'));
 const ServersPage = lazy(() => import('./pages/ServersPage'));
 const GroupsPage = lazy(() => import('./pages/GroupsPage'));
@@ -52,6 +56,38 @@ function App() {
                     element={
                       <Suspense fallback={<RouteFallback />}>
                         <LoginPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/register"
+                    element={
+                      <Suspense fallback={<RouteFallback />}>
+                        <RegisterPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/forgot-password"
+                    element={
+                      <Suspense fallback={<RouteFallback />}>
+                        <ForgotPasswordPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/reset-password"
+                    element={
+                      <Suspense fallback={<RouteFallback />}>
+                        <ResetPasswordPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/verify-email"
+                    element={
+                      <Suspense fallback={<RouteFallback />}>
+                        <VerifyEmailPage />
                       </Suspense>
                     }
                   />

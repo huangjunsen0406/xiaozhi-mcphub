@@ -8,7 +8,7 @@ import { useSettingsData } from '@/hooks/useSettingsData';
 import { useToast } from '@/contexts/ToastContext';
 import { PermissionChecker } from '@/components/PermissionChecker';
 import { PERMISSIONS } from '@/constants/permissions';
-import { Copy, Check, Download, Edit, Trash2, Code as CodeIcon, Zap, Database, Wrench, Sparkles, RefreshCw, Route as RouteIcon, Key, Lock, Cloud, SlidersHorizontal, ShieldCheck, Package, KeyRound, FileDown, X, FileText } from 'lucide-react';
+import { Copy, Check, Download, Edit, Trash2, Code as CodeIcon, Zap, Database, Wrench, Sparkles, RefreshCw, Route as RouteIcon, Key, Lock, Cloud, SlidersHorizontal, ShieldCheck, Package, KeyRound, FileDown, X, FileText, Mail } from 'lucide-react';
 import { EndpointCopy } from '@/components/ui/EndpointCopy';
 import type { BearerKey, User } from '@/types';
 import { useServerContext } from '@/contexts/ServerContext';
@@ -470,6 +470,20 @@ const SettingsPage: React.FC = () => {
 
   const [tempModelscopeApiKey, setTempModelscopeApiKey] = useState<string>('');
 
+  const [tempEmailConfig, setTempEmailConfig] = useState({
+    enabled: false,
+    host: '',
+    port: '465',
+    secure: true,
+    user: '',
+    password: '',
+    fromName: '',
+    fromEmail: '',
+    baseUrl: '',
+  });
+  const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [testEmailSending, setTestEmailSending] = useState(false);
+
   const [tempOAuthServerConfig, setTempOAuthServerConfig] = useState<{
     accessTokenLifetime: string;
     refreshTokenLifetime: string;
@@ -517,6 +531,7 @@ const SettingsPage: React.FC = () => {
     toolResultCompressionConfig,
     mcpRouterConfig,
     modelscopeConfig,
+    emailConfig,
     oauthServerConfig,
     betterAuthConfig,
     nameSeparator,
@@ -532,6 +547,7 @@ const SettingsPage: React.FC = () => {
     updateToolResultCompressionConfigBatch,
     updateMCPRouterConfig,
     updateModelscopeConfig,
+    updateEmailConfigBatch,
     updateOAuthServerConfig,
     updateBetterAuthConfigBatch,
     updateNameSeparator,
@@ -612,6 +628,23 @@ const SettingsPage: React.FC = () => {
       setTempModelscopeApiKey(modelscopeConfig.apiKey || '');
     }
   }, [modelscopeConfig]);
+
+  // Update local tempEmailConfig when emailConfig changes
+  useEffect(() => {
+    if (emailConfig) {
+      setTempEmailConfig({
+        enabled: emailConfig.enabled,
+        host: emailConfig.host,
+        port: String(emailConfig.port || 465),
+        secure: emailConfig.secure,
+        user: emailConfig.user,
+        password: emailConfig.password,
+        fromName: emailConfig.fromName,
+        fromEmail: emailConfig.fromEmail,
+        baseUrl: emailConfig.baseUrl,
+      });
+    }
+  }, [emailConfig]);
 
   useEffect(() => {
     if (oauthServerConfig) {
@@ -697,6 +730,7 @@ const SettingsPage: React.FC = () => {
     betterAuthConfig: false,
     mcpRouterConfig: false,
     modelscopeConfig: false,
+    emailConfig: false,
     nameSeparator: false,
     password: false,
     exportConfig: false,
@@ -713,6 +747,7 @@ const SettingsPage: React.FC = () => {
       | 'betterAuthConfig'
       | 'mcpRouterConfig'
       | 'modelscopeConfig'
+      | 'emailConfig'
       | 'nameSeparator'
       | 'password'
       | 'exportConfig'
@@ -838,6 +873,38 @@ const SettingsPage: React.FC = () => {
 
   const saveModelscopeConfig = async () => {
     await updateModelscopeConfig(tempModelscopeApiKey);
+  };
+
+  const saveEmailConfig = async () => {
+    const port = parseInt(tempEmailConfig.port, 10);
+    await updateEmailConfigBatch({
+      enabled: tempEmailConfig.enabled,
+      host: tempEmailConfig.host,
+      port: Number.isFinite(port) ? port : 465,
+      secure: tempEmailConfig.secure,
+      user: tempEmailConfig.user,
+      password: tempEmailConfig.password,
+      fromName: tempEmailConfig.fromName,
+      fromEmail: tempEmailConfig.fromEmail,
+      baseUrl: tempEmailConfig.baseUrl,
+    });
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailAddress.trim()) return;
+    setTestEmailSending(true);
+    try {
+      const resp = await apiPost('/email/test', { email: testEmailAddress.trim() });
+      if (resp.success) {
+        showToast(t('settings.testEmailSent'));
+      } else {
+        showToast(resp.message || t('settings.testEmailFailed'));
+      }
+    } catch {
+      showToast(t('settings.testEmailFailed'));
+    } finally {
+      setTestEmailSending(false);
+    }
   };
 
   type OAuthServerNumberField =
@@ -3030,6 +3097,195 @@ const SettingsPage: React.FC = () => {
                     {t('common.save')}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </PermissionChecker>
+
+
+      {/* Email (SMTP) Configuration Settings */}
+      <PermissionChecker permissions={PERMISSIONS.SETTINGS_SYSTEM_CONFIG}>
+        <div className="hub-card mb-6 overflow-hidden">
+          <div
+            className="flex justify-between items-center cursor-pointer transition-colors hover:bg-[var(--hub-surface-hover)] py-3 px-5"
+            onClick={() => toggleSection('emailConfig')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Mail size={15} className="text-[var(--hub-ink-2)]" />
+              <h2 className="font-medium text-[var(--hub-ink)]">{t('settings.emailConfig')}</h2>
+            </div>
+            <span className="text-[var(--hub-ink-3)]">
+              {sectionsVisible.emailConfig ? '−' : '+'}
+            </span>
+          </div>
+
+          {sectionsVisible.emailConfig && (
+            <div className="space-y-4 pb-4 px-6 pt-4 border-t border-[var(--hub-line-2)]">
+              <p className="text-sm text-gray-500">{t('settings.emailConfigDescription')}</p>
+
+              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-gray-700">{t('settings.emailEnabled')}</h3>
+                  <p className="text-sm text-gray-500">{t('settings.emailEnabledDescription')}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={tempEmailConfig.enabled}
+                  className={`hub-switch${tempEmailConfig.enabled ? ' on' : ''}`}
+                  onClick={() =>
+                    setTempEmailConfig((prev) => ({ ...prev, enabled: !prev.enabled }))
+                  }
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="mb-2">
+                    <h3 className="font-medium text-gray-700">{t('settings.emailHost')}</h3>
+                  </div>
+                  <input
+                    type="text"
+                    value={tempEmailConfig.host}
+                    onChange={(e) =>
+                      setTempEmailConfig((prev) => ({ ...prev, host: e.target.value }))
+                    }
+                    placeholder="smtp.example.com"
+                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="mb-2">
+                    <h3 className="font-medium text-gray-700">{t('settings.emailPort')}</h3>
+                  </div>
+                  <input
+                    type="text"
+                    value={tempEmailConfig.port}
+                    onChange={(e) =>
+                      setTempEmailConfig((prev) => ({ ...prev, port: e.target.value }))
+                    }
+                    placeholder="465"
+                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="mb-2">
+                    <h3 className="font-medium text-gray-700">{t('settings.emailUser')}</h3>
+                  </div>
+                  <input
+                    type="text"
+                    value={tempEmailConfig.user}
+                    onChange={(e) =>
+                      setTempEmailConfig((prev) => ({ ...prev, user: e.target.value }))
+                    }
+                    placeholder="user@example.com"
+                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="mb-2">
+                    <h3 className="font-medium text-gray-700">{t('settings.emailPassword')}</h3>
+                  </div>
+                  <input
+                    type="password"
+                    value={tempEmailConfig.password}
+                    onChange={(e) =>
+                      setTempEmailConfig((prev) => ({ ...prev, password: e.target.value }))
+                    }
+                    placeholder=""
+                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="mb-2">
+                    <h3 className="font-medium text-gray-700">{t('settings.emailFromName')}</h3>
+                  </div>
+                  <input
+                    type="text"
+                    value={tempEmailConfig.fromName}
+                    onChange={(e) =>
+                      setTempEmailConfig((prev) => ({ ...prev, fromName: e.target.value }))
+                    }
+                    placeholder="xiaozhi-mcphub"
+                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="mb-2">
+                    <h3 className="font-medium text-gray-700">{t('settings.emailFromEmail')}</h3>
+                  </div>
+                  <input
+                    type="text"
+                    value={tempEmailConfig.fromEmail}
+                    onChange={(e) =>
+                      setTempEmailConfig((prev) => ({ ...prev, fromEmail: e.target.value }))
+                    }
+                    placeholder="noreply@example.com"
+                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="mb-2">
+                    <h3 className="font-medium text-gray-700">{t('settings.emailBaseUrl')}</h3>
+                  </div>
+                  <input
+                    type="text"
+                    value={tempEmailConfig.baseUrl}
+                    onChange={(e) =>
+                      setTempEmailConfig((prev) => ({ ...prev, baseUrl: e.target.value }))
+                    }
+                    placeholder="https://hub.example.com"
+                    className="flex-1 mt-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading}
+                  />
+                </div>
+
+              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-gray-700">{t('settings.emailSecure')}</h3>
+                  <p className="text-sm text-gray-500">{t('settings.emailSecureDescription')}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={tempEmailConfig.secure}
+                  className={`hub-switch${tempEmailConfig.secure ? ' on' : ''}`}
+                  onClick={() =>
+                    setTempEmailConfig((prev) => ({ ...prev, secure: !prev.secure }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-1">
+                  <input
+                    type="email"
+                    value={testEmailAddress}
+                    onChange={(e) => setTestEmailAddress(e.target.value)}
+                    placeholder={t('settings.testEmailPlaceholder')}
+                    className="flex-1 block w-full py-2 px-3 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 form-input"
+                    disabled={loading || testEmailSending}
+                  />
+                  <button
+                    onClick={handleSendTestEmail}
+                    disabled={loading || testEmailSending || !testEmailAddress.trim()}
+                    className="hub-btn"
+                  >
+                    {testEmailSending ? t('settings.testEmailSending') : t('settings.sendTestEmail')}
+                  </button>
+                </div>
+                <button onClick={saveEmailConfig} disabled={loading} className="hub-btn primary">
+                  {t('common.save')}
+                </button>
               </div>
             </div>
           )}

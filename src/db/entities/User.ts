@@ -26,6 +26,9 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true, unique: true })
   email: string | null;
 
+  @Column({ type: 'boolean', default: false, name: 'email_verified' })
+  emailVerified: boolean;
+
   @Column({ type: 'varchar', length: 255, nullable: true, unique: true, name: 'sso_user_id' })
   ssoUserId: string | null;
 

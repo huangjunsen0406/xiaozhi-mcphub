@@ -11,6 +11,7 @@ export interface IUser {
   password: string;
   isAdmin?: boolean;
   email?: string | null;
+  emailVerified?: boolean;
   ssoUserId?: string | null;
 }
 
@@ -234,6 +235,7 @@ export interface XiaozhiEndpoint {
   description?: string;
   groupId?: string; // null表示使用全部工具
   useSmartRouting?: boolean; // 端点是否使用智能路由
+  owner?: string; // Owning username for multi-account isolation
   reconnect: {
     maxAttempts: number;
     infiniteReconnect?: boolean; // 是否启用无限重连
@@ -267,6 +269,19 @@ export interface XiaozhiConfig {
   };
 }
 
+// SMTP settings used by the email service (verification & password reset)
+export interface EmailConfig {
+  enabled?: boolean;
+  host?: string;
+  port?: number;
+  secure?: boolean; // TLS on connect (usually port 465)
+  user?: string;
+  password?: string;
+  fromName?: string;
+  fromEmail?: string;
+  baseUrl?: string; // Public URL used in email links, e.g. https://hub.example.com
+}
+
 export interface SystemConfig {
   routing?: {
     enableGlobalRoute?: boolean; // Controls whether the /sse endpoint without group is enabled
@@ -293,6 +308,7 @@ export interface SystemConfig {
   modelscope?: {
     apiKey?: string; // Bearer token auto-attached to ModelScope MCP server requests
   };
+  email?: EmailConfig; // SMTP settings for verification / password-reset mail
   nameSeparator?: string; // Separator used between server name and tool/prompt name (default: '-')
   oauth?: OAuthProviderConfig; // OAuth provider configuration for upstream MCP servers
   oauthServer?: OAuthServerConfig; // OAuth authorization server configuration for MCPHub itself

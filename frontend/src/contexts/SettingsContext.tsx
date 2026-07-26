@@ -106,6 +106,18 @@ interface ModelscopeConfig {
   apiKey: string;
 }
 
+interface EmailConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+  fromName: string;
+  fromEmail: string;
+  baseUrl: string;
+}
+
 interface SystemSettings {
   systemConfig?: {
     routing?: RoutingConfig;
@@ -114,6 +126,7 @@ interface SystemSettings {
     toolResultCompression?: ToolResultCompressionConfig;
     mcpRouter?: MCPRouterConfig;
     modelscope?: ModelscopeConfig;
+    email?: Partial<EmailConfig>;
     nameSeparator?: string;
     oauthServer?: OAuthServerConfig;
     auth?: {
@@ -142,6 +155,7 @@ interface SettingsContextValue {
   toolResultCompressionConfig: ToolResultCompressionConfig;
   mcpRouterConfig: MCPRouterConfig;
   modelscopeConfig: ModelscopeConfig;
+  emailConfig: EmailConfig;
   oauthServerConfig: OAuthServerConfig;
   betterAuthConfig: BetterAuthConfig;
   nameSeparator: string;
@@ -163,6 +177,7 @@ interface SettingsContextValue {
     updates: Partial<SmartRoutingConfig>,
   ) => Promise<boolean | undefined>;
   updateModelscopeConfig: (apiKey: string) => Promise<boolean | undefined>;
+  updateEmailConfigBatch: (updates: Partial<EmailConfig>) => Promise<boolean | undefined>;
   updateToolResultCompressionConfig: (
     key: keyof ToolResultCompressionConfig,
     value: any,
@@ -385,6 +400,18 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     apiKey: '',
   });
 
+  const [emailConfig, setEmailConfig] = useState<EmailConfig>({
+    enabled: false,
+    host: '',
+    port: 465,
+    secure: true,
+    user: '',
+    password: '',
+    fromName: '',
+    fromEmail: '',
+    baseUrl: '',
+  });
+
   const [oauthServerConfig, setOAuthServerConfig] = useState<OAuthServerConfig>(
     getDefaultOAuthServerConfig(),
   );
@@ -485,6 +512,20 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
       }
       if (data.success && data.data?.systemConfig?.modelscope) {
         setModelscopeConfig({ apiKey: data.data.systemConfig.modelscope.apiKey || '' });
+      }
+      if (data.success && data.data?.systemConfig?.email) {
+        const emailCfg = data.data.systemConfig.email;
+        setEmailConfig({
+          enabled: emailCfg.enabled ?? false,
+          host: emailCfg.host || '',
+          port: emailCfg.port ?? 465,
+          secure: emailCfg.secure ?? true,
+          user: emailCfg.user || '',
+          password: emailCfg.password || '',
+          fromName: emailCfg.fromName || '',
+          fromEmail: emailCfg.fromEmail || '',
+          baseUrl: emailCfg.baseUrl || '',
+        });
       }
       if (data.success) {
         if (data.data?.systemConfig?.oauthServer) {
@@ -821,6 +862,35 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     } catch (error) {
       console.error('Failed to update ModelScope config', error);
       setError(error instanceof Error ? error.message : 'Failed to update ModelScope config');
+      showToast(t('errors.failedToUpdateSystemConfig'));
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Batch update Email (SMTP) configuration
+  const updateEmailConfigBatch = async (updates: Partial<EmailConfig>) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await apiPut('/system-config', {
+        email: updates,
+      });
+
+      if (data.success) {
+        setEmailConfig((prev) => ({ ...prev, ...updates }));
+        showToast(t('settings.systemConfigUpdated'));
+        return true;
+      } else {
+        setError(data.error || 'Failed to update email config');
+        showToast(data.error || t('errors.failedToUpdateSystemConfig'));
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to update email config', error);
+      setError(error instanceof Error ? error.message : 'Failed to update email config');
       showToast(t('errors.failedToUpdateSystemConfig'));
       return false;
     } finally {
@@ -1195,6 +1265,7 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     toolResultCompressionConfig,
     mcpRouterConfig,
     modelscopeConfig,
+    emailConfig,
     oauthServerConfig,
     betterAuthConfig,
     nameSeparator,
@@ -1214,6 +1285,7 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     updateToolResultCompressionConfigBatch,
     updateRoutingConfigBatch,
     updateModelscopeConfig,
+    updateEmailConfigBatch,
     updateMCPRouterConfig,
     updateMCPRouterConfigBatch,
     updateOAuthServerConfig,

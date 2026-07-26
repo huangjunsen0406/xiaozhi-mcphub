@@ -115,6 +115,32 @@ export const updateUserPassword = async (
   }
 };
 
+// Mark a user's email as verified
+export const verifyUserEmail = async (username: string): Promise<boolean> => {
+  try {
+    const userDao = getUserDao();
+    const result = await userDao.update(username, { emailVerified: true });
+    return result !== null;
+  } catch (error) {
+    console.error('Error verifying user email:', error);
+    return false;
+  }
+};
+
+// Partial update helper for user fields (email, flags, etc.)
+export const updateUserFields = async (
+  username: string,
+  fields: Partial<IUser>,
+): Promise<IUser | null> => {
+  try {
+    const userDao = getUserDao();
+    return await userDao.update(username, fields);
+  } catch (error) {
+    console.error('Error updating user fields:', error);
+    return null;
+  }
+};
+
 /**
  * Generate a cryptographically random password.
  * The result is a 24-character base64url string (≈ 144 bits of entropy).

@@ -31,6 +31,11 @@ export const hostedInternalEventRateLimiter = createStandardRateLimiter({
   max: 600,
 });
 
+export const authPublicRateLimiter = createStandardRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+});
+
 export const mcpConnectionRateLimiter = createStandardRateLimiter({
   windowMs: 60 * 1000,
   max: 480,

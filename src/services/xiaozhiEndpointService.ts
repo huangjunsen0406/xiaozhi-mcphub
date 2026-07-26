@@ -65,6 +65,7 @@ export class XiaozhiEndpointService {
         description: ep.description || '',
         groupId: ep.groupId || undefined,
         useSmartRouting: (ep as any).useSmartRouting || false,
+        owner: ep.owner || undefined,
         reconnect: ep.reconnect || {
           maxAttempts: 10,
           infiniteReconnect: true,
@@ -417,6 +418,21 @@ export class XiaozhiEndpointService {
     return this.config?.endpoints || [];
   }
 
+  /**
+   * Endpoints visible to a given user. Admins see everything; non-admins see
+   * only endpoints they own. Legacy endpoints without an owner are treated as
+   * admin-owned (matches canAccessEndpoint in the controller).
+   */
+  public getEndpointsForUser(username: string, isAdmin: boolean): XiaozhiEndpoint[] {
+    const all = this.getAllEndpoints();
+    if (isAdmin) return all;
+    return all.filter((ep) => ep.owner === username);
+  }
+
+  public getEndpointById(endpointId: string): XiaozhiEndpoint | undefined {
+    return this.getAllEndpoints().find((ep) => ep.id === endpointId);
+  }
+
   // 公共方法：创建端点
   public async createEndpoint(endpointData: Omit<XiaozhiEndpoint, 'id' | 'createdAt' | 'status'>): Promise<XiaozhiEndpoint> {
     if (!this.config) {
@@ -441,6 +457,7 @@ export class XiaozhiEndpointService {
       groupId: endpoint.groupId || null as any,
       reconnect: endpoint.reconnect,
       useSmartRouting: (endpoint as any).useSmartRouting || false,
+      owner: endpoint.owner || null as any,
       status: endpoint.status,
     } as any);
 

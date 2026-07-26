@@ -12,6 +12,8 @@ import BuiltinPrompt from './BuiltinPrompt.js';
 import BuiltinResource from './BuiltinResource.js';
 import XiaozhiEndpoint from './XiaozhiEndpoint.js';
 import XiaozhiConfig from './XiaozhiConfig.js';
+import EmailVerificationToken from './EmailVerificationToken.js';
+import PasswordResetToken from './PasswordResetToken.js';
 
 // Export all entities
 export default [
@@ -29,6 +31,8 @@ export default [
   BuiltinResource,
   XiaozhiEndpoint,
   XiaozhiConfig,
+  EmailVerificationToken,
+  PasswordResetToken,
 ];
 
 // Export individual entities for direct use
@@ -47,4 +51,6 @@ export {
   BuiltinResource,
   XiaozhiEndpoint,
   XiaozhiConfig,
+  EmailVerificationToken,
+  PasswordResetToken,
 };

@@ -122,6 +122,7 @@ export class UserDaoImpl extends JsonFileBaseDao implements UserDao {
       password: hashedPassword,
       isAdmin,
       email,
+      emailVerified: false,
       ssoUserId,
     };
 

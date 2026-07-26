@@ -15,6 +15,14 @@ import {
   getXiaozhiEndpointRepository,
 } from './XiaozhiEndpointRepository.js';
 import { XiaozhiConfigRepository, getXiaozhiConfigRepository } from './XiaozhiConfigRepository.js';
+import {
+  EmailVerificationTokenRepository,
+  getEmailVerificationTokenRepository,
+} from './EmailVerificationTokenRepository.js';
+import {
+  PasswordResetTokenRepository,
+  getPasswordResetTokenRepository,
+} from './PasswordResetTokenRepository.js';
 
 // Export all repositories
 export {
@@ -34,4 +42,8 @@ export {
   XiaozhiConfigRepository,
   getXiaozhiEndpointRepository,
   getXiaozhiConfigRepository,
+  EmailVerificationTokenRepository,
+  PasswordResetTokenRepository,
+  getEmailVerificationTokenRepository,
+  getPasswordResetTokenRepository,
 };

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { BookOpen, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -141,6 +141,8 @@ const LoginPage: React.FC = () => {
       if (result.success) {
         if (result.isUsingDefaultPassword) setShowDefaultPasswordWarning(true);
         else redirectAfterLogin();
+      } else if (result.code === 'EMAIL_NOT_VERIFIED') {
+        setError(t('auth.emailNotVerified'));
       } else {
         const message = result.message;
         setError(isServerUnavailableError(message) ? t('auth.serverUnavailable') : t('auth.loginFailed'));
@@ -357,6 +359,21 @@ const LoginPage: React.FC = () => {
               >
                 {loading ? t('auth.loggingIn') : t('auth.login')}
               </button>
+
+              <div
+                className="flex items-center justify-between"
+                style={{ fontSize: 12.5, color: 'var(--hub-ink-3)' }}
+              >
+                <Link
+                  to="/register"
+                  style={{ color: 'var(--hub-ink)', fontWeight: 500 }}
+                >
+                  {t('auth.register')}
+                </Link>
+                <Link to="/forgot-password" style={{ color: 'var(--hub-ink-3)' }}>
+                  {t('auth.forgotPassword')}
+                </Link>
+              </div>
             </form>
 
             {(socialProviders.google || socialProviders.github || socialProviders.oidc) && (

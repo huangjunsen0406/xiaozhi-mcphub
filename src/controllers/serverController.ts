@@ -346,6 +346,15 @@ export const getAllSettings = async (req: Request, res: Response): Promise<void>
       DEFAULT_INSTALL_BASE_URL,
     );
 
+    // Never send the raw SMTP password to the client; the update endpoint
+    // treats the masked placeholder as "keep existing password".
+    if (systemConfigForResponse.email?.password) {
+      systemConfigForResponse.email = {
+        ...systemConfigForResponse.email,
+        password: '********',
+      };
+    }
+
     const settings: McpSettings = {
       users,
       mcpServers,
@@ -1398,6 +1407,7 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       toolResultCompression,
       mcpRouter,
       modelscope,
+      email,
       nameSeparator,
       enableSessionRebuild,
       oauthServer,
@@ -1456,6 +1466,18 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
 
     const hasModelscopeUpdate = modelscope && typeof modelscope.apiKey === 'string';
 
+    const hasEmailUpdate =
+      email &&
+      (typeof email.enabled === 'boolean' ||
+        typeof email.host === 'string' ||
+        typeof email.port === 'number' ||
+        typeof email.secure === 'boolean' ||
+        typeof email.user === 'string' ||
+        typeof email.password === 'string' ||
+        typeof email.fromName === 'string' ||
+        typeof email.fromEmail === 'string' ||
+        typeof email.baseUrl === 'string');
+
     const hasNameSeparatorUpdate = typeof nameSeparator === 'string';
 
     const hasSessionRebuildUpdate = typeof enableSessionRebuild === 'boolean';
@@ -1501,6 +1523,7 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       !hasToolResultCompressionUpdate &&
       !hasMcpRouterUpdate &&
       !hasModelscopeUpdate &&
+      !hasEmailUpdate &&
       !hasNameSeparatorUpdate &&
       !hasSessionRebuildUpdate &&
       !hasOAuthServerUpdate &&
@@ -1873,6 +1896,25 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       systemConfig.modelscope = {
         ...(systemConfig.modelscope || {}),
         apiKey: modelscope.apiKey,
+      };
+    }
+
+    if (email) {
+      const current = systemConfig.email || {};
+      systemConfig.email = {
+        ...current,
+        ...(typeof email.enabled === 'boolean' ? { enabled: email.enabled } : {}),
+        ...(typeof email.host === 'string' ? { host: email.host } : {}),
+        ...(typeof email.port === 'number' ? { port: email.port } : {}),
+        ...(typeof email.secure === 'boolean' ? { secure: email.secure } : {}),
+        ...(typeof email.user === 'string' ? { user: email.user } : {}),
+        // Keep the previous password when the client sends the masked placeholder
+        ...(typeof email.password === 'string' && email.password !== '********'
+          ? { password: email.password }
+          : {}),
+        ...(typeof email.fromName === 'string' ? { fromName: email.fromName } : {}),
+        ...(typeof email.fromEmail === 'string' ? { fromEmail: email.fromEmail } : {}),
+        ...(typeof email.baseUrl === 'string' ? { baseUrl: email.baseUrl } : {}),
       };
     }
 

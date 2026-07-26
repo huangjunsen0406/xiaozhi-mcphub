@@ -17,13 +17,17 @@ const AuthContext = createContext<{
   login: (
     username: string,
     password: string,
-  ) => Promise<{ success: boolean; isUsingDefaultPassword?: boolean; message?: string }>;
-  register: (username: string, password: string, isAdmin?: boolean) => Promise<boolean>;
+  ) => Promise<{ success: boolean; isUsingDefaultPassword?: boolean; message?: string; code?: string }>;
+  register: (
+    username: string,
+    password: string,
+    email?: string,
+  ) => Promise<{ success: boolean; emailVerificationRequired?: boolean; message?: string }>;
   logout: () => void;
 }>({
   auth: initialState,
   login: async () => ({ success: false }),
-  register: async () => false,
+  register: async () => ({ success: false }),
   logout: () => {},
 });
 
@@ -127,7 +131,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (
     username: string,
     password: string,
-  ): Promise<{ success: boolean; isUsingDefaultPassword?: boolean; message?: string }> => {
+  ): Promise<{
+    success: boolean;
+    isUsingDefaultPassword?: boolean;
+    message?: string;
+    code?: string;
+  }> => {
     try {
       const response = await authService.login({ username, password });
 
@@ -148,7 +157,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           loading: false,
           error: response.message || 'Authentication failed',
         });
-        return { success: false, message: response.message };
+        return { success: false, message: response.message, code: response.code };
       }
     } catch (error) {
       setAuth({
@@ -164,34 +173,47 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (
     username: string,
     password: string,
-    isAdmin = false,
-  ): Promise<boolean> => {
+    email?: string,
+  ): Promise<{ success: boolean; emailVerificationRequired?: boolean; message?: string }> => {
     try {
-      const response = await authService.register({ username, password, isAdmin });
+      const response = await authService.register({ username, password, email });
 
       if (response.success && response.token && response.user) {
+        // Direct login (email verification off)
         setAuth({
           isAuthenticated: true,
           loading: false,
           user: response.user,
           error: null,
         });
-        return true;
-      } else {
-        setAuth({
-          ...initialState,
-          loading: false,
-          error: response.message || 'Registration failed',
-        });
-        return false;
+        return { success: true };
       }
+
+      if (response.success && response.emailVerificationRequired) {
+        // Registered but must verify email before logging in
+        return {
+          success: true,
+          emailVerificationRequired: true,
+          message: response.message,
+        };
+      }
+
+      setAuth({
+        ...initialState,
+        loading: false,
+        error: response.message || 'Registration failed',
+      });
+      return { success: false, message: response.message };
     } catch (error) {
       setAuth({
         ...initialState,
         loading: false,
         error: 'Registration failed',
       });
-      return false;
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : undefined,
+      };
     }
   };
 

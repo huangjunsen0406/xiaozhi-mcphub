@@ -1,16 +1,69 @@
 import { Request, Response } from 'express';
 import { xiaozhiClientService } from '../services/xiaozhiClientService.js';
 import { xiaozhiEndpointService } from '../services/xiaozhiEndpointService.js';
-// import { XiaozhiConfig } from '../types/index.js';
 import { getXiaozhiConfigRepository } from '../db/repositories/index.js';
+import { getGroupDao } from '../dao/index.js';
+import { XiaozhiEndpoint } from '../types/index.js';
+
+type AuthUser = { username?: string; isAdmin?: boolean };
+
+const getAuthUser = (req: Request): AuthUser => ((req as any).user || {}) as AuthUser;
+
+const isAdminUser = (user: AuthUser): boolean => Boolean(user.isAdmin);
+
+const canAccessEndpoint = (endpoint: XiaozhiEndpoint | undefined, user: AuthUser): boolean => {
+  if (!endpoint) return false;
+  if (isAdminUser(user)) return true;
+  // Legacy endpoints without owner are only visible to admins for write operations;
+  // for read, non-admins only see endpoints they own.
+  return Boolean(endpoint.owner && endpoint.owner === user.username);
+};
+
+const maskEndpoint = (endpoint: XiaozhiEndpoint) => ({
+  ...endpoint,
+  webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***'),
+});
+
+const requireAdmin = (req: Request, res: Response): boolean => {
+  if (isAdminUser(getAuthUser(req))) return true;
+  res.status(403).json({ success: false, message: 'Admin privileges required' });
+  return false;
+};
+
+const assertGroupOwnership = async (
+  groupId: string | null | undefined,
+  user: AuthUser,
+): Promise<{ ok: true } | { ok: false; status: number; message: string }> => {
+  if (!groupId) return { ok: true };
+  if (isAdminUser(user)) return { ok: true };
+
+  const groups = await getGroupDao().findByOwner(user.username || '');
+  if (!groups.some((g) => g.id === groupId || g.name === groupId)) {
+    return { ok: false, status: 403, message: 'Group not found or not owned by current user' };
+  }
+  return { ok: true };
+};
 
 // 获取小智客户端状态
 export const getXiaozhiStatus = async (req: Request, res: Response): Promise<void> => {
   try {
+    const user = getAuthUser(req);
     const status = xiaozhiClientService.getStatus();
+    const endpoints = xiaozhiEndpointService.getEndpointsForUser(
+      user.username || '',
+      isAdminUser(user),
+    );
+    const endpointIds = new Set(endpoints.map((e) => e.id));
+    const filteredEndpoints = (status.endpoints || []).filter((e: any) => endpointIds.has(e.id));
+    const connected = filteredEndpoints.some((e: any) => e.status === 'connected');
+
     res.json({
       success: true,
-      data: status,
+      data: {
+        enabled: status.enabled,
+        connected: isAdminUser(user) ? status.connected : connected,
+        endpoints: filteredEndpoints,
+      },
     });
   } catch (error) {
     console.error('获取小智状态失败:', error);
@@ -24,29 +77,32 @@ export const getXiaozhiStatus = async (req: Request, res: Response): Promise<voi
 // 获取小智客户端配置（兼容老API）
 export const getXiaozhiConfig = async (req: Request, res: Response): Promise<void> => {
   try {
+    const user = getAuthUser(req);
     const configRepo = getXiaozhiConfigRepository();
     const dbConfig = await configRepo.getConfig();
-    const config = {
-      enabled: dbConfig?.enabled ?? false,
-      endpoints: xiaozhiEndpointService.getAllEndpoints(),
-    };
+    const endpoints = xiaozhiEndpointService.getEndpointsForUser(
+      user.username || '',
+      isAdminUser(user),
+    );
 
     // 为了兼容老的前端，如果有端点，返回第一个端点的信息作为单端点模式
     const compatConfig = {
-      enabled: config.enabled,
-      webSocketUrl: config.endpoints.length > 0 ? 
-        config.endpoints[0].webSocketUrl.replace(/token=[^&?]*/g, 'token=***') : '',
-      reconnect: config.endpoints.length > 0 ? config.endpoints[0].reconnect : {
-        maxAttempts: 10,
-        initialDelay: 2000,
-        maxDelay: 60000,
-        backoffMultiplier: 2,
-      },
+      enabled: dbConfig?.enabled ?? false,
+      webSocketUrl:
+        endpoints.length > 0
+          ? endpoints[0].webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
+          : '',
+      reconnect:
+        endpoints.length > 0
+          ? endpoints[0].reconnect
+          : {
+              maxAttempts: 10,
+              initialDelay: 2000,
+              maxDelay: 60000,
+              backoffMultiplier: 2,
+            },
       // 同时返回新的多端点信息
-      endpoints: config.endpoints.map(endpoint => ({
-        ...endpoint,
-        webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
-      }))
+      endpoints: endpoints.map((endpoint) => maskEndpoint(endpoint)),
     };
 
     res.json({
@@ -62,9 +118,11 @@ export const getXiaozhiConfig = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// 更新小智客户端配置（兼容老API，用于总开关）
+// 更新小智客户端配置（兼容老API，用于总开关）— 仅管理员
 export const updateXiaozhiConfig = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!requireAdmin(req, res)) return;
+
     const { enabled } = req.body;
     const configRepo = getXiaozhiConfigRepository();
     const currentEnabled = (await configRepo.getConfig())?.enabled ?? false;
@@ -103,12 +161,14 @@ export const updateXiaozhiConfig = async (req: Request, res: Response): Promise<
   }
 };
 
-// 重启小智客户端
+// 重启小智客户端 — 仅管理员
 export const restartXiaozhiClient = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!requireAdmin(req, res)) return;
+
     // 先断开连接
     await xiaozhiClientService.disconnect();
-    
+
     // 重新初始化
     if (xiaozhiClientService.isEnabled()) {
       await xiaozhiClientService.initialize();
@@ -131,9 +191,11 @@ export const restartXiaozhiClient = async (req: Request, res: Response): Promise
   }
 };
 
-// 停止小智客户端
+// 停止小智客户端 — 仅管理员
 export const stopXiaozhiClient = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!requireAdmin(req, res)) return;
+
     await xiaozhiClientService.disconnect();
     res.json({
       success: true,
@@ -148,9 +210,11 @@ export const stopXiaozhiClient = async (req: Request, res: Response): Promise<vo
   }
 };
 
-// 启动小智客户端
+// 启动小智客户端 — 仅管理员
 export const startXiaozhiClient = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!requireAdmin(req, res)) return;
+
     if (!xiaozhiClientService.isEnabled()) {
       res.status(400).json({
         success: false,
@@ -175,17 +239,18 @@ export const startXiaozhiClient = async (req: Request, res: Response): Promise<v
 
 // ===== 多端点管理API =====
 
-// 获取所有小智端点
+// 获取所有小智端点（按当前用户过滤）
 export const getXiaozhiEndpoints = (req: Request, res: Response): void => {
   try {
-    const endpoints = xiaozhiEndpointService.getAllEndpoints();
-    
+    const user = getAuthUser(req);
+    const endpoints = xiaozhiEndpointService.getEndpointsForUser(
+      user.username || '',
+      isAdminUser(user),
+    );
+
     // 隐藏敏感信息 (URL中的token部分)
-    const safeEndpoints = endpoints.map(endpoint => ({
-      ...endpoint,
-      webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
-    }));
-    
+    const safeEndpoints = endpoints.map((endpoint) => maskEndpoint(endpoint));
+
     res.json({ success: true, data: safeEndpoints });
   } catch (error) {
     console.error('获取小智端点失败:', error);
@@ -196,15 +261,15 @@ export const getXiaozhiEndpoints = (req: Request, res: Response): void => {
 // 获取单个小智端点详情（用于编辑，返回完整URL）
 export const getXiaozhiEndpoint = (req: Request, res: Response): void => {
   try {
+    const user = getAuthUser(req);
     const { id } = req.params;
-    const endpoints = xiaozhiEndpointService.getAllEndpoints();
-    const endpoint = endpoints.find(ep => ep.id === id);
-    
-    if (!endpoint) {
+    const endpoint = xiaozhiEndpointService.getEndpointById(id);
+
+    if (!endpoint || !canAccessEndpoint(endpoint, user)) {
       res.status(404).json({ success: false, message: 'Endpoint not found' });
       return;
     }
-    
+
     // 返回完整的端点信息，不掩码URL
     res.json({ success: true, data: endpoint });
   } catch (error) {
@@ -216,12 +281,13 @@ export const getXiaozhiEndpoint = (req: Request, res: Response): void => {
 // 创建小智端点
 export const createXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
   try {
+    const user = getAuthUser(req);
     const { name, webSocketUrl, description, groupId, useSmartRouting } = req.body;
 
     if (!name || !webSocketUrl) {
-      res.status(400).json({ 
-        success: false, 
-        message: 'Name and webSocketUrl are required' 
+      res.status(400).json({
+        success: false,
+        message: 'Name and webSocketUrl are required',
       });
       return;
     }
@@ -230,8 +296,14 @@ export const createXiaozhiEndpoint = async (req: Request, res: Response): Promis
     if (!webSocketUrl.startsWith('ws://') && !webSocketUrl.startsWith('wss://')) {
       res.status(400).json({
         success: false,
-        message: 'WebSocket URL must start with ws:// or wss://'
+        message: 'WebSocket URL must start with ws:// or wss://',
       });
+      return;
+    }
+
+    const groupCheck = await assertGroupOwnership(groupId, user);
+    if (!groupCheck.ok) {
+      res.status(groupCheck.status).json({ success: false, message: groupCheck.message });
       return;
     }
 
@@ -242,6 +314,7 @@ export const createXiaozhiEndpoint = async (req: Request, res: Response): Promis
       groupId: groupId || null,
       useSmartRouting: !!useSmartRouting,
       enabled: true,
+      owner: user.username || 'admin',
       reconnect: {
         maxAttempts: 10,
         infiniteReconnect: true,
@@ -249,16 +322,11 @@ export const createXiaozhiEndpoint = async (req: Request, res: Response): Promis
         initialDelay: 2000,
         maxDelay: 60000,
         backoffMultiplier: 2,
-      }
-    });
+      },
+    } as any);
 
     // 隐藏敏感信息返回
-    const safeEndpoint = {
-      ...endpoint,
-      webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
-    };
-
-    res.json({ success: true, data: safeEndpoint });
+    res.json({ success: true, data: maskEndpoint(endpoint) });
   } catch (error) {
     console.error('创建小智端点失败:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -268,8 +336,19 @@ export const createXiaozhiEndpoint = async (req: Request, res: Response): Promis
 // 更新小智端点
 export const updateXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
   try {
+    const user = getAuthUser(req);
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
+
+    const existing = xiaozhiEndpointService.getEndpointById(id);
+    if (!existing || !canAccessEndpoint(existing, user)) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+
+    // Never allow ownership transfer via API
+    delete updateData.owner;
+    delete updateData.id;
 
     // 如果URL为占位符，不更新URL
     if (updateData.webSocketUrl && updateData.webSocketUrl.includes('token=***')) {
@@ -277,12 +356,24 @@ export const updateXiaozhiEndpoint = async (req: Request, res: Response): Promis
     }
 
     // 验证webSocketUrl格式（如果有的话）
-    if (updateData.webSocketUrl && !updateData.webSocketUrl.startsWith('ws://') && !updateData.webSocketUrl.startsWith('wss://')) {
+    if (
+      updateData.webSocketUrl &&
+      !updateData.webSocketUrl.startsWith('ws://') &&
+      !updateData.webSocketUrl.startsWith('wss://')
+    ) {
       res.status(400).json({
         success: false,
-        message: 'WebSocket URL must start with ws:// or wss://'
+        message: 'WebSocket URL must start with ws:// or wss://',
       });
       return;
+    }
+
+    if (updateData.groupId !== undefined) {
+      const groupCheck = await assertGroupOwnership(updateData.groupId, user);
+      if (!groupCheck.ok) {
+        res.status(groupCheck.status).json({ success: false, message: groupCheck.message });
+        return;
+      }
     }
 
     const endpoint = await xiaozhiEndpointService.updateEndpoint(id, updateData);
@@ -292,13 +383,7 @@ export const updateXiaozhiEndpoint = async (req: Request, res: Response): Promis
       return;
     }
 
-    // 隐藏敏感信息返回
-    const safeEndpoint = {
-      ...endpoint,
-      webSocketUrl: endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
-    };
-
-    res.json({ success: true, data: safeEndpoint });
+    res.json({ success: true, data: maskEndpoint(endpoint) });
   } catch (error) {
     console.error('更新小智端点失败:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -308,7 +393,14 @@ export const updateXiaozhiEndpoint = async (req: Request, res: Response): Promis
 // 删除小智端点
 export const deleteXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
   try {
+    const user = getAuthUser(req);
     const { id } = req.params;
+    const existing = xiaozhiEndpointService.getEndpointById(id);
+    if (!existing || !canAccessEndpoint(existing, user)) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+
     const success = await xiaozhiEndpointService.deleteEndpoint(id);
 
     if (!success) {
@@ -326,7 +418,14 @@ export const deleteXiaozhiEndpoint = async (req: Request, res: Response): Promis
 // 重连小智端点
 export const reconnectXiaozhiEndpoint = async (req: Request, res: Response): Promise<void> => {
   try {
+    const user = getAuthUser(req);
     const { id } = req.params;
+    const existing = xiaozhiEndpointService.getEndpointById(id);
+    if (!existing || !canAccessEndpoint(existing, user)) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+
     const success = await xiaozhiEndpointService.reconnectEndpoint(id);
 
     if (!success) {
@@ -344,7 +443,14 @@ export const reconnectXiaozhiEndpoint = async (req: Request, res: Response): Pro
 // 获取小智端点状态
 export const getXiaozhiEndpointStatus = (req: Request, res: Response): void => {
   try {
+    const user = getAuthUser(req);
     const { id } = req.params;
+    const existing = xiaozhiEndpointService.getEndpointById(id);
+    if (!existing || !canAccessEndpoint(existing, user)) {
+      res.status(404).json({ success: false, message: 'Endpoint not found' });
+      return;
+    }
+
     const status = xiaozhiEndpointService.getEndpointStatus(id);
 
     if (!status) {
@@ -355,10 +461,7 @@ export const getXiaozhiEndpointStatus = (req: Request, res: Response): void => {
     // 隐藏敏感信息
     const safeStatus = {
       ...status,
-      endpoint: {
-        ...status.endpoint,
-        webSocketUrl: status.endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
-      }
+      endpoint: maskEndpoint(status.endpoint),
     };
 
     res.json({ success: true, data: safeStatus });
@@ -368,18 +471,23 @@ export const getXiaozhiEndpointStatus = (req: Request, res: Response): void => {
   }
 };
 
-// 获取所有小智端点状态
+// 获取所有小智端点状态（按当前用户过滤）
 export const getAllXiaozhiEndpointStatus = (req: Request, res: Response): void => {
   try {
-    const allStatus = xiaozhiEndpointService.getAllEndpointsStatus();
-    
+    const user = getAuthUser(req);
+    const visibleIds = new Set(
+      xiaozhiEndpointService
+        .getEndpointsForUser(user.username || '', isAdminUser(user))
+        .map((e) => e.id),
+    );
+    const allStatus = xiaozhiEndpointService
+      .getAllEndpointsStatus()
+      .filter((status) => visibleIds.has(status.endpoint.id));
+
     // 隐藏敏感信息
-    const safeAllStatus = allStatus.map(status => ({
+    const safeAllStatus = allStatus.map((status) => ({
       ...status,
-      endpoint: {
-        ...status.endpoint,
-        webSocketUrl: status.endpoint.webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
-      }
+      endpoint: maskEndpoint(status.endpoint),
     }));
 
     res.json({ success: true, data: safeAllStatus });

@@ -481,6 +481,7 @@ export interface LoginCredentials {
 
 export interface RegisterCredentials extends LoginCredentials {
   isAdmin?: boolean;
+  email?: string;
 }
 
 export interface ChangePasswordCredentials {
@@ -494,6 +495,8 @@ export interface AuthResponse {
   user?: IUser;
   message?: string;
   isUsingDefaultPassword?: boolean;
+  emailVerificationRequired?: boolean;
+  code?: string;
 }
 
 // Official Registry types (from registry.modelcontextprotocol.io)

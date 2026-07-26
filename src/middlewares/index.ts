@@ -67,9 +67,17 @@ export const initMiddlewares = (app: express.Application): void => {
         ? betterAuthConfig.basePath.replace(/^\/api/, '') || '/'
         : null;
 
-      // Skip authentication for login endpoint
+      // Skip authentication for public auth endpoints (login/register + email flows)
+      const publicAuthPaths = [
+        '/auth/login',
+        '/auth/register',
+        '/auth/verify-email',
+        '/auth/forgot-password',
+        '/auth/verify-reset-token',
+        '/auth/reset-password',
+      ];
       if (
-        req.path === '/auth/login' ||
+        publicAuthPaths.includes(req.path) ||
         (betterAuthApiPath !== null && req.path.startsWith(betterAuthApiPath)) ||
         req.path.startsWith('/better-auth')
       ) {

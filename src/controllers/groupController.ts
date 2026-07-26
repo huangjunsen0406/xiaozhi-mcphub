@@ -19,6 +19,7 @@ import {
   getServerConfigsInGroup,
   updateServerToolsInGroup,
 } from '../services/groupService.js';
+import { getGroupDao } from '../dao/index.js';
 
 const isValidCapabilitySelection = (value: unknown): boolean => {
   return (
@@ -73,9 +74,13 @@ const validateGroupServersConfig = (servers: unknown): string | null => {
 };
 
 // Get all groups
-export const getGroups = async (_: Request, res: Response): Promise<void> => {
+export const getGroups = async (req: Request, res: Response): Promise<void> => {
   try {
-    const groups = await getAllGroups();
+    const currentUser = (req as any).user;
+    const isAdmin = Boolean(currentUser?.isAdmin);
+    const groups = isAdmin
+      ? await getAllGroups()
+      : await getGroupDao().findByOwner(currentUser?.username || '');
     const response: ApiResponse = {
       success: true,
       data: groups,
@@ -103,6 +108,20 @@ export const getGroup = async (req: Request, res: Response): Promise<void> => {
 
     const group = await getGroupByIdOrName(id);
     if (!group) {
+      res.status(404).json({
+        success: false,
+        message: 'Group not found',
+      });
+      return;
+    }
+
+    const currentUser = (req as any).user;
+    if (
+      currentUser &&
+      !currentUser.isAdmin &&
+      group.owner &&
+      group.owner !== currentUser.username
+    ) {
       res.status(404).json({
         success: false,
         message: 'Group not found',

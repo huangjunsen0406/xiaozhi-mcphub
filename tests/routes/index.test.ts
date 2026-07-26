@@ -88,6 +88,14 @@ jest.mock('../../src/controllers/authController.js', () => ({
   register: routeHandler,
   getCurrentUser: routeHandler,
   changePassword: routeHandler,
+  verifyEmail: routeHandler,
+  requestPasswordReset: routeHandler,
+  verifyResetToken: routeHandler,
+  resetPassword: routeHandler,
+}));
+
+jest.mock('../../src/controllers/emailController.js', () => ({
+  sendTestEmail: routeHandler,
 }));
 
 jest.mock('../../src/controllers/logController.js', () => ({

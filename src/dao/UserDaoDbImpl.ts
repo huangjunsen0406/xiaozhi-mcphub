@@ -20,6 +20,7 @@ export class UserDaoDbImpl implements UserDao {
       password: u.password,
       isAdmin: u.isAdmin,
       email: u.email ?? undefined,
+      emailVerified: u.emailVerified ?? false,
       ssoUserId: u.ssoUserId ?? undefined,
     };
   }
@@ -57,6 +58,7 @@ export class UserDaoDbImpl implements UserDao {
       password: entity.password,
       isAdmin: entity.isAdmin || false,
       email: entity.email ?? null,
+      emailVerified: entity.emailVerified ?? false,
       ssoUserId: entity.ssoUserId ?? null,
     });
     return this.toIUser(user);
@@ -78,6 +80,7 @@ export class UserDaoDbImpl implements UserDao {
     if (entity.password !== undefined) updateData.password = entity.password;
     if (entity.isAdmin !== undefined) updateData.isAdmin = entity.isAdmin;
     if (entity.email !== undefined) updateData.email = entity.email ?? null;
+    if (entity.emailVerified !== undefined) updateData.emailVerified = entity.emailVerified;
     if (entity.ssoUserId !== undefined) updateData.ssoUserId = entity.ssoUserId ?? null;
 
     const user = await this.repository.update(username, updateData);

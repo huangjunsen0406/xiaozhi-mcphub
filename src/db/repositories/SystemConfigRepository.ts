@@ -43,6 +43,7 @@ export class SystemConfigRepository {
         toolResultCompression: {},
         mcpRouter: {},
         modelscope: {},
+        email: {},
         nameSeparator: '-',
         oauth: {},
         oauthServer: cloneDefaultOAuthServerConfig(),

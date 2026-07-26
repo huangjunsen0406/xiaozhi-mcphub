@@ -6,8 +6,10 @@ const createUserMock = jest.fn();
 jest.mock('../../src/models/User.js', () => ({
   createUser: createUserMock,
   findUserByUsername: jest.fn(),
+  findUserByEmail: jest.fn(),
   verifyPassword: jest.fn(),
   updateUserPassword: jest.fn(),
+  verifyUserEmail: jest.fn(),
 }));
 
 jest.mock('../../src/services/services.js', () => ({
@@ -61,6 +63,9 @@ describe('authController.register', () => {
       username: 'alice',
       password: 'secret123',
       isAdmin: false,
+      // Email service is disabled in tests, so no email and auto-verified
+      email: undefined,
+      emailVerified: true,
     });
   });
 });

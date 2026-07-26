@@ -29,6 +29,9 @@ export class XiaozhiEndpoint {
   @Column({ type: 'boolean', name: 'use_smart_routing', default: false })
   useSmartRouting: boolean; // Endpoint-level smart routing toggle
 
+  @Column({ type: 'varchar', nullable: true })
+  owner: string; // Owning username; null/empty treated as legacy shared endpoint
+
   @Column({ type: 'simple-json', nullable: true })
   reconnect: {
     maxAttempts?: number;

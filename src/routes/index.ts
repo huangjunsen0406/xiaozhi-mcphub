@@ -83,7 +83,16 @@ import {
   listDiscoveryTags,
   getMarketplaceWellKnown,
 } from '../controllers/discoveryController.js';
-import { login, register, getCurrentUser, changePassword } from '../controllers/authController.js';
+import {
+  login,
+  register,
+  getCurrentUser,
+  changePassword,
+  verifyEmail,
+  requestPasswordReset,
+  verifyResetToken,
+  resetPassword,
+} from '../controllers/authController.js';
 import { getAllLogs, clearLogs, streamLogs } from '../controllers/logController.js';
 import {
   getRuntimeConfig,
@@ -167,6 +176,7 @@ import { auth } from '../middlewares/auth.js';
 import { getBetterAuthRuntimeConfig } from '../services/betterAuthConfig.js';
 import {
   authenticatedRouteRateLimiter,
+  authPublicRateLimiter,
   hostedInternalEventRateLimiter,
   templateRateLimiter,
   mcpConnectionRateLimiter,
@@ -189,6 +199,7 @@ import {
   getAllXiaozhiEndpointStatus,
 } from '../controllers/xiaozhiController.js';
 import { requireDatabase } from '../middlewares/requireDatabase.js';
+import { sendTestEmail } from '../controllers/emailController.js';
 
 const router = express.Router();
 const authenticatedRouter = express.Router();
@@ -352,6 +363,9 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   );
   authenticatedRouter.post('/templates/import', templateRateLimiter, auth, importConfigTemplate);
 
+  // Email test route (admin check inside the handler)
+  authenticatedRouter.post('/email/test', sendTestEmail);
+
   // Xiaozhi routes are database-backed and unavailable in JSON-file mode
   authenticatedRouter.use('/xiaozhi', requireDatabase);
 
@@ -438,6 +452,7 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
 
   router.post(
     '/auth/login',
+    authPublicRateLimiter,
     [
       check('username', 'Username is required').not().isEmpty(),
       check('password', 'Password is required').not().isEmpty(),
@@ -447,11 +462,44 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
 
   router.post(
     '/auth/register',
+    authPublicRateLimiter,
     [
       check('username', 'Username is required').not().isEmpty(),
       check('password', 'Password must be at least 6 characters').isLength({ min: 6 }),
+      check('email', 'Email must be valid').optional({ nullable: true, checkFalsy: true }).isEmail(),
     ],
     register,
+  );
+
+  router.post(
+    '/auth/verify-email',
+    authPublicRateLimiter,
+    [check('token', 'Token is required').not().isEmpty()],
+    verifyEmail,
+  );
+
+  router.post(
+    '/auth/forgot-password',
+    authPublicRateLimiter,
+    [check('email', 'Email is required').isEmail()],
+    requestPasswordReset,
+  );
+
+  router.post(
+    '/auth/verify-reset-token',
+    authPublicRateLimiter,
+    [check('token', 'Token is required').not().isEmpty()],
+    verifyResetToken,
+  );
+
+  router.post(
+    '/auth/reset-password',
+    authPublicRateLimiter,
+    [
+      check('token', 'Token is required').not().isEmpty(),
+      check('newPassword', 'New password must be at least 6 characters').isLength({ min: 6 }),
+    ],
+    resetPassword,
   );
 
   router.get('/auth/user', authenticatedRouteRateLimiter, auth, getCurrentUser);
