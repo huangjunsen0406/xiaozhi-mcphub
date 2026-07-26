@@ -10,6 +10,7 @@ import { formatTokens } from '@/utils/contextCost';
 import { Server } from '@/types';
 import { EndpointCopy } from '@/components/ui/EndpointCopy';
 import { ServerStatusDot } from '@/components/ui/StatusDot';
+import { apiGet } from '@/utils/fetchInterceptor';
 
 const Stat: React.FC<{ label: string; value: React.ReactNode; tone?: 'ok' | 'warn' | 'err' | 'muted' | 'default' }> = ({
   label,
@@ -103,6 +104,38 @@ const DashboardPage: React.FC = () => {
     [serverCosts],
   );
 
+  // Xiaozhi summary
+  const [xiaozhi, setXiaozhi] = React.useState({
+    enabled: false,
+    total: 0,
+    enabledCount: 0,
+    connectedCount: 0,
+  });
+
+  React.useEffect(() => {
+    const fetchXiaozhi = async () => {
+      try {
+        const configResp: any = await apiGet('/xiaozhi/config');
+        const statusResp: any = await apiGet('/xiaozhi/endpoints/status/all');
+
+        const cfg = configResp?.success ? configResp.data : null;
+        const eps = Array.isArray(cfg?.endpoints) ? cfg.endpoints : [];
+
+        setXiaozhi({
+          enabled: !!cfg?.enabled,
+          total: eps.length,
+          enabledCount: eps.filter((e: any) => e.enabled !== false).length,
+          connectedCount: statusResp?.success && Array.isArray(statusResp.data)
+            ? statusResp.data.filter((s: any) => s.connected).length
+            : 0,
+        });
+      } catch {
+        // Dashboard xiaozhi stats are non-critical; leave the defaults in place
+      }
+    };
+    fetchXiaozhi();
+  }, []);
+
   const recentServers = useMemo(() => allServers.slice(0, 6), [allServers]);
   const baseUrl = installConfig?.baseUrl?.replace(/\/+$/, '') || '';
   const recentServerColumns =
@@ -175,6 +208,24 @@ const DashboardPage: React.FC = () => {
           <Stat label={t('pages.dashboard.offlineServers')} value={stats.offline} tone="err" />
           <Stat label={t('pages.dashboard.disabledServers')} value={stats.disabled} tone="muted" />
           <Stat label={t('cost.totalFootprint')} value={formatTokens(footprint)} />
+        </div>
+      )}
+
+      {/* Xiaozhi summary */}
+      {!showSkeleton && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <Stat
+            label={t('xiaozhi.status.service')}
+            value={xiaozhi.enabled ? t('xiaozhi.status.enabled') : t('xiaozhi.status.disabled')}
+            tone={xiaozhi.enabled ? 'ok' : 'muted'}
+          />
+          <Stat label={t('xiaozhi.status.totalEndpoints')} value={xiaozhi.total} />
+          <Stat label={t('xiaozhi.status.enabled')} value={xiaozhi.enabledCount} />
+          <Stat
+            label={t('xiaozhi.status.connected')}
+            value={xiaozhi.connectedCount}
+            tone={xiaozhi.connectedCount > 0 ? 'ok' : 'muted'}
+          />
         </div>
       )}
 

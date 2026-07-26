@@ -21,6 +21,7 @@ const LogsPage = lazy(() => import('./pages/LogsPage'));
 const ActivityPage = lazy(() => import('./pages/ActivityPage'));
 const PromptsPage = lazy(() => import('./pages/PromptsPage'));
 const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
+const XiaozhiEndpointsPage = lazy(() => import('./pages/XiaozhiEndpointsPage'));
 
 // Helper component to redirect cloud server routes to market
 const CloudRedirect: React.FC = () => {
@@ -64,6 +65,7 @@ function App() {
                       <Route path="/prompts" element={<PromptsPage />} />
                       <Route path="/resources" element={<ResourcesPage />} />
                       <Route path="/users" element={<UsersPage />} />
+                      <Route path="/xiaozhi" element={<XiaozhiEndpointsPage />} />
                       <Route path="/market" element={<MarketPage />} />
                       <Route path="/market/:serverName" element={<MarketPage />} />
                       {/* Legacy cloud routes redirect to market with cloud tab */}
