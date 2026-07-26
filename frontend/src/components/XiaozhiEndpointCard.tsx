@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from './ui/Button';
+import { Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import ConfirmDialog from './ui/ConfirmDialog';
-import { Badge } from './ui/Badge';
+import { StatusDot, DotKind } from './ui/StatusDot';
 import { XiaozhiEndpoint, XiaozhiEndpointStatus } from '../hooks/useXiaozhiEndpoints';
 
 interface XiaozhiEndpointCardProps {
   endpoint: XiaozhiEndpoint;
   status?: XiaozhiEndpointStatus;
   isReconnecting?: boolean;
+  groupName?: string;
   onEdit: (endpoint: XiaozhiEndpoint) => void;
   onDelete: (endpointId: string) => void;
   onReconnect: (endpointId: string) => void;
@@ -19,6 +20,7 @@ const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
   endpoint,
   status,
   isReconnecting = false,
+  groupName,
   onEdit,
   onDelete,
   onReconnect,
@@ -32,137 +34,166 @@ const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
     setShowDeleteDialog(false);
   };
 
-  const getStatusBadge = () => {
+  const statusDot = (): { kind: DotKind; label: string } => {
     if (!endpoint.enabled) {
-      return <Badge variant="secondary">{t('xiaozhi.status.disabled', 'Disabled')}</Badge>;
+      return { kind: 'muted', label: t('xiaozhi.status.disabled') };
     }
-    
+    if (isReconnecting) {
+      return { kind: 'warn', label: t('xiaozhi.reconnect.connecting') };
+    }
     if (!status) {
-      return <Badge variant="secondary">{t('xiaozhi.status.unknown', 'Unknown')}</Badge>;
+      return { kind: 'muted', label: t('xiaozhi.status.unknown') };
     }
-
-    if (status.connected) {
-      return <Badge variant="default">{t('xiaozhi.status.connected', 'Connected')}</Badge>;
-    } else {
-      return <Badge variant="destructive">{t('xiaozhi.status.disconnected', 'Disconnected')}</Badge>;
-    }
+    return status.connected
+      ? { kind: 'ok', label: t('xiaozhi.status.connected') }
+      : { kind: 'err', label: t('xiaozhi.status.disconnected') };
   };
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return t('xiaozhi.never', 'Never');
+    if (!dateString) return t('xiaozhi.never');
     return new Date(dateString).toLocaleString();
   };
 
+  const { kind, label } = statusDot();
+  const metaLabel = (text: string) => (
+    <span style={{ color: 'var(--hub-ink-3)' }}>{text}</span>
+  );
+
   return (
-    <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+    <div className="hub-card flex h-full flex-col overflow-hidden">
+      {/* Header */}
+      <div
+        className="flex items-start gap-3 px-4 py-3"
+        style={{ borderBottom: '1px solid var(--hub-line-2)' }}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="truncate"
+              style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.015em' }}
+            >
               {endpoint.name}
-            </h3>
-            {getStatusBadge()}
-          </div>
-          
-          {endpoint.description && (
-            <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-              {endpoint.description}
-            </p>
-          )}
-
-          <div className="space-y-1 text-sm text-gray-500 dark:text-gray-400">
-            <p>
-              <span className="font-medium">{t('xiaozhi.url', 'WebSocket URL')}:</span>{' '}
-              <span className="px-2 py-1 font-mono text-xs bg-gray-100 rounded dark:bg-gray-700">
-                {endpoint.webSocketUrl}
+            </span>
+            <StatusDot kind={kind} label={label} />
+            {groupName ? (
+              <span className="hub-tag" title={groupName}>
+                {groupName}
               </span>
-            </p>
-            
-            {endpoint.groupId && (
-              <p>
-                <span className="font-medium">{t('xiaozhi.group', 'Group')}:</span> {endpoint.groupId}
-              </p>
+            ) : (
+              <span className="hub-tag" style={{ color: 'var(--hub-ink-3)' }}>
+                {t('xiaozhi.allTools')}
+              </span>
             )}
-            
-            <p>
-              <span className="font-medium">{t('xiaozhi.created', 'Created')}:</span>{' '}
-              {formatDate(endpoint.createdAt)}
-            </p>
-            
-            <p>
-              <span className="font-medium">{t('xiaozhi.lastConnected', 'Last Connected')}:</span>{' '}
-              {formatDate(endpoint.lastConnected)}
-            </p>
-
-            <div className="text-xs">
-              <p>
-                <span className="font-medium">{t('xiaozhi.reconnect.maxAttempts', 'Max Attempts')}:</span>{' '}
-                {endpoint.reconnect.maxAttempts}
-              </p>
-              <p>
-                <span className="font-medium">{t('xiaozhi.reconnect.initialDelay', 'Initial Delay')}:</span>{' '}
-                {endpoint.reconnect.initialDelay}ms
-              </p>
+            {endpoint.useSmartRouting && (
+              <span className="hub-tag">{t('xiaozhi.form.useSmartRouting')}</span>
+            )}
+          </div>
+          {endpoint.description && (
+            <div className="truncate" style={{ fontSize: 12.5, color: 'var(--hub-ink-3)', marginTop: 2 }}>
+              {endpoint.description}
             </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={endpoint.enabled}
+          aria-label={t('xiaozhi.enabled')}
+          className={`hub-switch card flex-shrink-0${endpoint.enabled ? ' on' : ''}`}
+          style={{ marginTop: 3 }}
+          onClick={() => onToggleEnabled(endpoint.id, !endpoint.enabled)}
+        />
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 px-4 py-3 space-y-2.5">
+        <div>
+          <div className="text-[11px] mb-1" style={{ color: 'var(--hub-ink-3)' }}>
+            {t('xiaozhi.url')}
+          </div>
+          <div
+            className="hub-mono truncate"
+            style={{
+              fontSize: 12,
+              padding: '5px 8px',
+              borderRadius: 6,
+              background: 'var(--hub-bg-2)',
+              border: '1px solid var(--hub-line)',
+              color: 'var(--hub-ink-2)',
+            }}
+            title={endpoint.webSocketUrl}
+          >
+            {endpoint.webSocketUrl}
           </div>
         </div>
 
-        <div className="flex items-center gap-4 ml-4">
-          <div className="flex items-center">
-            <span className="mr-2 text-sm text-gray-700 dark:text-gray-300">{t('xiaozhi.enabled', 'Enabled')}</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={endpoint.enabled}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${endpoint.enabled ? 'bg-blue-200' : 'bg-gray-100'}`}
-              onClick={() => onToggleEnabled(endpoint.id, !endpoint.enabled)}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${endpoint.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5" style={{ fontSize: 12 }}>
+          <div className="min-w-0">
+            {metaLabel(t('xiaozhi.created'))}
+            <div className="truncate" style={{ color: 'var(--hub-ink-2)' }}>
+              {formatDate(endpoint.createdAt)}
+            </div>
+          </div>
+          <div className="min-w-0">
+            {metaLabel(t('xiaozhi.lastConnected'))}
+            <div className="truncate" style={{ color: 'var(--hub-ink-2)' }}>
+              {formatDate(endpoint.lastConnected)}
+            </div>
+          </div>
+          <div className="min-w-0">
+            {metaLabel(t('xiaozhi.reconnect.maxAttempts'))}
+            <div className="hub-num hub-mono" style={{ color: 'var(--hub-ink-2)' }}>
+              {endpoint.reconnect.infiniteReconnect ? '∞' : endpoint.reconnect.maxAttempts}
+            </div>
+          </div>
+          <div className="min-w-0">
+            {metaLabel(t('xiaozhi.reconnect.initialDelay'))}
+            <div className="hub-num hub-mono" style={{ color: 'var(--hub-ink-2)' }}>
+              {endpoint.reconnect.initialDelay}ms
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+      {/* Footer */}
+      <div
+        className="flex items-center justify-between gap-2 px-4 py-2.5"
+        style={{ borderTop: '1px solid var(--hub-line-2)' }}
+      >
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEdit(endpoint)}
-          >
-            {t('server.edit', 'Edit')}
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
+          <button className="hub-btn sm" onClick={() => onEdit(endpoint)}>
+            <Pencil size={12} /> {t('server.edit')}
+          </button>
+          <button
+            className="hub-btn sm"
             onClick={() => onReconnect(endpoint.id)}
             disabled={!endpoint.enabled || isReconnecting}
           >
-            {isReconnecting 
-              ? t('xiaozhi.reconnect.connecting', 'Reconnecting...') 
-              : t('xiaozhi.reconnect.title', 'Reconnect')
-            }
-          </Button>
+            <RefreshCw size={12} className={isReconnecting ? 'animate-spin' : undefined} />
+            {isReconnecting ? t('xiaozhi.reconnect.connecting') : t('xiaozhi.reconnect.title')}
+          </button>
         </div>
 
-        <Button
-          variant="destructive"
-          size="sm"
+        <button
+          className="hub-icon-btn sm"
+          style={{ color: 'var(--hub-ink-3)' }}
           onClick={() => setShowDeleteDialog(true)}
+          aria-label={t('common.delete')}
+          title={t('common.delete')}
         >
-          {t('common.delete', 'Delete')}
-        </Button>
+          <Trash2 size={13} />
+        </button>
       </div>
 
       <ConfirmDialog
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={handleDelete}
-        title={t('xiaozhi.delete.title', 'Delete Endpoint')}
-        message={t('xiaozhi.delete.message', 'Are you sure you want to delete this endpoint? This action cannot be undone.')}
-        confirmText={t('common.delete', 'Delete')}
-        cancelText={t('common.cancel', 'Cancel')}
+        title={t('xiaozhi.delete.title')}
+        message={t('xiaozhi.delete.message')}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
       />
     </div>
   );

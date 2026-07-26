@@ -141,7 +141,11 @@ export const findPackageRoot = (startPath?: string): string | null => {
     if (fs.existsSync(packageJsonPath)) {
       try {
         const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-        if (pkg.name === 'mcphub' || pkg.name === '@samanhappy/mcphub') {
+        if (
+          pkg.name === 'mcphub' ||
+          pkg.name === '@samanhappy/mcphub' ||
+          pkg.name === '@huangjunsen0406/xiaozhi-mcphub'
+        ) {
           if (debug) {
             console.log(`DEBUG: Found package.json at ${packageJsonPath}`);
           }

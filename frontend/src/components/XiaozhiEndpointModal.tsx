@@ -1,7 +1,12 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
 import XiaozhiEndpointForm from './XiaozhiEndpointForm';
-import { XiaozhiEndpoint, CreateEndpointData, UpdateEndpointData } from '../hooks/useXiaozhiEndpoints';
+import {
+  XiaozhiEndpoint,
+  CreateEndpointData,
+  UpdateEndpointData,
+} from '../hooks/useXiaozhiEndpoints';
 
 interface Group {
   id: string;
@@ -39,29 +44,23 @@ const XiaozhiEndpointModal: React.FC<XiaozhiEndpointModalProps> = ({
   };
 
   return (
-    <div className="flex fixed inset-0 z-50 justify-center items-center p-4 bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
-        <div className="flex-shrink-0 p-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-              {endpoint 
-                ? t('xiaozhi.modal.editTitle', 'Edit Endpoint') 
-                : t('xiaozhi.modal.createTitle', 'Create New Endpoint')
-              }
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-300"
-              disabled={loading}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="hub-card p-6 w-full max-w-3xl max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center mb-5 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-[var(--hub-ink)]">
+            {endpoint ? t('xiaozhi.modal.editTitle') : t('xiaozhi.modal.createTitle')}
+          </h2>
+          <button
+            onClick={onClose}
+            className="hub-icon-btn"
+            aria-label={t('app.closeButton')}
+            disabled={loading}
+          >
+            <X size={16} />
+          </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-6 pb-6">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <XiaozhiEndpointForm
             endpoint={endpoint}
             groups={groups}

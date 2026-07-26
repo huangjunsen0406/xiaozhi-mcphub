@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '../components/ui/Button';
+import { Plus, AlertCircle, X, Bot } from 'lucide-react';
 import XiaozhiEndpointCard from '../components/XiaozhiEndpointCard';
 import XiaozhiEndpointModal from '../components/XiaozhiEndpointModal';
 import { useXiaozhiEndpoints, XiaozhiEndpoint } from '../hooks/useXiaozhiEndpoints';
@@ -12,6 +12,43 @@ interface Group {
   name: string;
   description?: string;
 }
+
+const Stat: React.FC<{
+  label: string;
+  value: React.ReactNode;
+  tone?: 'ok' | 'warn' | 'err' | 'muted' | 'default';
+}> = ({ label, value, tone = 'default' }) => {
+  const toneColor =
+    tone === 'ok'
+      ? 'oklch(0.4 0.13 145)'
+      : tone === 'warn'
+        ? 'oklch(0.45 0.13 80)'
+        : tone === 'err'
+          ? 'oklch(0.45 0.18 25)'
+          : tone === 'muted'
+            ? 'var(--hub-ink-3)'
+            : 'var(--hub-ink)';
+  return (
+    <div className="hub-card" style={{ padding: '14px 16px' }}>
+      <div className="text-[12px]" style={{ color: 'var(--hub-ink-3)' }}>
+        {label}
+      </div>
+      <div
+        className="hub-num"
+        style={{
+          fontSize: 26,
+          fontWeight: 500,
+          letterSpacing: '-0.02em',
+          lineHeight: 1.1,
+          marginTop: 8,
+          color: toneColor,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+};
 
 const XiaozhiEndpointsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -35,6 +72,7 @@ const XiaozhiEndpointsPage: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingEndpoint, setEditingEndpoint] = useState<XiaozhiEndpoint | undefined>();
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
 
   // Fetch groups for the form dropdown
   useEffect(() => {
@@ -67,11 +105,9 @@ const XiaozhiEndpointsPage: React.FC = () => {
   };
 
   const handleFormSubmit = async (data: any) => {
-    const success = editingEndpoint
+    return editingEndpoint
       ? await updateEndpoint(editingEndpoint.id, data)
       : await createEndpoint(data);
-    
-    return success;
   };
 
   const handleModalClose = () => {
@@ -87,133 +123,130 @@ const XiaozhiEndpointsPage: React.FC = () => {
     await updateConfig({ enabled });
   };
 
+  const groupNameById = (id?: string) => groups.find((g) => g.id === id)?.name;
+  const visibleError = error && error !== dismissedError ? error : null;
+  const showSkeleton = loading && endpoints.length === 0;
 
   return (
-    <div className="p-6">
+    <div>
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {t('xiaozhi.title', 'Xiaozhi Endpoints')}
-            </h1>
-            <p className="mt-1 text-gray-600 dark:text-gray-400">
-              {t('xiaozhi.description', 'Manage your Xiaozhi WebSocket endpoints for MCP integration')}
-            </p>
-          </div>
-          
-          <Button onClick={handleCreateNew}>
-            {t('xiaozhi.addEndpoint', 'Add Endpoint')}
-          </Button>
+      <div className="flex items-end justify-between gap-4 mb-6">
+        <div>
+          <h1 className="hub-h1">{t('xiaozhi.title')}</h1>
+          <p className="hub-sub">
+            <span className="hub-num">{endpoints.length}</span> {t('xiaozhi.endpointsUnit')}
+            {'  ·  '}
+            {t('xiaozhi.status.connected')} · <span className="hub-num">{getConnectedCount()}</span>
+          </p>
         </div>
-
-        {/* Status Overview */}
-        <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-4">
-          <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('xiaozhi.status.service', 'Service Status')}
-                </p>
-                <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {config.enabled ? t('xiaozhi.status.enabled', 'Enabled') : t('xiaozhi.status.disabled', 'Disabled')}
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={config.enabled}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.enabled ? 'bg-blue-200' : 'bg-gray-100'}`}
-                onClick={() => handleToggleService(!config.enabled)}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
-          </div>
-
-          <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t('xiaozhi.status.totalEndpoints', 'Total Endpoints')}
-            </p>
-            <p className="text-2xl font-bold text-blue-600">{endpoints.length}</p>
-          </div>
-
-          <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t('xiaozhi.status.enabled', 'Enabled')}
-            </p>
-            <p className="text-2xl font-bold text-green-600">{getEnabledCount()}</p>
-          </div>
-
-          <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t('xiaozhi.status.connected', 'Connected')}
-            </p>
-            <p className="text-2xl font-bold text-emerald-600">{getConnectedCount()}</p>
-          </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <span className="text-[13px]" style={{ color: 'var(--hub-ink-2)' }}>
+              {t('xiaozhi.status.service')}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config.enabled}
+              aria-label={t('xiaozhi.status.service')}
+              className={`hub-switch${config.enabled ? ' on' : ''}`}
+              onClick={() => handleToggleService(!config.enabled)}
+            />
+          </label>
+          <button className="hub-btn primary" onClick={handleCreateNew}>
+            <Plus size={13} /> {t('xiaozhi.addEndpoint')}
+          </button>
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="p-4 mb-6 border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20 dark:border-red-800">
-          <p className="text-red-800 dark:text-red-400">{error}</p>
+      {/* Error */}
+      {visibleError && (
+        <div
+          className="hub-card flex items-center justify-between gap-3 mb-4"
+          style={{
+            padding: '10px 14px',
+            borderColor: 'oklch(0.85 0.1 25)',
+            background: 'oklch(0.97 0.03 25)',
+            color: 'oklch(0.4 0.18 25)',
+          }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle size={14} className="flex-shrink-0" />
+            <span className="truncate text-[13px]">{visibleError}</span>
+          </div>
+          <button
+            className="hub-icon-btn sm"
+            onClick={() => setDismissedError(error)}
+            aria-label={t('app.closeButton')}
+          >
+            <X size={13} />
+          </button>
         </div>
       )}
 
-      {/* Endpoints List */}
-      <div className="space-y-4">
-        {loading && endpoints.length === 0 ? (
-          <div className="py-8 text-center">
-            <p className="text-gray-500 dark:text-gray-400">
-              {t('app.loading', 'Loading...')}
-            </p>
-          </div>
-        ) : endpoints.length === 0 ? (
-          <div className="py-12 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="mb-4">
-                <svg
-                  className="w-12 h-12 mx-auto text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"
-                  />
-                </svg>
-              </div>
-              <h3 className="mb-2 text-lg font-medium text-gray-900 dark:text-white">
-                {t('xiaozhi.empty.title', 'No endpoints configured')}
-              </h3>
-              <p className="mb-4 text-gray-500 dark:text-gray-400">
-                {t('xiaozhi.empty.description', 'Get started by creating your first Xiaozhi endpoint.')}
-              </p>
-              <Button onClick={handleCreateNew}>
-                {t('xiaozhi.addEndpoint', 'Add Endpoint')}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          endpoints.map((endpoint) => (
+      {/* Stat row */}
+      {showSkeleton ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="hub-card animate-pulse"
+              style={{ padding: '14px 16px', height: 78 }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <Stat
+            label={t('xiaozhi.status.service')}
+            value={config.enabled ? t('xiaozhi.status.enabled') : t('xiaozhi.status.disabled')}
+            tone={config.enabled ? 'ok' : 'muted'}
+          />
+          <Stat label={t('xiaozhi.status.totalEndpoints')} value={endpoints.length} />
+          <Stat label={t('xiaozhi.status.enabled')} value={getEnabledCount()} />
+          <Stat
+            label={t('xiaozhi.status.connected')}
+            value={getConnectedCount()}
+            tone={getConnectedCount() > 0 ? 'ok' : 'muted'}
+          />
+        </div>
+      )}
+
+      {/* Endpoints */}
+      {showSkeleton ? (
+        <div className="hub-card p-6 text-center" style={{ color: 'var(--hub-ink-3)' }}>
+          {t('app.loading')}
+        </div>
+      ) : endpoints.length === 0 ? (
+        <div className="hub-card p-10 text-center">
+          <Bot size={28} className="mx-auto mb-3" style={{ color: 'var(--hub-ink-3)' }} />
+          <h3 className="hub-card-title" style={{ fontSize: 14, marginBottom: 4 }}>
+            {t('xiaozhi.empty.title')}
+          </h3>
+          <p className="hub-sub" style={{ marginBottom: 14 }}>
+            {t('xiaozhi.empty.description')}
+          </p>
+          <button className="hub-btn primary mx-auto" onClick={handleCreateNew}>
+            <Plus size={13} /> {t('xiaozhi.addEndpoint')}
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+          {endpoints.map((endpoint) => (
             <XiaozhiEndpointCard
               key={endpoint.id}
               endpoint={endpoint}
               status={getEndpointStatusById(endpoint.id)}
               isReconnecting={isEndpointReconnecting(endpoint.id)}
+              groupName={groupNameById(endpoint.groupId)}
               onEdit={handleEdit}
               onDelete={deleteEndpoint}
               onReconnect={reconnectEndpoint}
               onToggleEnabled={handleToggleEnabled}
             />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Modal */}
       <XiaozhiEndpointModal
