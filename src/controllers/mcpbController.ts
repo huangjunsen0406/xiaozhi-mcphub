@@ -76,6 +76,50 @@ const resolveMcpbServerExtractDir = (baseDir: string, serverName: string): strin
   return resolvedTargetDir;
 };
 
+/**
+ * Extract zip entries only when each entry path stays inside targetDir (zip-slip guard).
+ * Prefer this over extractAllTo so malicious entry names cannot escape even if the
+ * zip library's own sanitization changes.
+ */
+const extractMcpbArchiveSafely = (zip: AdmZip, targetDir: string): void => {
+  const resolvedTargetDir = path.resolve(targetDir);
+  if (!fs.existsSync(resolvedTargetDir)) {
+    fs.mkdirSync(resolvedTargetDir, { recursive: true });
+  }
+
+  for (const entry of zip.getEntries()) {
+    const entryName = entry.entryName.replace(/\\/g, '/');
+    if (!entryName || entryName.includes('\0')) {
+      throw new Error('Invalid archive entry name');
+    }
+
+    // Reject absolute paths and Windows drive-prefixed names early.
+    if (path.isAbsolute(entryName) || /^[a-zA-Z]:[\\/]/.test(entryName)) {
+      throw new Error(`Invalid archive entry path: ${entryName}`);
+    }
+
+    // Reject any segment that is ".." before joining (zip-slip).
+    const segments = entryName.split('/').filter((s) => s !== '' && s !== '.');
+    if (segments.some((s) => s === '..')) {
+      throw new Error(`Invalid archive entry path: ${entryName}`);
+    }
+
+    const destination = path.resolve(resolvedTargetDir, ...segments);
+    const relative = path.relative(resolvedTargetDir, destination);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error(`Invalid archive entry path: ${entryName}`);
+    }
+
+    if (entry.isDirectory || entryName.endsWith('/')) {
+      fs.mkdirSync(destination, { recursive: true });
+      continue;
+    }
+
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, entry.getData());
+  }
+};
+
 // Clean up old MCPB server files when installing a new version
 const cleanupOldMcpbServer = (serverName: string): void => {
   try {
@@ -115,9 +159,9 @@ export const uploadMcpbFile = async (req: Request, res: Response): Promise<void>
     const tempExtractDir = path.join(path.dirname(mcpbFilePath), `temp-extracted-${timestamp}`);
 
     try {
-      // Extract the MCPB file (which is a ZIP archive) to a temporary directory first
+      // Extract the MCPB file (ZIP) with per-entry path checks (CWE-22 / zip-slip).
       const zip = new AdmZip(mcpbFilePath);
-      zip.extractAllTo(tempExtractDir, true);
+      extractMcpbArchiveSafely(zip, tempExtractDir);
 
       // Read and validate the manifest.json
       const manifestPath = path.join(tempExtractDir, 'manifest.json');

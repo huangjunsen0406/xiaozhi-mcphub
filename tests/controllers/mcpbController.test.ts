@@ -112,4 +112,53 @@ describe('mcpbController - uploadMcpbFile', () => {
     expect(fs.existsSync(path.join(finalExtractDir, 'manifest.json'))).toBe(true);
     expect(fs.existsSync(path.join(finalExtractDir, 'server.js'))).toBe(true);
   });
+
+  it('rejects archive entries that attempt zip-slip path traversal', async () => {
+    const uploadDir = path.join(tempRoot, 'data/uploads/mcpb');
+    const mcpbFilePath = path.join(uploadDir, 'slip.mcpb');
+
+    // Build a zip whose central-directory names still contain ".."
+    // (AdmZip.addFile may collapse them; write raw zip via buffer from a known layout).
+    const { execFileSync } = require('child_process') as typeof import('child_process');
+    const staging = path.join(tempRoot, 'slip-staging');
+    fs.mkdirSync(staging, { recursive: true });
+    fs.writeFileSync(
+      path.join(staging, 'manifest.json'),
+      JSON.stringify({
+        manifest_version: '1',
+        name: 'safe-name',
+        version: '1.0.0',
+        server: { entry: 'server.js' },
+      }),
+    );
+    // Use Python zipfile to preserve traversal entry names
+    execFileSync(
+      'python3',
+      [
+        '-c',
+        `
+import zipfile
+z = zipfile.ZipFile(${JSON.stringify(mcpbFilePath)}, 'w')
+z.write(${JSON.stringify(path.join(staging, 'manifest.json'))}, 'manifest.json')
+z.writestr('../../../escaped-pwn.txt', 'pwned')
+z.writestr('subdir/../../outside.txt', 'out')
+z.close()
+`,
+      ],
+      { stdio: 'pipe' },
+    );
+
+    const { response, json, status } = createResponse();
+    await uploadMcpbFile({ file: { path: mcpbFilePath } } as Request, response);
+
+    expect(status).toHaveBeenCalledWith(500);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        message: expect.stringContaining('Invalid archive entry path'),
+      }),
+    );
+    expect(fs.existsSync(path.resolve(uploadDir, '../../../escaped-pwn.txt'))).toBe(false);
+    expect(fs.existsSync(mcpbFilePath)).toBe(false);
+  });
 });
