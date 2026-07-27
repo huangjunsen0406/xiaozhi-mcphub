@@ -154,7 +154,9 @@
     "verifySuccessTitle": "邮箱验证成功",
     "verifySuccessBody": "邮箱已验证，现在可以登录了。",
     "verifyFailedTitle": "验证失败",
-    "verifyFailedBody": "验证链接无效或已过期。"
+    "verifyFailedBody": "验证链接无效或已过期。",
+    "currentPasswordIncorrect": "当前密码不正确",
+    "user": "用户"
   },
   "server": {
     "addServer": "添加服务器",
@@ -315,7 +317,21 @@
     "failedToUpdateSystemConfig": "更新系统配置失败",
     "failedToUpdateRouteConfig": "更新路由配置失败",
     "failedToUpdateSmartRoutingConfig": "更新智能路由配置失败",
-    "failedToUpdateBetterAuthConfig": "更新 Better Auth 配置失败"
+    "failedToUpdateBetterAuthConfig": "更新 Better Auth 配置失败",
+    "failedToCreateEndpoint": "创建端点失败",
+    "failedToDeleteEndpoint": "删除端点失败",
+    "failedToFetchEndpoints": "获取端点详情失败",
+    "failedToFetchXiaozhiConfig": "获取小智配置失败",
+    "failedToReconnectEndpoint": "重连端点失败",
+    "failedToUpdateEndpoint": "更新端点失败",
+    "failedToUpdateInstallConfig": "更新安装配置失败",
+    "failedToUpdateMCPRouterConfig": "更新 MCP Router 配置失败",
+    "failedToUpdateNameSeparator": "更新名称分隔符失败",
+    "failedToUpdateOAuthServerConfig": "更新 OAuth 服务配置失败",
+    "failedToUpdateRoutingConfig": "更新路由配置失败",
+    "failedToUpdateSessionRebuild": "更新会话重建设置失败",
+    "failedToUpdateSettings": "更新设置失败",
+    "failedToUpdateXiaozhiConfig": "更新小智配置失败"
   },
   "common": {
     "processing": "处理中...",
@@ -367,7 +383,8 @@
     "inactive": "未激活",
     "viewAll": "查看全部",
     "docs": "文档",
-    "all": "全部"
+    "all": "全部",
+    "edit": "编辑"
   },
   "pagination": {
     "rowsPerPage": "每页行数",
@@ -853,7 +870,7 @@
     "mcpRouterApiKeyPlaceholder": "请输入 MCPRouter API 密钥",
     "mcpRouterReferer": "引用地址",
     "mcpRouterRefererDescription": "MCPRouter API 请求的引用地址头",
-    "mcpRouterRefererPlaceholder": "https://www.mcphub.app",
+    "mcpRouterRefererPlaceholder": "https://github.com/huangjunsen0406/xiaozhi-mcphub",
     "mcpRouterTitle": "标题",
     "mcpRouterTitleDescription": "MCPRouter API 请求的标题头",
     "mcpRouterTitlePlaceholder": "MCPHub",
@@ -923,7 +940,12 @@
     "testEmailPlaceholder": "测试邮件收件地址",
     "testEmailSending": "发送中...",
     "testEmailSent": "测试邮件已发送",
-    "testEmailFailed": "测试邮件发送失败"
+    "testEmailFailed": "测试邮件发送失败",
+    "endpointCreated": "端点创建成功",
+    "endpointDeleted": "端点删除成功",
+    "endpointReconnecting": "端点重连已发起",
+    "noChanges": "没有需要保存的更改",
+    "selectAtLeastOneGroupOrServer": "请至少选择一个分组或服务器"
   },
   "mcpb": {
     "upload": "上传",
@@ -1021,7 +1043,8 @@
     "statsError": "获取用户统计失败",
     "deleteConfirmation": "您确定要删除用户 '{{username}}' 吗？此操作无法撤消。",
     "confirmDelete": "删除用户",
-    "deleteWarning": "您确定要删除用户 '{{username}}' 吗？此操作无法撤消。"
+    "deleteWarning": "您确定要删除用户 '{{username}}' 吗？此操作无法撤消。",
+    "fetchError": "获取用户列表失败"
   },
   "api": {
     "errors": {
@@ -1066,7 +1089,21 @@
       "failedToFilterMarketServers": "过滤市场服务器失败",
       "failedToProcessMcpbFile": "处理 MCPB 文件失败",
       "failedToFetchXiaozhiConfig": "获取小智配置失败",
-      "failedToUpdateXiaozhiConfig": "更新小智配置失败"
+      "failedToUpdateXiaozhiConfig": "更新小智配置失败",
+      "server_error": "服务器错误",
+      "validation_failed": "参数校验失败",
+      "user_not_found": "用户不存在",
+      "emailNotVerified": "邮箱尚未验证",
+      "emailRequired": "请输入邮箱",
+      "emailAlreadyUsed": "该邮箱已被使用",
+      "userExists": "用户已存在",
+      "tokenRequired": "缺少令牌",
+      "invalidOrExpiredToken": "令牌无效或已过期",
+      "invalidToken": "令牌无效或已过期",
+      "emailServiceDisabled": "邮件服务未启用",
+      "tooManyRequests": "请求过于频繁，请稍后再试",
+      "emailSendFailed": "邮件发送失败",
+      "tokenAndPasswordRequired": "需要令牌和新密码"
     },
     "success": {
       "serverCreated": "服务器创建成功",
@@ -1082,7 +1119,14 @@
       "serverAddedToGroup": "服务器添加到分组成功",
       "serverRemovedFromGroup": "服务器从分组移除成功",
       "serverToolsUpdated": "服务器工具更新成功",
-      "xiaozhiConfigUpdated": "小智配置更新成功"
+      "xiaozhiConfigUpdated": "小智配置更新成功",
+      "login_successful": "登录成功",
+      "emailVerified": "邮箱验证成功",
+      "registrationPendingVerification": "注册成功，请先验证邮箱后再登录。",
+      "passwordResetEmailSent": "如果该邮箱存在，我们已发送重置链接，请查收邮件。",
+      "passwordResetSuccess": "密码重置成功",
+      "tokenValid": "令牌有效",
+      "endpointUpdated": "端点已更新"
     }
   },
   "oauthCallback": {

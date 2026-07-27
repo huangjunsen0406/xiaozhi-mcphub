@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, Eye, EyeOff, MailCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getPublicConfig } from '../services/configService';
+import { validatePasswordStrength } from '../utils/passwordValidation';
 import ThemeSwitch from '@/components/ui/ThemeSwitch';
 import LanguageSwitch from '@/components/ui/LanguageSwitch';
 
@@ -46,8 +47,9 @@ const RegisterPage: React.FC = () => {
       setError(t('auth.emailRequired'));
       return;
     }
-    if (password.length < 6) {
-      setError(t('auth.passwordTooShort'));
+    const strength = validatePasswordStrength(password);
+    if (!strength.isValid) {
+      setError(t(`auth.${strength.errors[0]}`));
       return;
     }
     if (password !== confirmPassword) {

@@ -63,6 +63,12 @@ const ChangePasswordForm: React.FC<ChangePasswordFormProps> = ({ onSuccess, onCa
         if (onSuccess) {
           onSuccess();
         }
+      } else if (Array.isArray((response as any).errors) && (response as any).errors.length > 0) {
+        const codes = (response as any).errors as string[];
+        setPasswordErrors(codes);
+        setError(t(`auth.${codes[0]}`, { defaultValue: t('auth.passwordStrengthError') }));
+      } else if (response.message === 'Password does not meet security requirements') {
+        setError(t('auth.passwordStrengthError'));
       } else {
         setError(response.message || t('auth.changePasswordError'));
       }

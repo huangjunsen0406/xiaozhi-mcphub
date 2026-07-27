@@ -3,9 +3,22 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { verifyResetToken, resetPassword } from '../services/authService';
+import { validatePasswordStrength } from '../utils/passwordValidation';
 import AuthPageShell from '../components/AuthPageShell';
 
 type TokenState = 'checking' | 'valid' | 'invalid';
+
+/** Map backend/frontend password strength codes (or legacy English) to auth.* keys. */
+const PASSWORD_ERROR_CODE_BY_LEGACY: Record<string, string> = {
+  'Password must be at least 8 characters long': 'passwordMinLength',
+  'Password must contain at least one letter': 'passwordRequireLetter',
+  'Password must contain at least one number': 'passwordRequireNumber',
+  'Password must contain at least one special character': 'passwordRequireSpecial',
+  passwordMinLength: 'passwordMinLength',
+  passwordRequireLetter: 'passwordRequireLetter',
+  passwordRequireNumber: 'passwordRequireNumber',
+  passwordRequireSpecial: 'passwordRequireSpecial',
+};
 
 const ResetPasswordPage: React.FC = () => {
   const { t } = useTranslation();
@@ -20,8 +33,17 @@ const ResetPasswordPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+
+  const translatePasswordError = (codeOrMessage: string): string => {
+    const code = PASSWORD_ERROR_CODE_BY_LEGACY[codeOrMessage] || codeOrMessage;
+    const key = `auth.${code}`;
+    const translated = t(key);
+    // i18next returns the key itself when missing — fall back to raw text.
+    return translated === key ? codeOrMessage : translated;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +63,15 @@ const ResetPasswordPage: React.FC = () => {
     };
   }, [token]);
 
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (value) {
+      setPasswordErrors(validatePasswordStrength(value).errors);
+    } else {
+      setPasswordErrors([]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -49,10 +80,14 @@ const ResetPasswordPage: React.FC = () => {
       setError(t('auth.emptyFields'));
       return;
     }
-    if (password.length < 6) {
-      setError(t('auth.passwordTooShort'));
+
+    const strength = validatePasswordStrength(password);
+    if (!strength.isValid) {
+      setPasswordErrors(strength.errors);
+      setError(t('auth.passwordStrengthError'));
       return;
     }
+
     if (password !== confirmPassword) {
       setError(t('auth.passwordsNotMatch'));
       return;
@@ -64,7 +99,26 @@ const ResetPasswordPage: React.FC = () => {
       if (result.success) {
         setDone(true);
       } else {
-        setError(result.message || t('auth.resetFailed'));
+        const serverCodes = Array.isArray(result.errors) ? result.errors : [];
+        if (serverCodes.length > 0) {
+          setPasswordErrors(
+            serverCodes
+              .map((c) => PASSWORD_ERROR_CODE_BY_LEGACY[c] || c)
+              .filter((c) =>
+                [
+                  'passwordMinLength',
+                  'passwordRequireLetter',
+                  'passwordRequireNumber',
+                  'passwordRequireSpecial',
+                ].includes(c),
+              ),
+          );
+          setError(translatePasswordError(serverCodes[0]));
+        } else if (result.message === 'Password does not meet security requirements') {
+          setError(t('auth.passwordStrengthError'));
+        } else {
+          setError(result.message || t('auth.resetFailed'));
+        }
       }
     } catch {
       setError(t('auth.resetFailed'));
@@ -127,11 +181,28 @@ const ResetPasswordPage: React.FC = () => {
             type="password"
             autoComplete="new-password"
             required
+            minLength={8}
             className="hub-input"
             placeholder={t('auth.newPassword')}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => handlePasswordChange(e.target.value)}
           />
+          <p className="hub-sub" style={{ marginTop: 6, fontSize: 12 }}>
+            {t('auth.passwordStrengthHint')}
+          </p>
+          {password && passwordErrors.length > 0 && (
+            <ul className="mt-2 space-y-1 list-none p-0">
+              {passwordErrors.map((code) => (
+                <li
+                  key={code}
+                  className="text-[12.5px]"
+                  style={{ color: 'oklch(0.45 0.18 25)' }}
+                >
+                  • {translatePasswordError(code)}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div>
@@ -143,6 +214,7 @@ const ResetPasswordPage: React.FC = () => {
             type="password"
             autoComplete="new-password"
             required
+            minLength={8}
             className="hub-input"
             placeholder={t('auth.confirmPassword')}
             value={confirmPassword}

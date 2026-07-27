@@ -154,7 +154,9 @@
     "verifySuccessTitle": "Email verified",
     "verifySuccessBody": "Your email has been verified. You can now log in.",
     "verifyFailedTitle": "Verification failed",
-    "verifyFailedBody": "The verification link is invalid or has expired."
+    "verifyFailedBody": "The verification link is invalid or has expired.",
+    "currentPasswordIncorrect": "Current password is incorrect",
+    "user": "User"
   },
   "server": {
     "addServer": "Add Server",
@@ -313,7 +315,22 @@
     "failedToFetchSettings": "Failed to fetch settings",
     "failedToUpdateRouteConfig": "Failed to update route configuration",
     "failedToUpdateSmartRoutingConfig": "Failed to update smart routing configuration",
-    "failedToUpdateBetterAuthConfig": "Failed to update Better Auth configuration"
+    "failedToUpdateBetterAuthConfig": "Failed to update Better Auth configuration",
+    "failedToCreateEndpoint": "Failed to create endpoint",
+    "failedToDeleteEndpoint": "Failed to delete endpoint",
+    "failedToFetchEndpoints": "Failed to fetch endpoint details",
+    "failedToFetchXiaozhiConfig": "Failed to fetch Xiaozhi configuration",
+    "failedToReconnectEndpoint": "Failed to reconnect endpoint",
+    "failedToUpdateEndpoint": "Failed to update endpoint",
+    "failedToUpdateInstallConfig": "Failed to update install config",
+    "failedToUpdateMCPRouterConfig": "Failed to update MCP Router config",
+    "failedToUpdateNameSeparator": "Failed to update name separator",
+    "failedToUpdateOAuthServerConfig": "Failed to update OAuth server config",
+    "failedToUpdateRoutingConfig": "Failed to update routing config",
+    "failedToUpdateSessionRebuild": "Failed to update session rebuild setting",
+    "failedToUpdateSettings": "Failed to update settings",
+    "failedToUpdateSystemConfig": "Failed to update system config",
+    "failedToUpdateXiaozhiConfig": "Failed to update Xiaozhi configuration"
   },
   "common": {
     "processing": "Processing...",
@@ -365,7 +382,8 @@
     "inactive": "Inactive",
     "viewAll": "View all",
     "docs": "Docs",
-    "all": "All"
+    "all": "All",
+    "edit": "Edit"
   },
   "pagination": {
     "rowsPerPage": "Rows per page",
@@ -850,7 +868,7 @@
     "mcpRouterApiKeyPlaceholder": "Enter MCPRouter API key",
     "mcpRouterReferer": "Referer",
     "mcpRouterRefererDescription": "Referer header for MCPRouter API requests",
-    "mcpRouterRefererPlaceholder": "https://www.mcphub.app",
+    "mcpRouterRefererPlaceholder": "https://github.com/huangjunsen0406/xiaozhi-mcphub",
     "mcpRouterTitle": "Title",
     "mcpRouterTitleDescription": "Title header for MCPRouter API requests",
     "mcpRouterTitlePlaceholder": "MCPHub",
@@ -920,7 +938,12 @@
     "testEmailPlaceholder": "Recipient for test email",
     "testEmailSending": "Sending...",
     "testEmailSent": "Test email sent",
-    "testEmailFailed": "Failed to send test email"
+    "testEmailFailed": "Failed to send test email",
+    "endpointCreated": "Endpoint created successfully",
+    "endpointDeleted": "Endpoint deleted successfully",
+    "endpointReconnecting": "Endpoint reconnection initiated",
+    "noChanges": "No changes to save",
+    "selectAtLeastOneGroupOrServer": "Please select at least one group or server"
   },
   "mcpb": {
     "upload": "Upload",
@@ -1018,7 +1041,8 @@
     "statsError": "Failed to fetch user statistics",
     "deleteConfirmation": "Are you sure you want to delete user '{{username}}'? This action cannot be undone.",
     "confirmDelete": "Delete User",
-    "deleteWarning": "Are you sure you want to delete user '{{username}}'? This action cannot be undone."
+    "deleteWarning": "Are you sure you want to delete user '{{username}}'? This action cannot be undone.",
+    "fetchError": "Failed to fetch users"
   },
   "api": {
     "errors": {
@@ -1064,7 +1088,21 @@
       "failedToFilterMarketServers": "Failed to filter market servers",
       "failedToProcessMcpbFile": "Failed to process MCPB file",
       "failedToFetchXiaozhiConfig": "Failed to fetch Xiaozhi configuration",
-      "failedToUpdateXiaozhiConfig": "Failed to update Xiaozhi configuration"
+      "failedToUpdateXiaozhiConfig": "Failed to update Xiaozhi configuration",
+      "server_error": "Server error",
+      "validation_failed": "Validation failed",
+      "user_not_found": "User not found",
+      "emailNotVerified": "Email not verified",
+      "emailRequired": "Email is required",
+      "emailAlreadyUsed": "Email already in use",
+      "userExists": "User already exists",
+      "tokenRequired": "Token is required",
+      "invalidOrExpiredToken": "Invalid or expired token",
+      "invalidToken": "Invalid or expired token",
+      "emailServiceDisabled": "Email service is not enabled",
+      "tooManyRequests": "Too many requests. Please try again later.",
+      "emailSendFailed": "Failed to send email",
+      "tokenAndPasswordRequired": "Token and new password are required"
     },
     "success": {
       "serverCreated": "Server created successfully",
@@ -1080,7 +1118,14 @@
       "serverAddedToGroup": "Server added to group successfully",
       "serverRemovedFromGroup": "Server removed from group successfully",
       "serverToolsUpdated": "Server tools updated successfully",
-      "xiaozhiConfigUpdated": "Xiaozhi configuration updated"
+      "xiaozhiConfigUpdated": "Xiaozhi configuration updated",
+      "login_successful": "Login successful",
+      "emailVerified": "Email verified successfully",
+      "registrationPendingVerification": "Registration successful. Please verify your email before logging in.",
+      "passwordResetEmailSent": "If the email exists, a reset link has been sent. Please check your inbox.",
+      "passwordResetSuccess": "Password reset successfully",
+      "tokenValid": "Token is valid",
+      "endpointUpdated": "Endpoint updated successfully"
     }
   },
   "oauthCallback": {
@@ -1297,7 +1342,7 @@
     },
     "reconnect": {
       "title": "Reconnect",
-      "connecting": "重连中...",
+      "connecting": "Reconnecting...",
       "maxAttempts": "Max Attempts",
       "initialDelay": "Initial Delay"
     },

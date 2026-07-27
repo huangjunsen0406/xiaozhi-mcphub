@@ -106,7 +106,57 @@
     "passwordRequireLetter": "Le mot de passe doit contenir au moins une lettre",
     "passwordRequireNumber": "Le mot de passe doit contenir au moins un chiffre",
     "passwordRequireSpecial": "Le mot de passe doit contenir au moins un caractère spécial",
-    "passwordStrengthHint": "Le mot de passe doit contenir au moins 8 caractères et inclure des lettres, des chiffres et des caractères spéciaux"
+    "passwordStrengthHint": "Le mot de passe doit contenir au moins 8 caractères et inclure des lettres, des chiffres et des caractères spéciaux",
+    "currentPasswordIncorrect": "Le mot de passe actuel est incorrect",
+    "user": "Utilisateur",
+    "backToLogin": "Retour à la connexion",
+    "confirmPasswordPlaceholder": "Saisissez à nouveau le mot de passe",
+    "createAccount": "Créer un compte",
+    "email": "E-mail",
+    "emailNotVerified": "Votre e-mail n'est pas vérifié. Veuillez consulter votre boîte de réception pour le lien de vérification.",
+    "emailOptionalHint": "facultatif, requis lorsque la vérification par e-mail est activée",
+    "emailPlaceholder": "vous@exemple.com",
+    "emailRequired": "L'e-mail est requis",
+    "emailRequiredHint": "Le service d'e-mail est activé — vous devez vérifier votre e-mail avant de vous connecter.",
+    "forgotPassword": "Mot de passe oublié ?",
+    "forgotPasswordHint": "Entrez l’e-mail de votre compte et nous vous enverrons un lien de réinitialisation.",
+    "forgotPasswordTitle": "Réinitialiser votre mot de passe",
+    "haveAccount": "Vous avez déjà un compte ?",
+    "loginPrompt": "Veuillez saisir vos identifiants pour accéder au panneau d’administration",
+    "noAccount": "Vous n'avez pas de compte ?",
+    "passwordPlaceholder": "Entrez votre mot de passe",
+    "register": "S'inscrire",
+    "registerFailed": "Échec de l'inscription",
+    "registerPrompt": "Créez un nouveau compte pour accéder au tableau de bord",
+    "registerTitle": "Créez votre compte",
+    "registering": "Inscription…",
+    "rememberMe": "Se souvenir du compte",
+    "requestNewLink": "Demander un nouveau lien",
+    "resetEmailSentBody": "Si l'e-mail existe, un lien de réinitialisation a été envoyé. Vérifiez votre boîte de réception.",
+    "resetEmailSentTitle": "E-mail de réinitialisation envoyé",
+    "resetFailed": "Échec de la réinitialisation du mot de passe",
+    "resetPassword": "Réinitialiser le mot de passe",
+    "resetPasswordTitle": "Définir un nouveau mot de passe",
+    "resetRequestFailed": "Échec de la demande de réinitialisation",
+    "resetSuccessBody": "Votre mot de passe a été réinitialisé. Vous pouvez maintenant vous connecter avec le nouveau mot de passe.",
+    "resetSuccessTitle": "Mot de passe réinitialisé",
+    "resetTokenInvalidBody": "Le lien de réinitialisation est invalide ou a expiré. Veuillez en demander un nouveau.",
+    "resetTokenInvalidTitle": "Lien invalide ou expiré",
+    "resetting": "Réinitialisation…",
+    "sendResetEmail": "Envoyer l’e-mail de réinitialisation",
+    "sending": "Envoi…",
+    "sloganDesc": "Routage intelligent · Gestion centralisée · Collaboration efficace",
+    "usernamePlaceholder": "Entrez votre nom d'utilisateur",
+    "verificationEmailSentBody": "Nous avons envoyé un lien de vérification à {{email}}. Veuillez vérifier avant de vous connecter.",
+    "verificationEmailSentTitle": "E-mail de vérification envoyé",
+    "verifyEmailTitle": "Vérifiez votre e-mail",
+    "verifyFailedBody": "Le lien de vérification est invalide ou a expiré.",
+    "verifyFailedTitle": "Échec de la vérification",
+    "verifySuccessBody": "Votre e-mail a été vérifié. Vous pouvez maintenant vous connecter.",
+    "verifySuccessTitle": "E-mail vérifié",
+    "verifyingEmail": "Vérification de votre e-mail…",
+    "welcomeBack": "Bon retour",
+    "passwordTooShort": "Le mot de passe doit contenir au moins 6 caractères"
   },
   "server": {
     "addServer": "Ajouter un serveur",
@@ -235,7 +285,15 @@
       "resource": "Ressource / Audience",
       "accessToken": "Jeton d'accès",
       "refreshToken": "Jeton d'actualisation"
-    }
+    },
+    "visibility": "Visibilité",
+    "visibilityDescription": "Contrôle quels utilisateurs non administrateurs voient ce serveur dans tools/list. Les administrateurs voient toujours tous les serveurs.",
+    "visibilityGroup": "Groupe (réservé — pas encore implémenté)",
+    "visibilityGroupShort": "Groupe",
+    "visibilityPrivate": "Privé — uniquement le propriétaire et les administrateurs",
+    "visibilityPrivateShort": "Privé",
+    "visibilityPublic": "Public — tous les utilisateurs authentifiés",
+    "visibilityPublicShort": "Public"
   },
   "status": {
     "online": "En ligne",
@@ -258,7 +316,22 @@
     "failedToFetchSettings": "Échec de la récupération des paramètres",
     "failedToUpdateRouteConfig": "Échec de la mise à jour de la configuration de routage",
     "failedToUpdateSmartRoutingConfig": "Échec de la mise à jour de la configuration du routage intelligent",
-    "failedToUpdateBetterAuthConfig": "Échec de la mise à jour de la configuration Better Auth"
+    "failedToUpdateBetterAuthConfig": "Échec de la mise à jour de la configuration Better Auth",
+    "failedToCreateEndpoint": "Échec de la création du point de terminaison",
+    "failedToDeleteEndpoint": "Échec de la suppression du point de terminaison",
+    "failedToFetchEndpoints": "Échec du chargement des détails du point de terminaison",
+    "failedToFetchXiaozhiConfig": "Échec du chargement de la configuration Xiaozhi",
+    "failedToReconnectEndpoint": "Échec de la reconnexion du point de terminaison",
+    "failedToUpdateEndpoint": "Échec de la mise à jour du point de terminaison",
+    "failedToUpdateInstallConfig": "Échec de la mise à jour de la configuration d'installation",
+    "failedToUpdateMCPRouterConfig": "Échec de la mise à jour de la configuration MCP Router",
+    "failedToUpdateNameSeparator": "Échec de la mise à jour du séparateur de nom",
+    "failedToUpdateOAuthServerConfig": "Échec de la mise à jour de la configuration du serveur OAuth",
+    "failedToUpdateRoutingConfig": "Échec de la mise à jour de la configuration de routage",
+    "failedToUpdateSessionRebuild": "Échec de la mise à jour du paramètre de reconstruction de session",
+    "failedToUpdateSettings": "Échec de la mise à jour des paramètres",
+    "failedToUpdateSystemConfig": "Échec de la mise à jour de la configuration système",
+    "failedToUpdateXiaozhiConfig": "Échec de la mise à jour de la configuration Xiaozhi"
   },
   "common": {
     "processing": "En cours de traitement...",
@@ -310,7 +383,8 @@
     "inactive": "Inactif",
     "viewAll": "Voir tout",
     "docs": "Docs",
-    "all": "Tout"
+    "all": "Tout",
+    "edit": "Modifier"
   },
   "pagination": {
     "rowsPerPage": "Lignes par page",
@@ -330,7 +404,8 @@
     "logs": "Journaux",
     "activity": "Activité",
     "workspace": "Espace de travail",
-    "system": "Système"
+    "system": "Système",
+    "xiaozhi": "Xiaozhi"
   },
   "pages": {
     "dashboard": {
@@ -340,7 +415,9 @@
       "disabledServers": "Désactivés",
       "offlineServers": "Hors ligne",
       "connectingServers": "En connexion",
-      "recentServers": "Serveurs récents"
+      "recentServers": "Serveurs récents",
+      "endpoints": "Points de terminaison MCP",
+      "endpointsHint": "Utilisez ces URL dans Claude Desktop, Cursor ou tout client MCP"
     },
     "servers": {
       "title": "Gestion des serveurs"
@@ -792,7 +869,7 @@
     "mcpRouterApiKeyPlaceholder": "Entrez la clé API MCPRouter",
     "mcpRouterReferer": "Référent",
     "mcpRouterRefererDescription": "En-tête Referer pour les requêtes API MCPRouter",
-    "mcpRouterRefererPlaceholder": "https://www.mcphub.app",
+    "mcpRouterRefererPlaceholder": "https://github.com/huangjunsen0406/xiaozhi-mcphub",
     "mcpRouterTitle": "Titre",
     "mcpRouterTitleDescription": "En-tête Title pour les requêtes API MCPRouter",
     "mcpRouterTitlePlaceholder": "MCPHub",
@@ -840,7 +917,34 @@
     "dynamicRegistrationAllowedGrantTypesPlaceholder": "ex. authorization_code, refresh_token",
     "dynamicRegistrationAuth": "Exiger une authentification",
     "dynamicRegistrationAuthDescription": "Protège l'endpoint d'enregistrement afin que seules les requêtes authentifiées puissent créer des clients",
-    "invalidNumberInput": "Veuillez saisir un nombre valide supérieur ou égal à zéro"
+    "invalidNumberInput": "Veuillez saisir un nombre valide supérieur ou égal à zéro",
+    "endpointCreated": "Point de terminaison créé avec succès",
+    "endpointDeleted": "Point de terminaison supprimé avec succès",
+    "endpointReconnecting": "Reconnexion du point de terminaison initiée",
+    "noChanges": "Aucune modification à enregistrer",
+    "selectAtLeastOneGroupOrServer": "Veuillez sélectionner au moins un groupe ou un serveur",
+    "emailBaseUrl": "URL de base publique (utilisée dans les liens e-mail)",
+    "emailConfig": "Configuration e-mail (SMTP)",
+    "emailConfigDescription": "Paramètres SMTP pour les e-mails de vérification d'inscription et de réinitialisation de mot de passe. L'inscription nécessite une vérification e-mail lorsque c'est activé.",
+    "emailEnabled": "Activer le service e-mail",
+    "emailEnabledDescription": "Lorsque activé, les nouvelles inscriptions doivent vérifier leur adresse e-mail.",
+    "emailFromEmail": "E-mail de l'expéditeur",
+    "emailFromName": "Nom de l'expéditeur",
+    "emailHost": "Hôte SMTP",
+    "emailPassword": "Mot de passe SMTP",
+    "emailPort": "Port SMTP",
+    "emailSecure": "TLS à la connexion (secure)",
+    "emailSecureDescription": "Activer pour le port 465 ; désactiver pour STARTTLS sur le port 587.",
+    "emailUser": "Nom d'utilisateur SMTP",
+    "modelscopeApiKey": "Clé API ModelScope",
+    "modelscopeApiKeyDescription": "Attachée automatiquement comme jeton Bearer aux serveurs MCP hébergés sur mcp.api-inference.modelscope.net. Un en-tête Authorization configuré manuellement a la priorité.",
+    "modelscopeApiKeyPlaceholder": "Obtenez votre clé API sur modelscope.cn",
+    "modelscopeConfig": "Configuration ModelScope",
+    "sendTestEmail": "Envoyer un test",
+    "testEmailFailed": "Échec de l'envoi de l'e-mail de test",
+    "testEmailPlaceholder": "Destinataire de l'e-mail de test",
+    "testEmailSending": "Envoi…",
+    "testEmailSent": "E-mail de test envoyé"
   },
   "mcpb": {
     "upload": "Télécharger",
@@ -938,7 +1042,8 @@
     "statsError": "Échec de la récupération des statistiques utilisateur",
     "deleteConfirmation": "Êtes-vous sûr de vouloir supprimer l'utilisateur '{{username}}' ? Cette action est irréversible.",
     "confirmDelete": "Supprimer l'utilisateur",
-    "deleteWarning": "Êtes-vous sûr de vouloir supprimer l'utilisateur '{{username}}' ? Cette action est irréversible."
+    "deleteWarning": "Êtes-vous sûr de vouloir supprimer l'utilisateur '{{username}}' ? Cette action est irréversible.",
+    "fetchError": "Échec du chargement des utilisateurs"
   },
   "api": {
     "errors": {
@@ -981,7 +1086,21 @@
       "failedToGetMarketTags": "Échec de la récupération des tags du marché",
       "failedToSearchMarketServers": "Échec de la recherche des serveurs du marché",
       "failedToFilterMarketServers": "Échec du filtrage des serveurs du marché",
-      "failedToProcessMcpbFile": "Échec du traitement du fichier MCPB"
+      "failedToProcessMcpbFile": "Échec du traitement du fichier MCPB",
+      "server_error": "Erreur serveur",
+      "validation_failed": "Échec de la validation",
+      "user_not_found": "Utilisateur introuvable",
+      "emailNotVerified": "E-mail non vérifié",
+      "emailRequired": "L'e-mail est requis",
+      "emailAlreadyUsed": "L'e-mail est déjà utilisé",
+      "userExists": "L'utilisateur existe déjà",
+      "tokenRequired": "Jeton requis",
+      "invalidOrExpiredToken": "Jeton invalide ou expiré",
+      "invalidToken": "Jeton invalide ou expiré",
+      "emailServiceDisabled": "Le service d'e-mail n'est pas activé",
+      "tooManyRequests": "Trop de requêtes. Veuillez réessayer plus tard.",
+      "emailSendFailed": "Échec de l'envoi de l'e-mail",
+      "tokenAndPasswordRequired": "Jeton et nouveau mot de passe requis"
     },
     "success": {
       "serverCreated": "Serveur créé avec succès",
@@ -996,7 +1115,15 @@
       "groupDeleted": "Groupe supprimé avec succès",
       "serverAddedToGroup": "Serveur ajouté au groupe avec succès",
       "serverRemovedFromGroup": "Serveur supprimé du groupe avec succès",
-      "serverToolsUpdated": "Outils du serveur mis à jour avec succès"
+      "serverToolsUpdated": "Outils du serveur mis à jour avec succès",
+      "login_successful": "Connexion réussie",
+      "emailVerified": "E-mail vérifié avec succès",
+      "registrationPendingVerification": "Inscription réussie. Veuillez vérifier votre e-mail avant de vous connecter.",
+      "passwordResetEmailSent": "Si l'e-mail existe, un lien de réinitialisation a été envoyé. Vérifiez votre boîte de réception.",
+      "passwordResetSuccess": "Mot de passe réinitialisé avec succès",
+      "tokenValid": "Jeton valide",
+      "endpointUpdated": "Point de terminaison mis à jour",
+      "xiaozhiConfigUpdated": "Configuration Xiaozhi mise à jour"
     }
   },
   "oauthCallback": {
@@ -1178,5 +1305,68 @@
     "notConnected": "Non connecté",
     "connectedOf": "{{connected}} sur {{total}} serveurs connectés",
     "totalFootprint": "Empreinte contextuelle"
+  },
+  "xiaozhi": {
+    "addEndpoint": "Ajouter un point de terminaison",
+    "allTools": "Tous les outils",
+    "created": "Créé",
+    "delete": {
+      "message": "Voulez-vous vraiment supprimer ce point de terminaison ? Cette action est irréversible.",
+      "title": "Supprimer le point de terminaison"
+    },
+    "empty": {
+      "description": "Commencez par créer votre premier point de terminaison Xiaozhi.",
+      "title": "Aucun point de terminaison configuré"
+    },
+    "enabled": "Activé",
+    "endpointsUnit": "points de terminaison",
+    "form": {
+      "backoffMultiplier": "Multiplicateur de backoff",
+      "description": "Description",
+      "descriptionPlaceholder": "Description facultative pour ce point de terminaison",
+      "enabled": "Activer ce point de terminaison",
+      "errors": {
+        "backoffRange": "Le multiplicateur de backoff doit être entre 1 et 10",
+        "initialDelayRange": "Le délai initial doit être entre 100 ms et 60000 ms",
+        "maxAttemptsRange": "Le nombre max de tentatives doit être entre 1 et 100",
+        "maxDelayGreater": "Le délai max doit être supérieur au délai initial",
+        "nameRequired": "Le nom est requis",
+        "urlInvalid": "L'URL WebSocket doit commencer par ws:// ou wss://",
+        "urlRequired": "L'URL WebSocket est requise"
+      },
+      "group": "Groupe",
+      "initialDelay": "Délai initial (ms)",
+      "maxAttempts": "Tentatives max",
+      "maxDelay": "Délai max (ms)",
+      "name": "Nom",
+      "namePlaceholder": "Entrez le nom du point de terminaison",
+      "noGroup": "Aucun groupe (tous les outils)",
+      "reconnectSettings": "Paramètres de reconnexion",
+      "url": "URL WebSocket",
+      "useSmartRouting": "Utiliser le routage intelligent"
+    },
+    "lastConnected": "Dernière connexion",
+    "modal": {
+      "createTitle": "Créer un nouveau point de terminaison",
+      "editTitle": "Modifier le point de terminaison"
+    },
+    "never": "Jamais",
+    "reconnect": {
+      "connecting": "Reconnexion…",
+      "initialDelay": "Délai initial",
+      "maxAttempts": "Tentatives max",
+      "title": "Reconnecter"
+    },
+    "status": {
+      "connected": "Connecté",
+      "disabled": "Désactivé",
+      "disconnected": "Déconnecté",
+      "enabled": "Activé",
+      "service": "État du service",
+      "totalEndpoints": "Total des points de terminaison",
+      "unknown": "Inconnu"
+    },
+    "title": "Points de terminaison Xiaozhi",
+    "url": "URL WebSocket"
   }
 }

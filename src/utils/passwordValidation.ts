@@ -1,5 +1,8 @@
 /**
- * Password strength validation utility
+ * Password strength validation utility.
+ * Returns stable error codes (not localized strings) so callers can translate
+ * with i18n. Keep in sync with frontend/src/utils/passwordValidation.ts.
+ *
  * Requirements:
  * - At least 8 characters
  * - Contains at least one letter
@@ -7,32 +10,35 @@
  * - Contains at least one special character
  */
 
+export type PasswordStrengthErrorCode =
+  | 'passwordMinLength'
+  | 'passwordRequireLetter'
+  | 'passwordRequireNumber'
+  | 'passwordRequireSpecial';
+
 export interface PasswordValidationResult {
   isValid: boolean;
-  errors: string[];
+  /** Stable codes mapped to auth.* i18n keys on both client and server */
+  errors: PasswordStrengthErrorCode[];
 }
 
 export const validatePasswordStrength = (password: string): PasswordValidationResult => {
-  const errors: string[] = [];
+  const errors: PasswordStrengthErrorCode[] = [];
 
-  // Check minimum length
   if (password.length < 8) {
-    errors.push('Password must be at least 8 characters long');
+    errors.push('passwordMinLength');
   }
 
-  // Check for at least one letter
   if (!/[a-zA-Z]/.test(password)) {
-    errors.push('Password must contain at least one letter');
+    errors.push('passwordRequireLetter');
   }
 
-  // Check for at least one number
   if (!/\d/.test(password)) {
-    errors.push('Password must contain at least one number');
+    errors.push('passwordRequireNumber');
   }
 
-  // Check for at least one special character
   if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
-    errors.push('Password must contain at least one special character');
+    errors.push('passwordRequireSpecial');
   }
 
   return {

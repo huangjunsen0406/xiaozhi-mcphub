@@ -241,12 +241,16 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({
+      success: false,
+      message: t('api.errors.server_error') || 'Server error',
+    });
   }
 };
 
 // Get current user
 export const getCurrentUser = (req: Request, res: Response): void => {
+  const t = (req as any).t;
   try {
     // User is already attached to request by auth middleware
     const user = (req as any).user;
@@ -261,7 +265,10 @@ export const getCurrentUser = (req: Request, res: Response): void => {
     });
   } catch (error) {
     console.error('Get current user error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({
+      success: false,
+      message: t?.('api.errors.server_error') || 'Server error',
+    });
   }
 };
 
@@ -277,14 +284,16 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
   const { currentPassword, newPassword } = req.body;
   const username = (req as any).user.username;
 
+  const t = (req as any).t;
+
   try {
-    // Validate new password strength
-    const validationResult = validatePasswordStrength(newPassword);
-    if (!validationResult.isValid) {
+    // Validate new password strength (codes, not English strings)
+    const strength = validatePasswordStrength(newPassword);
+    if (!strength.isValid) {
       res.status(400).json({
         success: false,
-        message: 'Password does not meet security requirements',
-        errors: validationResult.errors,
+        message: t('auth.passwordStrengthError') || 'Password does not meet security requirements',
+        errors: strength.errors,
       });
       return;
     }
@@ -293,7 +302,10 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     const user = await findUserByUsername(username);
 
     if (!user) {
-      res.status(404).json({ success: false, message: 'User not found' });
+      res.status(404).json({
+        success: false,
+        message: t('api.errors.user_not_found') || 'User not found',
+      });
       return;
     }
 
@@ -301,7 +313,10 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     const isPasswordValid = await verifyPassword(currentPassword, user.password);
 
     if (!isPasswordValid) {
-      res.status(401).json({ success: false, message: 'Current password is incorrect' });
+      res.status(401).json({
+        success: false,
+        message: t('auth.currentPasswordIncorrect') || 'Current password is incorrect',
+      });
       return;
     }
 
@@ -309,14 +324,23 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     const updated = await updateUserPassword(username, newPassword);
 
     if (!updated) {
-      res.status(500).json({ success: false, message: 'Failed to update password' });
+      res.status(500).json({
+        success: false,
+        message: t('api.errors.server_error') || 'Failed to update password',
+      });
       return;
     }
 
-    res.json({ success: true, message: 'Password updated successfully' });
+    res.json({
+      success: true,
+      message: t('auth.passwordChanged') || 'Password updated successfully',
+    });
   } catch (error) {
     console.error('Change password error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({
+      success: false,
+      message: t('api.errors.server_error') || 'Server error',
+    });
   }
 };
 
@@ -490,10 +514,11 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       res.status(400).json({
         success: false,
-        message: t('users.passwordTooShort') || 'Password must be at least 6 characters',
+        message: t('auth.passwordMinLength') || 'Password must be at least 8 characters long',
+        errors: ['passwordMinLength'],
       });
       return;
     }
@@ -502,7 +527,8 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     if (!strength.isValid) {
       res.status(400).json({
         success: false,
-        message: 'Password does not meet security requirements',
+        message: t('auth.passwordStrengthError') || 'Password does not meet security requirements',
+        // Stable codes — frontend maps via t(`auth.${code}`)
         errors: strength.errors,
       });
       return;

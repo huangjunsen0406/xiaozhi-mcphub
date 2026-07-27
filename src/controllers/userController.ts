@@ -96,12 +96,13 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // Validate password strength
+    // Validate password strength (stable codes for i18n)
     const validationResult = validatePasswordStrength(password);
     if (!validationResult.isValid) {
+      const t = (req as any).t;
       res.status(400).json({
         success: false,
-        message: 'Password does not meet security requirements',
+        message: t?.('auth.passwordStrengthError') || 'Password does not meet security requirements',
         errors: validationResult.errors,
       });
       return;
@@ -182,12 +183,14 @@ export const updateExistingUser = async (req: Request, res: Response): Promise<v
     if (isAdmin !== undefined) updateData.isAdmin = isAdmin;
     if (email !== undefined) updateData.email = email;
     if (newPassword) {
-      // Validate new password strength
+      // Validate new password strength (stable codes for i18n)
       const validationResult = validatePasswordStrength(newPassword);
       if (!validationResult.isValid) {
+        const t = (req as any).t;
         res.status(400).json({
           success: false,
-          message: 'Password does not meet security requirements',
+          message:
+            t?.('auth.passwordStrengthError') || 'Password does not meet security requirements',
           errors: validationResult.errors,
         });
         return;

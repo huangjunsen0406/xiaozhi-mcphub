@@ -106,7 +106,57 @@
     "passwordRequireLetter": "Şifre en az bir harf içermelidir",
     "passwordRequireNumber": "Şifre en az bir rakam içermelidir",
     "passwordRequireSpecial": "Şifre en az bir özel karakter içermelidir",
-    "passwordStrengthHint": "Şifre en az 8 karakter olmalı ve harf, rakam ve özel karakter içermelidir"
+    "passwordStrengthHint": "Şifre en az 8 karakter olmalı ve harf, rakam ve özel karakter içermelidir",
+    "currentPasswordIncorrect": "Mevcut şifre yanlış",
+    "user": "Kullanıcı",
+    "backToLogin": "Girişe dön",
+    "confirmPasswordPlaceholder": "Şifrenizi tekrar girin",
+    "createAccount": "Hesap oluştur",
+    "email": "E-posta",
+    "emailNotVerified": "E-postanız doğrulanmadı. Lütfen doğrulama bağlantısı için gelen kutunuzu kontrol edin.",
+    "emailOptionalHint": "isteğe bağlı, e-posta doğrulama açıksa zorunlu",
+    "emailPlaceholder": "siz@ornek.com",
+    "emailRequired": "E-posta gerekli",
+    "emailRequiredHint": "E-posta servisi etkin — giriş yapmadan önce e-postanızı doğrulamanız gerekir.",
+    "forgotPassword": "Şifrenizi mi unuttunuz?",
+    "forgotPasswordHint": "Hesap e-postanızı girin, size bir sıfırlama bağlantısı gönderelim.",
+    "forgotPasswordTitle": "Şifrenizi sıfırlayın",
+    "haveAccount": "Zaten hesabınız var mı?",
+    "loginPrompt": "Yönetim paneline erişmek için kimlik bilgilerinizi girin",
+    "noAccount": "Hesabınız yok mu?",
+    "passwordPlaceholder": "Şifrenizi girin",
+    "register": "Kayıt ol",
+    "registerFailed": "Kayıt başarısız",
+    "registerPrompt": "Panele erişmek için yeni bir hesap oluşturun",
+    "registerTitle": "Hesabınızı oluşturun",
+    "registering": "Kaydediliyor…",
+    "rememberMe": "Hesabı hatırla",
+    "requestNewLink": "Yeni bağlantı iste",
+    "resetEmailSentBody": "E-posta mevcutsa sıfırlama bağlantısı gönderildi. Lütfen gelen kutunuzu kontrol edin.",
+    "resetEmailSentTitle": "Sıfırlama e-postası gönderildi",
+    "resetFailed": "Şifre sıfırlama başarısız",
+    "resetPassword": "Şifreyi sıfırla",
+    "resetPasswordTitle": "Yeni şifre belirleyin",
+    "resetRequestFailed": "Şifre sıfırlama isteği başarısız",
+    "resetSuccessBody": "Şifreniz sıfırlandı. Artık yeni şifreyle giriş yapabilirsiniz.",
+    "resetSuccessTitle": "Şifre sıfırlandı",
+    "resetTokenInvalidBody": "Sıfırlama bağlantısı geçersiz veya süresi dolmuş. Lütfen yeni bir tane isteyin.",
+    "resetTokenInvalidTitle": "Bağlantı geçersiz veya süresi dolmuş",
+    "resetting": "Sıfırlanıyor…",
+    "sendResetEmail": "Sıfırlama e-postası gönder",
+    "sending": "Gönderiliyor…",
+    "sloganDesc": "Akıllı yönlendirme · Merkezi yönetim · Verimli iş birliği",
+    "usernamePlaceholder": "Kullanıcı adınızı girin",
+    "verificationEmailSentBody": "{{email}} adresine doğrulama bağlantısı gönderdik. Giriş yapmadan önce doğrulayın.",
+    "verificationEmailSentTitle": "Doğrulama e-postası gönderildi",
+    "verifyEmailTitle": "E-postanızı doğrulayın",
+    "verifyFailedBody": "Doğrulama bağlantısı geçersiz veya süresi dolmuş.",
+    "verifyFailedTitle": "Doğrulama başarısız",
+    "verifySuccessBody": "E-postanız doğrulandı. Artık giriş yapabilirsiniz.",
+    "verifySuccessTitle": "E-posta doğrulandı",
+    "verifyingEmail": "E-posta doğrulanıyor…",
+    "welcomeBack": "Tekrar hoş geldiniz",
+    "passwordTooShort": "Şifre en az 6 karakter olmalıdır"
   },
   "server": {
     "addServer": "Sunucu Ekle",
@@ -235,7 +285,15 @@
       "resource": "Kaynak / Hedef Kitle",
       "accessToken": "Erişim Tokeni",
       "refreshToken": "Yenileme Tokeni"
-    }
+    },
+    "visibility": "Görünürlük",
+    "visibilityDescription": "tools/list içinde bu sunucuyu hangi yönetici olmayan kullanıcıların göreceğini kontrol eder. Yöneticiler bu ayardan bağımsız olarak tüm sunucuları görür.",
+    "visibilityGroup": "Grup (ayrılmış — henüz uygulanmadı)",
+    "visibilityGroupShort": "Grup",
+    "visibilityPrivate": "Özel — yalnızca sahip ve yöneticiler",
+    "visibilityPrivateShort": "Özel",
+    "visibilityPublic": "Herkese açık — tüm kimliği doğrulanmış kullanıcılar",
+    "visibilityPublicShort": "Herkese açık"
   },
   "status": {
     "online": "Çevrimiçi",
@@ -258,7 +316,22 @@
     "failedToFetchSettings": "Ayarlar getirilemedi",
     "failedToUpdateRouteConfig": "Route yapılandırması güncellenemedi",
     "failedToUpdateSmartRoutingConfig": "Akıllı yönlendirme yapılandırması güncellenemedi",
-    "failedToUpdateBetterAuthConfig": "Better Auth yapılandırması güncellenemedi"
+    "failedToUpdateBetterAuthConfig": "Better Auth yapılandırması güncellenemedi",
+    "failedToCreateEndpoint": "Uç nokta oluşturulamadı",
+    "failedToDeleteEndpoint": "Uç nokta silinemedi",
+    "failedToFetchEndpoints": "Uç nokta ayrıntıları alınamadı",
+    "failedToFetchXiaozhiConfig": "Xiaozhi yapılandırması alınamadı",
+    "failedToReconnectEndpoint": "Uç noktaya yeniden bağlanılamadı",
+    "failedToUpdateEndpoint": "Uç nokta güncellenemedi",
+    "failedToUpdateInstallConfig": "Kurulum yapılandırması güncellenemedi",
+    "failedToUpdateMCPRouterConfig": "MCP Router yapılandırması güncellenemedi",
+    "failedToUpdateNameSeparator": "Ad ayırıcı güncellenemedi",
+    "failedToUpdateOAuthServerConfig": "OAuth sunucu yapılandırması güncellenemedi",
+    "failedToUpdateRoutingConfig": "Yönlendirme yapılandırması güncellenemedi",
+    "failedToUpdateSessionRebuild": "Oturum yeniden oluşturma ayarı güncellenemedi",
+    "failedToUpdateSettings": "Ayarlar güncellenemedi",
+    "failedToUpdateSystemConfig": "Sistem yapılandırması güncellenemedi",
+    "failedToUpdateXiaozhiConfig": "Xiaozhi yapılandırması güncellenemedi"
   },
   "common": {
     "processing": "İşleniyor...",
@@ -310,7 +383,8 @@
     "inactive": "Pasif",
     "viewAll": "Tümünü gör",
     "docs": "Belgeler",
-    "all": "Tümü"
+    "all": "Tümü",
+    "edit": "Düzenle"
   },
   "pagination": {
     "rowsPerPage": "Sayfa başına satır",
@@ -330,7 +404,8 @@
     "logs": "Günlükler",
     "activity": "Etkinlik",
     "workspace": "Çalışma Alanı",
-    "system": "Sistem"
+    "system": "Sistem",
+    "xiaozhi": "Xiaozhi"
   },
   "pages": {
     "dashboard": {
@@ -340,7 +415,9 @@
       "disabledServers": "Devre Dışı",
       "offlineServers": "Çevrimdışı",
       "connectingServers": "Bağlanıyor",
-      "recentServers": "Son Sunucular"
+      "recentServers": "Son Sunucular",
+      "endpoints": "MCP Uç Noktaları",
+      "endpointsHint": "Bu URL’leri Claude Desktop, Cursor veya herhangi bir MCP istemcisinde kullanın"
     },
     "servers": {
       "title": "Sunucu Yönetimi"
@@ -791,7 +868,7 @@
     "mcpRouterApiKeyPlaceholder": "MCPRouter API anahtarını girin",
     "mcpRouterReferer": "Yönlendiren",
     "mcpRouterRefererDescription": "MCPRouter API istekleri için Referer başlığı",
-    "mcpRouterRefererPlaceholder": "https://www.mcphub.app",
+    "mcpRouterRefererPlaceholder": "https://github.com/huangjunsen0406/xiaozhi-mcphub",
     "mcpRouterTitle": "Başlık",
     "mcpRouterTitleDescription": "MCPRouter API istekleri için Başlık başlığı",
     "mcpRouterTitlePlaceholder": "MCPHub",
@@ -839,7 +916,35 @@
     "dynamicRegistrationAllowedGrantTypesPlaceholder": "örn. authorization_code, refresh_token",
     "dynamicRegistrationAuth": "Kayıt için kimlik doğrulaması iste",
     "dynamicRegistrationAuthDescription": "Kayıt uç noktasını korur, yalnızca kimliği doğrulanmış istekler yeni istemci oluşturabilir",
-    "invalidNumberInput": "Lütfen sıfırdan küçük olmayan geçerli bir sayı girin"
+    "invalidNumberInput": "Lütfen sıfırdan küçük olmayan geçerli bir sayı girin",
+    "endpointCreated": "Uç nokta başarıyla oluşturuldu",
+    "endpointDeleted": "Uç nokta başarıyla silindi",
+    "endpointReconnecting": "Uç nokta yeniden bağlantısı başlatıldı",
+    "noChanges": "Kaydedilecek değişiklik yok",
+    "selectAtLeastOneGroupOrServer": "Lütfen en az bir grup veya sunucu seçin",
+    "bearerKeyScopeFilter": "Kapsama göre filtrele",
+    "emailBaseUrl": "Herkese açık taban URL (e-posta bağlantılarında kullanılır)",
+    "emailConfig": "E-posta (SMTP) Yapılandırması",
+    "emailConfigDescription": "Kayıt doğrulama ve şifre sıfırlama e-postaları için SMTP ayarları. Etkinken kayıt e-posta doğrulaması gerektirir.",
+    "emailEnabled": "E-posta servisini etkinleştir",
+    "emailEnabledDescription": "Açıkken yeni kayıtlar e-posta adreslerini doğrulamalıdır.",
+    "emailFromEmail": "Gönderen e-postası",
+    "emailFromName": "Gönderen adı",
+    "emailHost": "SMTP host",
+    "emailPassword": "SMTP şifresi",
+    "emailPort": "SMTP portu",
+    "emailSecure": "Bağlantıda TLS (secure)",
+    "emailSecureDescription": "Port 465 için açın; port 587 STARTTLS için kapatın.",
+    "emailUser": "SMTP kullanıcı adı",
+    "modelscopeApiKey": "ModelScope API Anahtarı",
+    "modelscopeApiKeyDescription": "mcp.api-inference.modelscope.net üzerindeki MCP sunucularına Bearer token olarak otomatik eklenir. Elle yapılandırılmış Authorization başlığı önceliklidir.",
+    "modelscopeApiKeyPlaceholder": "API anahtarınızı modelscope.cn adresinden alın",
+    "modelscopeConfig": "ModelScope Yapılandırması",
+    "sendTestEmail": "Test gönder",
+    "testEmailFailed": "Test e-postası gönderilemedi",
+    "testEmailPlaceholder": "Test e-postası alıcısı",
+    "testEmailSending": "Gönderiliyor…",
+    "testEmailSent": "Test e-postası gönderildi"
   },
   "mcpb": {
     "upload": "Yükle",
@@ -937,7 +1042,8 @@
     "statsError": "Kullanıcı istatistikleri getirilemedi",
     "deleteConfirmation": "'{{username}}' kullanıcısını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
     "confirmDelete": "Kullanıcıyı Sil",
-    "deleteWarning": "'{{username}}' kullanıcısını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz."
+    "deleteWarning": "'{{username}}' kullanıcısını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
+    "fetchError": "Kullanıcılar alınamadı"
   },
   "api": {
     "errors": {
@@ -980,7 +1086,21 @@
       "failedToGetMarketTags": "Market etiketleri alınamadı",
       "failedToSearchMarketServers": "Market sunucuları aranamadı",
       "failedToFilterMarketServers": "Market sunucuları filtrelenemedi",
-      "failedToProcessMcpbFile": "MCPB dosyası işlenemedi"
+      "failedToProcessMcpbFile": "MCPB dosyası işlenemedi",
+      "server_error": "Sunucu hatası",
+      "validation_failed": "Doğrulama başarısız",
+      "user_not_found": "Kullanıcı bulunamadı",
+      "emailNotVerified": "E-posta doğrulanmadı",
+      "emailRequired": "E-posta gerekli",
+      "emailAlreadyUsed": "E-posta zaten kullanılıyor",
+      "userExists": "Kullanıcı zaten var",
+      "tokenRequired": "Token gerekli",
+      "invalidOrExpiredToken": "Geçersiz veya süresi dolmuş token",
+      "invalidToken": "Geçersiz veya süresi dolmuş token",
+      "emailServiceDisabled": "E-posta servisi etkin değil",
+      "tooManyRequests": "Çok fazla istek. Lütfen daha sonra tekrar deneyin.",
+      "emailSendFailed": "E-posta gönderilemedi",
+      "tokenAndPasswordRequired": "Token ve yeni şifre gerekli"
     },
     "success": {
       "serverCreated": "Sunucu başarıyla oluşturuldu",
@@ -995,7 +1115,15 @@
       "groupDeleted": "Grup başarıyla silindi",
       "serverAddedToGroup": "Sunucu başarıyla gruba eklendi",
       "serverRemovedFromGroup": "Sunucu başarıyla gruptan kaldırıldı",
-      "serverToolsUpdated": "Sunucu araçları başarıyla güncellendi"
+      "serverToolsUpdated": "Sunucu araçları başarıyla güncellendi",
+      "login_successful": "Giriş başarılı",
+      "emailVerified": "E-posta başarıyla doğrulandı",
+      "registrationPendingVerification": "Kayıt başarılı. Giriş yapmadan önce e-postanızı doğrulayın.",
+      "passwordResetEmailSent": "E-posta mevcutsa sıfırlama bağlantısı gönderildi. Lütfen gelen kutunuzu kontrol edin.",
+      "passwordResetSuccess": "Şifre başarıyla sıfırlandı",
+      "tokenValid": "Token geçerli",
+      "endpointUpdated": "Uç nokta güncellendi",
+      "xiaozhiConfigUpdated": "Xiaozhi yapılandırması güncellendi"
     }
   },
   "oauthCallback": {
@@ -1177,5 +1305,68 @@
     "notConnected": "Bağlı değil",
     "connectedOf": "{{total}} sunucudan {{connected}} tanesi bağlı",
     "totalFootprint": "Bağlam ayak izi"
+  },
+  "xiaozhi": {
+    "addEndpoint": "Uç nokta ekle",
+    "allTools": "Tüm araçlar",
+    "created": "Oluşturulma",
+    "delete": {
+      "message": "Bu uç noktayı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
+      "title": "Uç noktayı sil"
+    },
+    "empty": {
+      "description": "İlk Xiaozhi uç noktanızı oluşturarak başlayın.",
+      "title": "Yapılandırılmış uç nokta yok"
+    },
+    "enabled": "Etkin",
+    "endpointsUnit": "uç nokta",
+    "form": {
+      "backoffMultiplier": "Geri çekilme çarpanı",
+      "description": "Açıklama",
+      "descriptionPlaceholder": "Bu uç nokta için isteğe bağlı açıklama",
+      "enabled": "Bu uç noktayı etkinleştir",
+      "errors": {
+        "backoffRange": "Geri çekilme çarpanı 1 ile 10 arasında olmalıdır",
+        "initialDelayRange": "Başlangıç gecikmesi 100ms ile 60000ms arasında olmalıdır",
+        "maxAttemptsRange": "Maksimum deneme 1 ile 100 arasında olmalıdır",
+        "maxDelayGreater": "Maksimum gecikme başlangıç gecikmesinden büyük olmalıdır",
+        "nameRequired": "Ad gerekli",
+        "urlInvalid": "WebSocket URL’si ws:// veya wss:// ile başlamalıdır",
+        "urlRequired": "WebSocket URL gerekli"
+      },
+      "group": "Grup",
+      "initialDelay": "Başlangıç gecikmesi (ms)",
+      "maxAttempts": "Maks. deneme",
+      "maxDelay": "Maks. gecikme (ms)",
+      "name": "Ad",
+      "namePlaceholder": "Uç nokta adını girin",
+      "noGroup": "Grup yok (tüm araçlar)",
+      "reconnectSettings": "Yeniden bağlanma ayarları",
+      "url": "WebSocket URL",
+      "useSmartRouting": "Akıllı yönlendirmeyi kullan"
+    },
+    "lastConnected": "Son bağlantı",
+    "modal": {
+      "createTitle": "Yeni uç nokta oluştur",
+      "editTitle": "Uç noktayı düzenle"
+    },
+    "never": "Hiç",
+    "reconnect": {
+      "connecting": "Yeniden bağlanıyor…",
+      "initialDelay": "Başlangıç gecikmesi",
+      "maxAttempts": "Maks. deneme",
+      "title": "Yeniden bağlan"
+    },
+    "status": {
+      "connected": "Bağlı",
+      "disabled": "Devre dışı",
+      "disconnected": "Bağlantı kesildi",
+      "enabled": "Etkin",
+      "service": "Servis durumu",
+      "totalEndpoints": "Toplam uç nokta",
+      "unknown": "Bilinmiyor"
+    },
+    "title": "Xiaozhi Uç Noktaları",
+    "url": "WebSocket URL"
   }
 }
