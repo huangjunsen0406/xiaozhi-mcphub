@@ -1065,7 +1065,8 @@ const SettingsPage: React.FC = () => {
     if (value) {
       const currentDbUrl = tempSmartRoutingConfig.dbUrl || smartRoutingConfig.dbUrl;
       const missingFields: string[] = [];
-      if (!currentDbUrl) missingFields.push(t('settings.dbUrl') || 'Database URL');
+      // Vector DB URL is instance-global and admin-managed; non-admins reuse system dbUrl.
+      if (isAdmin && !currentDbUrl) missingFields.push(t('settings.dbUrl') || 'Database URL');
 
       if (tempSmartRoutingConfig.embeddingProvider === 'azure_openai') {
         const currentEndpoint =
@@ -1125,7 +1126,8 @@ const SettingsPage: React.FC = () => {
       const updates: any = { enabled: value };
 
       // Check for unsaved changes and include them in the batch update
-      if (tempSmartRoutingConfig.dbUrl !== smartRoutingConfig.dbUrl) {
+      // dbUrl is global infra — only admins may write it
+      if (isAdmin && tempSmartRoutingConfig.dbUrl !== smartRoutingConfig.dbUrl) {
         updates.dbUrl = tempSmartRoutingConfig.dbUrl;
       }
       const parsedBasePacingDelay = parseBasePacingDelayForUpdate(
@@ -1202,7 +1204,8 @@ const SettingsPage: React.FC = () => {
   const handleSaveSmartRoutingConfig = async () => {
     const updates: any = {};
 
-    if (tempSmartRoutingConfig.dbUrl !== smartRoutingConfig.dbUrl) {
+    // dbUrl is global infra — only admins may write it
+    if (isAdmin && tempSmartRoutingConfig.dbUrl !== smartRoutingConfig.dbUrl) {
       updates.dbUrl = tempSmartRoutingConfig.dbUrl;
     }
     const parsedBasePacingDelay = parseBasePacingDelayForUpdate(
@@ -2152,8 +2155,9 @@ const SettingsPage: React.FC = () => {
 
               <div className="space-y-3 hub-sr-fields">
 
-              {/* hide when DB_URL env is set */}
-              {smartRoutingConfig.dbUrl !== '${DB_URL}' && (
+              {/* Vector DB URL is instance-global: only admins may view/edit it.
+                  Hide entirely for non-admins, and hide when DB_URL env is set. */}
+              {isAdmin && smartRoutingConfig.dbUrl !== '${DB_URL}' && (
                 <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
                   <div className="mb-2">
                     <h3 className="font-medium text-gray-700">
@@ -2979,8 +2983,8 @@ const SettingsPage: React.FC = () => {
         </div>
       </PermissionChecker>
 
-      {/* MCPRouter Configuration Settings */}
-      <PermissionChecker permissions={PERMISSIONS.SETTINGS_INSTALL_CONFIG}>
+      {/* MCPRouter Configuration Settings (per-user integrations) */}
+      <PermissionChecker permissions={PERMISSIONS.SETTINGS_USER_INTEGRATIONS}>
         <div className="hub-card mb-6 overflow-hidden">
           <div
             className="flex justify-between items-center cursor-pointer transition-colors hover:bg-[var(--hub-surface-hover)] py-3 px-5"
@@ -3053,8 +3057,8 @@ const SettingsPage: React.FC = () => {
         </div>
       </PermissionChecker>
 
-      {/* ModelScope Configuration Settings */}
-      <PermissionChecker permissions={PERMISSIONS.SETTINGS_INSTALL_CONFIG}>
+      {/* ModelScope Configuration Settings (per-user integrations) */}
+      <PermissionChecker permissions={PERMISSIONS.SETTINGS_USER_INTEGRATIONS}>
         <div className="hub-card mb-6 overflow-hidden">
           <div
             className="flex justify-between items-center cursor-pointer transition-colors hover:bg-[var(--hub-surface-hover)] py-3 px-5"

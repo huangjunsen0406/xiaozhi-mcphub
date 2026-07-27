@@ -91,6 +91,7 @@ export interface PublicConfigResponse {
     skipAuth?: boolean;
     permissions?: any;
     betterAuth?: BetterAuthConfig;
+    emailEnabled?: boolean;
   };
   message?: string;
 }
@@ -110,6 +111,7 @@ export const getPublicConfig = async (): Promise<{
   skipAuth: boolean;
   permissions?: any;
   betterAuth?: BetterAuthConfig;
+  emailEnabled?: boolean;
 }> => {
   try {
     const basePath = getBasePath();
@@ -126,13 +128,14 @@ export const getPublicConfig = async (): Promise<{
         skipAuth: data.data?.skipAuth === true,
         permissions: data.data?.permissions || {},
         betterAuth: data.data?.betterAuth,
+        emailEnabled: data.data?.emailEnabled === true,
       };
     }
 
-    return { skipAuth: false };
+    return { skipAuth: false, emailEnabled: false };
   } catch (error) {
     console.debug('Failed to get public config:', error);
-    return { skipAuth: false };
+    return { skipAuth: false, emailEnabled: false };
   }
 };
 
