@@ -81,9 +81,20 @@ describe('assertSafeUrl', () => {
     ).rejects.toThrow(UnsafeUrlError);
   });
 
+  // Inject the resolver instead of hitting real DNS: resolvers that hijack
+  // NXDOMAIN (ISP "search assist") answer even reserved .invalid names with a
+  // public IP, which would make a network-dependent version of this pass as safe.
   it('fails closed when DNS resolves nothing', async () => {
     await expect(
-      assertSafeUrl('http://unresolvable.invalid/'),
+      assertSafeUrl('http://unresolvable.invalid/', { lookup: lookup({}) }),
+    ).rejects.toThrow(UnsafeUrlError);
+  });
+
+  it('fails closed when DNS lookup errors', async () => {
+    await expect(
+      assertSafeUrl('http://broken-dns.example/', {
+        lookup: () => Promise.reject(new Error('ENOTFOUND')),
+      }),
     ).rejects.toThrow(UnsafeUrlError);
   });
 

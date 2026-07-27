@@ -53,7 +53,6 @@ const Stat: React.FC<{
 const XiaozhiEndpointsPage: React.FC = () => {
   const { t } = useTranslation();
   const {
-    config,
     endpoints,
     loading,
     error,
@@ -61,7 +60,6 @@ const XiaozhiEndpointsPage: React.FC = () => {
     updateEndpoint,
     deleteEndpoint,
     reconnectEndpoint,
-    updateConfig,
     fetchEndpointDetails,
     getEndpointStatusById,
     getConnectedCount,
@@ -119,13 +117,11 @@ const XiaozhiEndpointsPage: React.FC = () => {
     await updateEndpoint(endpointId, { enabled });
   };
 
-  const handleToggleService = async (enabled: boolean) => {
-    await updateConfig({ enabled });
-  };
-
   const groupNameById = (id?: string) => groups.find((g) => g.id === id)?.name;
   const visibleError = error && error !== dismissedError ? error : null;
   const showSkeleton = loading && endpoints.length === 0;
+  // Derived from endpoints — no shared instance master switch
+  const anyEnabled = endpoints.some((ep) => ep.enabled);
 
   return (
     <div>
@@ -140,19 +136,6 @@ const XiaozhiEndpointsPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <span className="text-[13px]" style={{ color: 'var(--hub-ink-2)' }}>
-              {t('xiaozhi.status.service')}
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={config.enabled}
-              aria-label={t('xiaozhi.status.service')}
-              className={`hub-switch${config.enabled ? ' on' : ''}`}
-              onClick={() => handleToggleService(!config.enabled)}
-            />
-          </label>
           <button className="hub-btn primary" onClick={handleCreateNew}>
             <Plus size={13} /> {t('xiaozhi.addEndpoint')}
           </button>
@@ -199,8 +182,8 @@ const XiaozhiEndpointsPage: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <Stat
             label={t('xiaozhi.status.service')}
-            value={config.enabled ? t('xiaozhi.status.enabled') : t('xiaozhi.status.disabled')}
-            tone={config.enabled ? 'ok' : 'muted'}
+            value={anyEnabled ? t('xiaozhi.status.enabled') : t('xiaozhi.status.disabled')}
+            tone={anyEnabled ? 'ok' : 'muted'}
           />
           <Stat label={t('xiaozhi.status.totalEndpoints')} value={endpoints.length} />
           <Stat label={t('xiaozhi.status.enabled')} value={getEnabledCount()} />
