@@ -1,5 +1,6 @@
 const mockGroupDao = {
   findByName: jest.fn(),
+  findByOwnerAndName: jest.fn(),
   create: jest.fn(),
 };
 
@@ -31,6 +32,7 @@ describe('groupService capability selections', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGroupDao.findByName.mockResolvedValue(null);
+    mockGroupDao.findByOwnerAndName.mockResolvedValue(null);
     mockServerDao.findAll.mockResolvedValue([{ name: 'server1' }, { name: 'server2' }]);
     mockGroupDao.create.mockImplementation(async (group: any) => group);
   });

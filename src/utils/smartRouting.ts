@@ -1,4 +1,9 @@
 import { expandEnvVars } from '../config/index.js';
+import {
+  getUserConfigOrEmpty,
+  mergeSmartRoutingSettings,
+  resolveConfigUsername,
+} from './effectiveConfig.js';
 import { getSystemConfigDao } from '../dao/DaoFactory.js';
 
 /**
@@ -59,16 +64,29 @@ export interface SmartRoutingConfig {
  * Priority order for each setting:
  * 1. Specific environment variables (ENABLE_SMART_ROUTING, SMART_ROUTING_ENABLED, etc.)
  * 2. Generic environment variables (OPENAI_API_KEY, DB_URL, etc.)
- * 3. Settings configuration (systemConfig.smartRouting)
+ * 3. Effective settings: systemConfig.smartRouting merged with optional UserConfig overrides
  * 4. Default values
+ *
+ * `dbUrl` always comes from system/env (never user overrides).
+ * Pass `username` (or rely on UserContext) for per-user enable/API-key/feature overrides.
+ * Omit username for system-level jobs (embedding sync, vector DB bootstrap).
  *
  * @returns {SmartRoutingConfig} Complete smart routing configuration
  */
-export async function getSmartRoutingConfig(): Promise<SmartRoutingConfig> {
-  // Get system config from DAO
+export async function getSmartRoutingConfig(
+  username?: string | null,
+): Promise<SmartRoutingConfig> {
+  // Get system config from DAO, then merge optional per-user overrides.
   const systemConfigDao = getSystemConfigDao();
   const systemConfig = await systemConfigDao.get();
-  const smartRoutingSettings: Partial<SmartRoutingConfig> = systemConfig.smartRouting || {};
+  const resolvedUsername = resolveConfigUsername(username);
+  const userConfig = resolvedUsername
+    ? await getUserConfigOrEmpty(resolvedUsername)
+    : {};
+  const smartRoutingSettings: Partial<SmartRoutingConfig> = mergeSmartRoutingSettings(
+    systemConfig.smartRouting,
+    userConfig.smartRouting,
+  );
 
   return {
     // Enabled status - check multiple environment variables
@@ -79,7 +97,7 @@ export async function getSmartRoutingConfig(): Promise<SmartRoutingConfig> {
       parseBooleanEnvVar,
     ),
 
-    // Database configuration
+    // Database configuration (system/env only — mergeSmartRoutingSettings already forces system dbUrl)
     dbUrl: getConfigValue([process.env.DB_URL], smartRoutingSettings.dbUrl, '', expandEnvVars),
 
     basePacingDelayMs: getConfigValue<number>(

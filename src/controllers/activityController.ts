@@ -2,6 +2,27 @@ import { Request, Response } from 'express';
 import { getActivityDao, isActivityLoggingEnabled } from '../dao/DaoFactory.js';
 import { IActivityFilter } from '../types/index.js';
 
+type AuthUser = { username?: string; isAdmin?: boolean };
+
+const getAuthUser = (req: Request): AuthUser => ((req as any).user || {}) as AuthUser;
+
+const isAdminUser = (user: AuthUser): boolean => Boolean(user.isAdmin);
+
+/**
+ * Non-admins may only query their own activity. Admins can filter by any username.
+ * Always force username for non-admins even if the client omits/overrides it.
+ */
+const applyUserScopeToFilter = (req: Request, filter: IActivityFilter): void => {
+  const user = getAuthUser(req);
+  if (isAdminUser(user)) {
+    if (req.query.username) {
+      filter.username = req.query.username as string;
+    }
+    return;
+  }
+  filter.username = user.username || '__none__';
+};
+
 /**
  * Check if activity feature is available (database mode only)
  */
@@ -63,9 +84,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
     if (req.query.group) {
       filter.group = req.query.group as string;
     }
-    if (req.query.username) {
-      filter.username = req.query.username as string;
-    }
+    applyUserScopeToFilter(req, filter);
     if (req.query.keyId) {
       filter.keyId = req.query.keyId as string;
     }
@@ -127,6 +146,15 @@ export const getActivityById = async (req: Request, res: Response): Promise<void
       return;
     }
 
+    const user = getAuthUser(req);
+    if (!isAdminUser(user) && activity.username !== user.username) {
+      res.status(404).json({
+        success: false,
+        message: 'Activity not found',
+      });
+      return;
+    }
+
     res.json({
       success: true,
       data: activity,
@@ -168,9 +196,7 @@ export const getActivityStats = async (req: Request, res: Response): Promise<voi
     if (req.query.group) {
       filter.group = req.query.group as string;
     }
-    if (req.query.username) {
-      filter.username = req.query.username as string;
-    }
+    applyUserScopeToFilter(req, filter);
     if (req.query.keyId) {
       filter.keyId = req.query.keyId as string;
     }
@@ -213,11 +239,12 @@ export const getActivityFilterOptions = async (req: Request, res: Response): Pro
       return;
     }
 
+    const user = getAuthUser(req);
     const [servers, tools, groups, usernames, keyNames] = await Promise.all([
       activityDao.getDistinctServers(),
       activityDao.getDistinctTools(),
       activityDao.getDistinctGroups(),
-      activityDao.getDistinctUsernames(),
+      isAdminUser(user) ? activityDao.getDistinctUsernames() : Promise.resolve([]),
       activityDao.getDistinctKeyNames(),
     ]);
 
@@ -227,7 +254,8 @@ export const getActivityFilterOptions = async (req: Request, res: Response): Pro
         servers,
         tools,
         groups,
-        usernames,
+        // Non-admins only ever see their own username as a filter option
+        usernames: isAdminUser(user) ? usernames : user.username ? [user.username] : [],
         keyNames,
       },
     });
@@ -245,6 +273,15 @@ export const getActivityFilterOptions = async (req: Request, res: Response): Pro
  */
 export const deleteOldActivities = async (req: Request, res: Response): Promise<void> => {
   try {
+    // Cleanup is a global maintenance operation — admin only
+    if (!isAdminUser(getAuthUser(req))) {
+      res.status(403).json({
+        success: false,
+        message: 'Admin privileges required',
+      });
+      return;
+    }
+
     const activityDao = getActivityDao();
     if (!activityDao) {
       res.status(404).json({

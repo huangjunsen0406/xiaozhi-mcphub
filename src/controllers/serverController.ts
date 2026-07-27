@@ -46,6 +46,16 @@ import type { UpstreamOAuthDisconnectScope } from '../services/upstreamOAuthDisc
 import { normalizeServerConfigForPersistence } from '../utils/serverConfigPersistence.js';
 import { setCachedSystemConfig } from '../utils/systemConfigCache.js';
 import { DEFAULT_INSTALL_BASE_URL, withResolvedInstallBaseUrl } from '../utils/installBaseUrl.js';
+import {
+  bodyHasGlobalOnlySystemFields,
+  extractUserConfigPatch,
+  getUserConfigOrEmpty,
+  mergeMcpRouter,
+  mergeModelscope,
+  mergeSmartRoutingSettings,
+  mergeToolResultCompression,
+  sanitizeUserSmartRouting,
+} from '../utils/effectiveConfig.js';
 
 type DescribableConfig = Record<string, { enabled: boolean; description?: string }>;
 type ServerRecord = ServerConfig & { name: string };
@@ -59,6 +69,11 @@ const getRequestUser = (req: Request): RequestUser | null => {
   return ((req as any).user as RequestUser | undefined) || null;
 };
 
+/**
+ * Whether the current user may manage (read detail / mutate) a server via the
+ * management API. Public visibility only affects list/runtime visibility —
+ * non-owners still cannot manage someone else's public server.
+ */
 const canAccessServer = (user: RequestUser | null, server: ServerRecord): boolean => {
   if (!user) {
     return false;
@@ -71,22 +86,23 @@ const canAccessServer = (user: RequestUser | null, server: ServerRecord): boolea
   return server.owner === user.username;
 };
 
-const isPrivilegedServerConfig = (config: ServerConfig): boolean => {
-  return Boolean(
-    config.type === 'stdio' ||
-      config.command ||
-      (Array.isArray(config.args) && config.args.length > 0) ||
-      (!config.url && !config.openapi?.url && !config.openapi?.schema),
-  );
-};
-
 const loadAuthorizedServer = async (
   req: Request,
   res: Response,
   serverName: string,
 ): Promise<ServerRecord | null> => {
   const serverDao = getServerDao();
-  const server = await serverDao.findById(serverName);
+  const user = getRequestUser(req);
+
+  // Prefer the caller's own namespace when names can collide across users.
+  let server: ServerRecord | null = null;
+  if (user?.username) {
+    server = await serverDao.findByOwnerAndName(user.username, serverName);
+  }
+  // Admin (or missing own match): fall back to first global match by name.
+  if (!server) {
+    server = await serverDao.findById(serverName);
+  }
 
   if (!server) {
     res.status(404).json({
@@ -96,7 +112,7 @@ const loadAuthorizedServer = async (
     return null;
   }
 
-  if (!canAccessServer(getRequestUser(req), server)) {
+  if (!canAccessServer(user, server)) {
     res.status(403).json({
       success: false,
       message: 'Forbidden',
@@ -105,27 +121,6 @@ const loadAuthorizedServer = async (
   }
 
   return server;
-};
-
-const ensureNonAdminCanManageConfig = (
-  req: Request,
-  res: Response,
-  config: ServerConfig,
-): boolean => {
-  const currentUser = getRequestUser(req);
-  if (currentUser?.isAdmin) {
-    return true;
-  }
-
-  if (isPrivilegedServerConfig(config)) {
-    res.status(403).json({
-      success: false,
-      message: 'Only admins can create or modify stdio-based servers',
-    });
-    return false;
-  }
-
-  return true;
 };
 
 const assignServerOwner = (
@@ -264,8 +259,8 @@ export const getAllServers = async (req: Request, res: Response): Promise<void> 
         hasPrevPage: paginatedResult.page > 1,
       };
     } else {
-      // No pagination, get all servers (will be filtered by mcpService)
-      serversInfo = await getServersInfo();
+      // No pagination: still pass currentUser so non-admins only see own + public.
+      serversInfo = await getServersInfo(undefined, undefined, currentUser);
     }
 
     const response: ApiResponse & {
@@ -370,23 +365,65 @@ export const getAllSettings = async (req: Request, res: Response): Promise<void>
       })),
     };
 
+    const requestUser = getRequestUser(req);
+    const isAdmin = Boolean(requestUser?.isAdmin);
+
+    // Non-admin: return effective (system defaults + own overrides) for allowlisted
+    // sections, own bearer keys only, and no other users' data.
+    if (!isAdmin) {
+      const username = requestUser?.username || '';
+      const ownUserConfig = await getUserConfigOrEmpty(username);
+      const effectiveSmartRouting = mergeSmartRoutingSettings(
+        systemConfigForResponse.smartRouting,
+        ownUserConfig.smartRouting,
+      );
+      // Never expose system vector-db URL / secrets the user cannot change meaningfully
+      // beyond their own overrides — keep dbUrl from system so UI can show read-only state.
+      const effectiveToolResultCompression = mergeToolResultCompression(
+        systemConfigForResponse.toolResultCompression,
+        ownUserConfig.toolResultCompression,
+      );
+      const effectiveMcpRouter = mergeMcpRouter(
+        systemConfigForResponse.mcpRouter,
+        ownUserConfig.mcpRouter,
+      );
+      const effectiveModelscope = mergeModelscope(
+        systemConfigForResponse.modelscope,
+        ownUserConfig.modelscope,
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: createSafeJSON({
+          mcpServers: {},
+          systemConfig: {
+            install: {
+              baseUrl: systemConfigForResponse.install?.baseUrl,
+            },
+            smartRouting: effectiveSmartRouting,
+            toolResultCompression: effectiveToolResultCompression,
+            mcpRouter: effectiveMcpRouter,
+            modelscope: effectiveModelscope,
+          },
+          // Also surface raw user overrides so clients can distinguish if needed
+          userConfig: {
+            smartRouting: sanitizeUserSmartRouting(ownUserConfig.smartRouting),
+            toolResultCompression: ownUserConfig.toolResultCompression,
+            mcpRouter: ownUserConfig.mcpRouter,
+            modelscope: ownUserConfig.modelscope,
+          },
+          bearerKeys: settings.bearerKeys?.filter(
+            (key) => key.kind === 'user' && key.owner === username,
+          ),
+        }),
+      };
+      res.json(response);
+      return;
+    }
+
     const response: ApiResponse = {
       success: true,
-      data: createSafeJSON(
-        (req as any).user?.isAdmin
-          ? settings
-          : {
-              mcpServers: {},
-              systemConfig: {
-                install: {
-                  baseUrl: systemConfigForResponse.install?.baseUrl,
-                },
-              },
-              bearerKeys: settings.bearerKeys?.filter(
-                (key) => key.kind === 'user' && key.owner === getRequestUser(req)?.username,
-              ),
-            },
-      ),
+      data: createSafeJSON(settings),
     };
     res.json(response);
   } catch (error) {
@@ -485,10 +522,6 @@ export const createServer = async (req: Request, res: Response): Promise<void> =
         success: false,
         message: 'Headers are not supported for stdio server type',
       });
-      return;
-    }
-
-    if (!ensureNonAdminCanManageConfig(req, res, normalizedConfig)) {
       return;
     }
 
@@ -659,16 +692,6 @@ export const batchCreateServers = async (req: Request, res: Response): Promise<v
           normalizedConfig.keepAliveInterval = 60000; // Default 60 seconds for SSE servers
         }
 
-        if (isPrivilegedServerConfig(normalizedConfig) && currentUser?.isAdmin !== true) {
-          results.push({
-            name,
-            success: false,
-            message: 'Only admins can create or modify stdio-based servers',
-          });
-          failureCount++;
-          continue;
-        }
-
         // Set owner property if not provided
         normalizedConfig.owner = currentUser?.isAdmin ? normalizedConfig.owner || defaultOwner : defaultOwner;
 
@@ -751,7 +774,7 @@ export const deleteServer = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const result = await removeServer(existingServer.name);
+    const result = await removeServer(existingServer.name, existingServer.owner);
     if (result.success) {
       notifyToolChanged();
       res.json({
@@ -868,10 +891,6 @@ export const updateServer = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    if (!ensureNonAdminCanManageConfig(req, res, normalizedConfig)) {
-      return;
-    }
-
     // Set default keep-alive interval for SSE servers if not specified
     if (
       (normalizedConfig.type === 'sse' ||
@@ -890,18 +909,20 @@ export const updateServer = async (req: Request, res: Response): Promise<void> =
     // If renaming, validate the new name and update references
     if (isRenaming) {
       const serverDao = getServerDao();
+      const requestUser = getRequestUser(req);
 
-      // Check if new name already exists
-      if (await serverDao.exists(newName)) {
+      // Conflict only within the same owner namespace
+      const ownerNamespace = existingServer.owner || requestUser?.username || 'admin';
+      if (await serverDao.existsForOwner(ownerNamespace, newName)) {
         res.status(400).json({
           success: false,
-          message: `Server name '${newName}' already exists`,
+          message: `You already have a server named '${newName}'`,
         });
         return;
       }
 
-      // Rename the server
-      const renamed = await serverDao.rename(name, newName);
+      // Rename the server within its owner namespace
+      const renamed = await serverDao.rename(name, newName, ownerNamespace);
       if (!renamed) {
         res.status(404).json({
           success: false,
@@ -976,8 +997,12 @@ export const getServerConfig = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    // Get runtime info (status, tools) from getServersInfo
-    const allServers = await getServersInfo();
+    // Get runtime info (status, tools) from getServersInfo for the current user
+    const allServers = await getServersInfo(
+      undefined,
+      undefined,
+      UserContextService.getInstance().getCurrentUser() || undefined,
+    );
     const serverInfo = allServers.find((s) => s.name === name);
 
     // Extract config without the name field
@@ -1414,6 +1439,56 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       auth,
       activityLog,
     } = req.body;
+
+    const requestUser = getRequestUser(req);
+    const isAdmin = Boolean(requestUser?.isAdmin);
+
+    // Non-admin path: only allowlisted personal sections go into UserConfig.
+    // Global-only fields (routing/install/email/auth/oauth/dbUrl/...) are rejected.
+    if (!isAdmin) {
+      if (bodyHasGlobalOnlySystemFields(req.body)) {
+        res.status(403).json({
+          success: false,
+          message: 'Admin privileges required to update system-wide configuration',
+        });
+        return;
+      }
+
+      const username = requestUser?.username;
+      if (!username) {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
+      }
+
+      const patch = extractUserConfigPatch(req.body);
+      if (!patch) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid user configuration provided',
+        });
+        return;
+      }
+
+      const updatedUserConfig = await getUserConfigDao().update(username, patch);
+      // Return shape compatible with existing SettingsContext (systemConfig.*)
+      const systemConfig = (await getSystemConfigDao().get()) || {};
+      const effective = {
+        smartRouting: mergeSmartRoutingSettings(systemConfig.smartRouting, updatedUserConfig.smartRouting),
+        toolResultCompression: mergeToolResultCompression(
+          systemConfig.toolResultCompression,
+          updatedUserConfig.toolResultCompression,
+        ),
+        mcpRouter: mergeMcpRouter(systemConfig.mcpRouter, updatedUserConfig.mcpRouter),
+        modelscope: mergeModelscope(systemConfig.modelscope, updatedUserConfig.modelscope),
+      };
+
+      res.json({
+        success: true,
+        data: effective,
+        message: 'User configuration updated successfully',
+      });
+      return;
+    }
 
     const hasRoutingUpdate =
       routing &&

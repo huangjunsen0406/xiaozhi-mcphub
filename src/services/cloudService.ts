@@ -8,14 +8,23 @@ import {
   MCPRouterCallToolResponse,
 } from '../types/index.js';
 import { getSystemConfigDao } from '../dao/index.js';
+import {
+  getUserConfigOrEmpty,
+  mergeMcpRouter,
+  resolveConfigUsername,
+} from '../utils/effectiveConfig.js';
 // MCPRouter API default base URL
 const DEFAULT_MCPROUTER_API_BASE = 'https://api.mcprouter.to/v1';
 
-// Get MCPRouter API config from system configuration
-const getMCPRouterConfig = async () => {
+// Get MCPRouter API config from system configuration + optional per-user overrides
+const getMCPRouterConfig = async (username?: string | null) => {
   const systemConfigDao = getSystemConfigDao();
   const systemConfig = await systemConfigDao.get();
-  const mcpRouterConfig = systemConfig?.mcpRouter;
+  const resolvedUsername = resolveConfigUsername(username);
+  const userConfig = resolvedUsername
+    ? await getUserConfigOrEmpty(resolvedUsername)
+    : {};
+  const mcpRouterConfig = mergeMcpRouter(systemConfig?.mcpRouter, userConfig.mcpRouter);
 
   return {
     apiKey: mcpRouterConfig?.apiKey || process.env.MCPROUTER_API_KEY || '',

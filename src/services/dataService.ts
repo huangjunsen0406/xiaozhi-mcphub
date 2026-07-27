@@ -69,8 +69,12 @@ export class DataService {
   getPermissions(user: IUser): string[] {
     if (user && user.isAdmin) {
       return ['*', 'x'];
-    } else {
-      return [''];
     }
+    // Non-admin users may manage their own allowlisted settings sections.
+    // Global-only sections (route/install/system/oauth/export) stay admin-only.
+    return [
+      'settings:smart_routing',
+      'settings:user_integrations',
+    ];
   }
 }

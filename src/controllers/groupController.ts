@@ -18,8 +18,46 @@ import {
   getServerConfigInGroup,
   getServerConfigsInGroup,
   updateServerToolsInGroup,
+  canAccessGroup,
 } from '../services/groupService.js';
 import { getGroupDao } from '../dao/index.js';
+
+type RequestUser = { username?: string; isAdmin?: boolean };
+
+const getRequestUser = (req: Request): RequestUser | null =>
+  ((req as any).user as RequestUser | undefined) || null;
+
+/**
+ * Load a group and enforce ownership for non-admin users.
+ * Returns null after writing the appropriate response when access is denied.
+ */
+const loadAccessibleGroup = async (
+  req: Request,
+  res: Response,
+  id: string,
+): Promise<NonNullable<Awaited<ReturnType<typeof getGroupByIdOrName>>> | null> => {
+  // getGroupByIdOrName already filters by current user via UserContext,
+  // but we also check req.user explicitly for defense in depth.
+  const group = await getGroupByIdOrName(id);
+  if (!group) {
+    res.status(404).json({
+      success: false,
+      message: 'Group not found',
+    });
+    return null;
+  }
+
+  const currentUser = getRequestUser(req);
+  if (currentUser && !canAccessGroup(group, currentUser as any)) {
+    res.status(404).json({
+      success: false,
+      message: 'Group not found',
+    });
+    return null;
+  }
+
+  return group;
+};
 
 const isValidCapabilitySelection = (value: unknown): boolean => {
   return (
@@ -76,8 +114,10 @@ const validateGroupServersConfig = (servers: unknown): string | null => {
 // Get all groups
 export const getGroups = async (req: Request, res: Response): Promise<void> => {
   try {
-    const currentUser = (req as any).user;
+    const currentUser = getRequestUser(req);
     const isAdmin = Boolean(currentUser?.isAdmin);
+    // Prefer owner-scoped DAO query for non-admins (excludes owner-less legacy groups).
+    // getAllGroups() also filters via UserContext, but findByOwner is explicit and faster.
     const groups = isAdmin
       ? await getAllGroups()
       : await getGroupDao().findByOwner(currentUser?.username || '');
@@ -106,26 +146,8 @@ export const getGroup = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const group = await getGroupByIdOrName(id);
+    const group = await loadAccessibleGroup(req, res, id);
     if (!group) {
-      res.status(404).json({
-        success: false,
-        message: 'Group not found',
-      });
-      return;
-    }
-
-    const currentUser = (req as any).user;
-    if (
-      currentUser &&
-      !currentUser.isAdmin &&
-      group.owner &&
-      group.owner !== currentUser.username
-    ) {
-      res.status(404).json({
-        success: false,
-        message: 'Group not found',
-      });
       return;
     }
 
@@ -596,12 +618,8 @@ export const getGroupServers = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const group = await getGroupByIdOrName(id);
+    const group = await loadAccessibleGroup(req, res, id);
     if (!group) {
-      res.status(404).json({
-        success: false,
-        message: 'Group not found',
-      });
       return;
     }
 
@@ -630,6 +648,11 @@ export const getGroupServerConfigs = async (req: Request, res: Response): Promis
       return;
     }
 
+    const group = await loadAccessibleGroup(req, res, id);
+    if (!group) {
+      return;
+    }
+
     const serverConfigs = await getServerConfigsInGroup(id);
     const response: ApiResponse = {
       success: true,
@@ -653,6 +676,11 @@ export const getGroupServerConfig = async (req: Request, res: Response): Promise
         success: false,
         message: 'Group ID and server name are required',
       });
+      return;
+    }
+
+    const group = await loadAccessibleGroup(req, res, id);
+    if (!group) {
       return;
     }
 

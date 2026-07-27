@@ -10,6 +10,11 @@ import type {
 } from '../types/index.js';
 import { countTokens } from '../utils/tokenCost.js';
 import { getCachedSystemConfig } from '../utils/systemConfigCache.js';
+import {
+  getUserConfigOrEmpty,
+  mergeToolResultCompression,
+  resolveConfigUsername,
+} from '../utils/effectiveConfig.js';
 import { getSystemConfigDao } from '../dao/index.js';
 
 const DEFAULT_CONFIG: Required<ToolResultCompressionConfig> = {
@@ -80,14 +85,21 @@ export const normalizeToolResultCompressionConfig = (
   };
 };
 
-const getRuntimeConfig = async (): Promise<Required<ToolResultCompressionConfig>> => {
+const getRuntimeConfig = async (
+  username?: string | null,
+): Promise<Required<ToolResultCompressionConfig>> => {
+  // System baseline: prefer the warm cache, fall back to the DAO.
   const cached = getCachedSystemConfig();
-  if (cached?.toolResultCompression) {
-    return normalizeToolResultCompressionConfig(cached.toolResultCompression);
-  }
+  const systemCompression =
+    cached?.toolResultCompression ?? (await getSystemConfigDao().get())?.toolResultCompression;
 
-  const systemConfig = await getSystemConfigDao().get();
-  return normalizeToolResultCompressionConfig(systemConfig?.toolResultCompression);
+  // Layer the current (or explicit) user's overrides on top so compression
+  // settings stay isolated per account.
+  const resolvedUsername = resolveConfigUsername(username);
+  const userConfig = resolvedUsername ? await getUserConfigOrEmpty(resolvedUsername) : {};
+
+  const merged = mergeToolResultCompression(systemCompression, userConfig.toolResultCompression);
+  return normalizeToolResultCompressionConfig(merged);
 };
 
 const markerFor = (
@@ -440,6 +452,7 @@ export const maybeCompressToolResult = async <T extends ToolResultLike>(
   _context: ToolResultCompressionContext = {},
 ): Promise<T> => {
   try {
+    // Prefer request/user context so compression settings are isolated per account.
     const config = await getRuntimeConfig();
     if (!config.enabled || result?.isError === true || !Array.isArray(result?.content)) {
       return result;

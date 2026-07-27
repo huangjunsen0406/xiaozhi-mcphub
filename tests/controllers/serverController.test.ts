@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 
 const mockServerDao = {
   findById: jest.fn(),
+  findByOwnerAndName: jest.fn(),
+  existsForOwner: jest.fn(),
   findAll: jest.fn(),
   findAllPaginated: jest.fn(),
   findByOwnerPaginated: jest.fn(),
@@ -175,7 +177,12 @@ describe('serverController - getAllSettings', () => {
           install: {
             baseUrl: 'https://hub.example.com',
           },
+          smartRouting: expect.any(Object),
+          toolResultCompression: expect.any(Object),
+          mcpRouter: expect.any(Object),
+          modelscope: expect.any(Object),
         },
+        userConfig: expect.any(Object),
         bearerKeys: [
           expect.objectContaining({
             id: 'alice-key',
@@ -202,13 +209,18 @@ describe('serverController - updateSystemConfig', () => {
     mockStatus = jest.fn().mockReturnThis();
 
     mockRequest = {
+      // Global system-config writes are admin-only since per-user isolation landed.
+      user: {
+        username: 'admin',
+        isAdmin: true,
+      },
       body: {
         routing: {
           bearerAuthHeaderName: 'X-MCP-Authorization',
           jsonBodyLimit: '2mb',
         },
       },
-    };
+    } as unknown as Partial<Request>;
 
     mockResponse = {
       json: mockJson,
@@ -647,7 +659,9 @@ describe('serverController - authorization hardening', () => {
     jest.clearAllMocks();
   });
 
-  it('rejects non-admin stdio server creation', async () => {
+  it('allows non-admin stdio server creation and pins it to the caller as owner', async () => {
+    mockAddServer.mockResolvedValue({ success: true });
+
     const json = jest.fn();
     const status = jest.fn().mockReturnThis();
     const req = {
@@ -668,11 +682,17 @@ describe('serverController - authorization hardening', () => {
 
     await createServer(req, res);
 
-    expect(mockAddServer).not.toHaveBeenCalled();
-    expect(status).toHaveBeenCalledWith(403);
+    expect(mockAddServer).toHaveBeenCalledWith(
+      'stdio-server',
+      expect.objectContaining({
+        type: 'stdio',
+        command: 'node',
+        owner: 'alice',
+      }),
+    );
     expect(json).toHaveBeenCalledWith({
-      success: false,
-      message: 'Only admins can create or modify stdio-based servers',
+      success: true,
+      message: 'Server added successfully',
     });
   });
 

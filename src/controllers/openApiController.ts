@@ -222,9 +222,13 @@ export const getGroupOpenAPISpec = async (req: Request, res: Response): Promise<
   try {
     const { name } = req.params;
 
-    // Check if group exists
+    // Check if group exists AND is visible to the current user.
+    // getGroupByIdOrName already applies owner filtering via UserContext.
     const group = await getGroupByIdOrName(name);
     if (!group) {
+      // Do not fall through to server OpenAPI for another user's group name —
+      // that would leak whether a private group name collides with a server.
+      // Only fall through when the group truly does not exist for this user.
       getServerOpenAPISpec(req, res);
       return;
     }

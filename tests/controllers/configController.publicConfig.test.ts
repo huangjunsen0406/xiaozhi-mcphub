@@ -106,8 +106,53 @@ describe('ConfigController - getPublicConfig', () => {
             },
           },
         },
+        emailEnabled: false,
       },
     });
+  });
+
+  it('exposes emailEnabled when SMTP is fully configured', async () => {
+    const systemConfig = {
+      routing: { skipAuth: false },
+      email: {
+        enabled: true,
+        host: 'smtp.example.com',
+        port: 465,
+        user: 'noreply@example.com',
+        password: 'secret',
+      },
+    };
+
+    getSystemConfigMock.mockResolvedValue(systemConfig);
+    getBetterAuthRuntimeConfigMock.mockResolvedValue({
+      enabled: false,
+      basePath: '/api/auth/better',
+      trustedOrigins: [],
+      providers: {
+        google: { enabled: false },
+        github: { enabled: false },
+        oidc: {
+          enabled: false,
+          providerId: 'oidc',
+          discoveryUrl: undefined,
+          scopes: ['openid', 'profile', 'email'],
+          pkce: true,
+          prompt: undefined,
+        },
+      },
+    });
+
+    await getPublicConfig(mockRequest as Request, mockResponse as Response);
+
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          skipAuth: false,
+          emailEnabled: true,
+        }),
+      }),
+    );
   });
 
   it('does not request guest permissions when skipAuth is disabled in DAO-backed settings', async () => {
@@ -145,6 +190,7 @@ describe('ConfigController - getPublicConfig', () => {
         data: expect.objectContaining({
           skipAuth: false,
           permissions: {},
+          emailEnabled: false,
         }),
       }),
     );

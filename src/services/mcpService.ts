@@ -42,6 +42,7 @@ import { getServerConfigInGroup, normalizeGroupServers } from './groupService.js
 import { removeServerToolEmbeddings, saveToolsAsVectorEmbeddings } from './vectorSearchService.js';
 import { OpenAPIClient } from '../clients/openapi.js';
 import { RequestContextService } from './requestContextService.js';
+import { UserContextService } from './userContextService.js';
 import { getDataService } from './services.js';
 import {
   getServerDao,
@@ -62,6 +63,10 @@ import {
 } from './smartRoutingService.js';
 import { getActivityLoggingService } from './activityLoggingService.js';
 import { maybeCompressToolResult } from './toolResultCompressionService.js';
+import {
+  getUserConfigOrEmpty,
+  mergeModelscope,
+} from '../utils/effectiveConfig.js';
 import {
   assertHostedToolAllowed,
   filterHostedTools,
@@ -1288,16 +1293,22 @@ const MODELSCOPE_MCP_HOST = 'mcp.api-inference.modelscope.net';
 /**
  * Returns the configured ModelScope API key when the target URL points at ModelScope's
  * MCP inference host, so the Bearer token can be attached automatically.
+ * Prefer the server owner's UserConfig.modelscope key; fall back to system default.
  */
-const getModelScopeToken = async (url: string | undefined): Promise<string | undefined> => {
+const getModelScopeToken = async (
+  url: string | undefined,
+  owner?: string | null,
+): Promise<string | undefined> => {
   if (!url || !url.includes(MODELSCOPE_MCP_HOST)) {
     return undefined;
   }
   try {
     const systemConfig = await getSystemConfigDao().get();
-    return systemConfig?.modelscope?.apiKey || undefined;
+    const userConfig = owner ? await getUserConfigOrEmpty(owner) : {};
+    const modelscope = mergeModelscope(systemConfig?.modelscope, userConfig.modelscope);
+    return modelscope?.apiKey || undefined;
   } catch {
-    // A missing or unreadable system config must not block transport creation
+    // A missing or unreadable config must not block transport creation
     return undefined;
   }
 };
@@ -1360,8 +1371,8 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
 
     options.fetch = requestAwareFetch;
 
-    // 自动为 ModelScope 域名附加 Bearer token
-    const modelScopeToken = await getModelScopeToken(conf.url);
+    // Auto-attach ModelScope Bearer using the server owner's personal key when present
+    const modelScopeToken = await getModelScopeToken(conf.url, conf.owner);
     if (modelScopeToken) {
       options.requestInit = {
         ...(options.requestInit || {}),
@@ -1403,8 +1414,9 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
 
     options.fetch = requestAwareFetch;
 
-    // 自动为 ModelScope 域名附加 Bearer token（不覆盖手动配置的 Authorization）
-    const modelScopeToken = await getModelScopeToken(conf.url);
+    // Auto-attach ModelScope Bearer using the server owner's personal key when present
+    // (do not override a manually configured Authorization header)
+    const modelScopeToken = await getModelScopeToken(conf.url, conf.owner);
     if (modelScopeToken) {
       options.eventSourceInit = {
         ...(options.eventSourceInit || {}),
@@ -1662,7 +1674,12 @@ export const initializeClientsFromSettings = async (
       //   server's state if it is already connected, or if an OAuth
       //   authorization is in flight. Reconnecting during PKCE authorization
       //   would replace the pending code verifier and break the callback.
-      const existingServer = existingServerInfos.find((s) => s.name === name);
+      // Match by (owner, name) when available so same-named servers of different users stay separate
+      const existingServer = existingServerInfos.find(
+        (s) =>
+          s.name === name &&
+          (s.owner || 'admin') === (expandedConf.owner || 'admin'),
+      );
       const isDifferentServer = Boolean(serverName) && serverName !== name;
       const hasInflightOAuthAuthorization =
         existingServer?.status === 'oauth_required' &&
@@ -2131,9 +2148,32 @@ export const getServersInfo = async (
   return infos;
 };
 
-// Get server by name
-export const getServerByName = (name: string): ServerInfo | undefined => {
-  return serverInfos.find((serverInfo) => serverInfo.name === name);
+// Get server by name. When owner is provided, match (owner, name); otherwise
+// prefer a unique name, then the current user's own instance if present.
+export const getServerByName = (
+  name: string,
+  owner?: string | null,
+): ServerInfo | undefined => {
+  const matches = serverInfos.filter((serverInfo) => serverInfo.name === name);
+  if (matches.length === 0) return undefined;
+  if (owner) {
+    const owned = matches.find((s) => (s.owner || 'admin') === owner);
+    if (owned) return owned;
+  }
+  if (matches.length === 1) return matches[0];
+  // Prefer current user context when multiple owners share the display name
+  try {
+    const current = UserContextService.getInstance().getCurrentUser()?.username;
+    if (current) {
+      const owned = matches.find((s) => (s.owner || 'admin') === current);
+      if (owned) return owned;
+    }
+  } catch {
+    /* ignore */
+  }
+  // Own-before-public: private/own entries first
+  const nonPublic = matches.find((s) => s.visibility !== 'public');
+  return nonPublic || matches[0];
 };
 
 // Get server by OAuth state parameter
@@ -2253,25 +2293,41 @@ const getServerByTool = (toolName: string): ServerInfo | undefined => {
   return serverInfos.find((serverInfo) => serverInfo.tools.some((tool) => tool.name === toolName));
 };
 
-// Add new server
+// Add new server (uniqueness is per-owner)
 export const addServer = async (
   name: string,
   config: ServerConfig,
 ): Promise<{ success: boolean; message?: string }> => {
-  const server: ServerConfigWithName = { name, ...config };
-  const result = await getServerDao().create(server);
-  if (result) {
-    return { success: true, message: 'Server added successfully' };
-  } else {
+  try {
+    const server: ServerConfigWithName = { name, ...config };
+    const result = await getServerDao().create(server);
+    if (result) {
+      return { success: true, message: 'Server added successfully' };
+    }
+    return { success: false, message: 'Failed to add server' };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('already exists')) {
+      return { success: false, message: 'You already have a server with this name' };
+    }
+    console.error('Failed to add server', { serverName: name, error });
     return { success: false, message: 'Failed to add server' };
   }
 };
 
-// Remove server
+// Remove server. When owner is provided, only remove that owner's instance.
 export const removeServer = async (
   name: string,
+  owner?: string | null,
 ): Promise<{ success: boolean; message?: string }> => {
-  const result = await getServerDao().delete(name);
+  const dao = getServerDao();
+  let result = false;
+
+  if (owner) {
+    result = await dao.deleteByOwnerAndName(owner, name);
+  } else {
+    result = await dao.delete(name);
+  }
+
   if (!result) {
     return { success: false, message: 'Failed to remove server' };
   }
@@ -2280,7 +2336,7 @@ export const removeServer = async (
   // dropping the serverInfos reference. Without this, a stdio child launched
   // via npx / npm exec outlives the request and becomes an unkillable orphan
   // that leaks memory until the container is restarted.
-  closeServer(name);
+  closeServer(name, owner);
 
   try {
     await removeServerToolEmbeddings(name);
@@ -2288,7 +2344,11 @@ export const removeServer = async (
     console.warn('Failed to remove embeddings for server', { serverName: name, error });
   }
 
-  serverInfos = serverInfos.filter((serverInfo) => serverInfo.name !== name);
+  serverInfos = serverInfos.filter((serverInfo) => {
+    if (serverInfo.name !== name) return true;
+    if (owner) return (serverInfo.owner || 'admin') !== owner;
+    return false;
+  });
   return { success: true, message: 'Server removed successfully' };
 };
 
@@ -2299,17 +2359,22 @@ export const addOrUpdateServer = async (
   allowOverride: boolean = false,
 ): Promise<{ success: boolean; message?: string }> => {
   try {
-    const exists = await getServerDao().exists(name);
+    const owner = config.owner || 'admin';
+    // Uniqueness is per-owner
+    const exists = await getServerDao().existsForOwner(owner, name);
     if (exists && !allowOverride) {
-      return { success: false, message: 'Server name already exists' };
+      return { success: false, message: 'You already have a server with this name' };
     }
 
     // If overriding an existing server, close connections and clear keep-alive timers
     if (exists) {
       // Close existing server connections (clears keep-alive intervals as well)
-      closeServer(name);
-      // Remove from server infos
-      serverInfos = serverInfos.filter((serverInfo) => serverInfo.name !== name);
+      closeServer(name, owner);
+      // Remove from server infos (scoped to owner)
+      serverInfos = serverInfos.filter(
+        (serverInfo) =>
+          !(serverInfo.name === name && (serverInfo.owner || 'admin') === owner),
+      );
     }
 
     if (exists) {
@@ -2322,6 +2387,10 @@ export const addOrUpdateServer = async (
     return { success: true, message: `Server ${action} successfully` };
   } catch (error) {
     console.error('Failed to add/update server', { serverName: name, error });
+    // Surface uniqueness errors from DAO
+    if (error instanceof Error && error.message.includes('already exists')) {
+      return { success: false, message: 'You already have a server with this name' };
+    }
     return { success: false, message: 'Failed to add/update server' };
   }
 };
@@ -2388,15 +2457,15 @@ const closeServerRuntime = (serverInfo: ServerInfo): void => {
 };
 
 // Close server client and transport
-function closeServer(name: string) {
-  const serverInfo = serverInfos.find((serverInfo) => serverInfo.name === name);
+function closeServer(name: string, owner?: string | null) {
+  const serverInfo = getServerByName(name, owner);
   if (serverInfo) {
     closeServerRuntime(serverInfo);
   }
 }
 
-export const resetServerOAuthConnection = (name: string): boolean => {
-  const serverInfo = serverInfos.find((serverInfo) => serverInfo.name === name);
+export const resetServerOAuthConnection = (name: string, owner?: string | null): boolean => {
+  const serverInfo = getServerByName(name, owner);
   if (!serverInfo) {
     return false;
   }

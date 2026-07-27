@@ -14,8 +14,8 @@ const isAdminUser = (user: AuthUser): boolean => Boolean(user.isAdmin);
 const canAccessEndpoint = (endpoint: XiaozhiEndpoint | undefined, user: AuthUser): boolean => {
   if (!endpoint) return false;
   if (isAdminUser(user)) return true;
-  // Legacy endpoints without owner are only visible to admins for write operations;
-  // for read, non-admins only see endpoints they own.
+  // Legacy endpoints without owner are admin-only (not shared with all users).
+  // Non-admins only see/mutate endpoints they own.
   return Boolean(endpoint.owner && endpoint.owner === user.username);
 };
 
@@ -56,11 +56,16 @@ export const getXiaozhiStatus = async (req: Request, res: Response): Promise<voi
     const endpointIds = new Set(endpoints.map((e) => e.id));
     const filteredEndpoints = (status.endpoints || []).filter((e: any) => endpointIds.has(e.id));
     const connected = filteredEndpoints.some((e: any) => e.status === 'connected');
+    // Per-user "enabled" = any of their endpoints is enabled (no shared master switch)
+    const enabled = xiaozhiEndpointService.isEnabledForUser(
+      user.username || '',
+      isAdminUser(user),
+    );
 
     res.json({
       success: true,
       data: {
-        enabled: status.enabled,
+        enabled,
         connected: isAdminUser(user) ? status.connected : connected,
         endpoints: filteredEndpoints,
       },
@@ -85,9 +90,10 @@ export const getXiaozhiConfig = async (req: Request, res: Response): Promise<voi
       isAdminUser(user),
     );
 
-    // 为了兼容老的前端，如果有端点，返回第一个端点的信息作为单端点模式
+    // Compat shape: "enabled" now means the user has any enabled endpoint.
+    // Global xiaozhi_config.enabled is no longer a connection gate.
     const compatConfig = {
-      enabled: dbConfig?.enabled ?? false,
+      enabled: endpoints.some((ep) => ep.enabled),
       webSocketUrl:
         endpoints.length > 0
           ? endpoints[0].webSocketUrl.replace(/token=[^&?]*/g, 'token=***')
@@ -103,6 +109,8 @@ export const getXiaozhiConfig = async (req: Request, res: Response): Promise<voi
             },
       // 同时返回新的多端点信息
       endpoints: endpoints.map((endpoint) => maskEndpoint(endpoint)),
+      // Expose legacy global flag for admin diagnostics only (not used for gating)
+      legacyGlobalEnabled: dbConfig?.enabled ?? false,
     };
 
     res.json({
@@ -118,39 +126,58 @@ export const getXiaozhiConfig = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// 更新小智客户端配置（兼容老API，用于总开关）— 仅管理员
+/**
+ * Legacy "master switch" API — now batch-toggles the caller's own endpoints.
+ * There is no shared instance-wide gate; each endpoint.enabled is authoritative.
+ * Admins may still write the legacy global flag for diagnostics, but it does not
+ * control connections.
+ */
 export const updateXiaozhiConfig = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!requireAdmin(req, res)) return;
+    const user = getAuthUser(req);
+    if (!user.username) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
 
     const { enabled } = req.body;
-    const configRepo = getXiaozhiConfigRepository();
-    const currentEnabled = (await configRepo.getConfig())?.enabled ?? false;
-    const targetEnabled = enabled ?? currentEnabled;
-
-    // 验证：如果要启用小智客户端，必须有至少一个端点（从服务读取）
-    if (targetEnabled && xiaozhiEndpointService.getAllEndpoints().length === 0) {
+    if (typeof enabled !== 'boolean') {
       res.status(400).json({
         success: false,
-        message: '启用小智客户端时，必须至少配置一个端点',
+        message: 'enabled (boolean) is required',
       });
       return;
     }
 
-    await configRepo.saveConfig({ enabled: targetEnabled });
+    const ownEndpoints = xiaozhiEndpointService.getEndpointsForUser(
+      user.username,
+      isAdminUser(user),
+    );
 
-    // 配置保存成功后，重新加载小智客户端服务配置
-    try {
-      await xiaozhiClientService.reloadConfig();
-      console.log('小智客户端配置已热更新');
-    } catch (error) {
-      console.error('重新加载小智客户端配置失败:', error);
-      // 不影响配置保存的成功响应，只记录错误
+    if (enabled && ownEndpoints.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: '没有可启用的端点，请先添加至少一个端点',
+      });
+      return;
+    }
+
+    // Batch update only the caller's visible endpoints
+    for (const ep of ownEndpoints) {
+      if (ep.enabled !== enabled) {
+        await xiaozhiEndpointService.updateEndpoint(ep.id, { enabled });
+      }
+    }
+
+    // Keep legacy global flag in sync for admin-only diagnostics (non-gating).
+    if (isAdminUser(user)) {
+      const configRepo = getXiaozhiConfigRepository();
+      await configRepo.saveConfig({ enabled });
     }
 
     res.json({
       success: true,
-      message: '配置更新成功',
+      message: enabled ? '已启用我的全部端点' : '已停用我的全部端点',
     });
   } catch (error) {
     console.error('更新小智配置失败:', error);
@@ -210,23 +237,15 @@ export const stopXiaozhiClient = async (req: Request, res: Response): Promise<vo
   }
 };
 
-// 启动小智客户端 — 仅管理员
+// 启动小智客户端 — 仅管理员（连接所有 endpoint.enabled 的端点）
 export const startXiaozhiClient = async (req: Request, res: Response): Promise<void> => {
   try {
     if (!requireAdmin(req, res)) return;
 
-    if (!xiaozhiClientService.isEnabled()) {
-      res.status(400).json({
-        success: false,
-        message: '小智客户端未启用，请先配置并启用',
-      });
-      return;
-    }
-
     await xiaozhiClientService.initialize();
     res.json({
       success: true,
-      message: '小智客户端启动成功',
+      message: '小智客户端启动成功（已连接所有启用的端点）',
     });
   } catch (error) {
     console.error('启动小智客户端失败:', error);

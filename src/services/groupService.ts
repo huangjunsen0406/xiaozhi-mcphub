@@ -42,18 +42,55 @@ const hasDuplicateExposedServerName = (servers: IGroupServerConfig[]): boolean =
   return false;
 };
 
-const canMutateGroup = (group: IGroup): boolean => {
-  const currentUser = UserContextService.getInstance().getCurrentUser();
+const getCurrentUser = () => UserContextService.getInstance().getCurrentUser();
 
-  if (!currentUser) {
+/**
+ * Whether the current user may see a group.
+ * - admin: all groups
+ * - non-admin: only groups they own
+ * - legacy groups without owner: admin-only (treated as not visible to regular users)
+ */
+export const canAccessGroup = (group: IGroup, user = getCurrentUser()): boolean => {
+  if (!user) {
     return false;
   }
-
-  if (currentUser.isAdmin) {
+  if (user.isAdmin) {
     return true;
   }
+  return Boolean(group.owner && group.owner === user.username);
+};
 
-  return group.owner === currentUser.username;
+const canMutateGroup = (group: IGroup): boolean => canAccessGroup(group);
+
+/**
+ * Servers a non-admin is allowed to attach to a group: own servers + public servers.
+ * Admins can attach any server.
+ */
+const getAttachableServerNames = async (): Promise<Set<string> | null> => {
+  const currentUser = getCurrentUser();
+  if (!currentUser || currentUser.isAdmin) {
+    return null; // null means "no restriction"
+  }
+
+  const serverDao = getServerDao();
+  const allServers = await serverDao.findAll();
+  const dataService = getDataService();
+  const visible = dataService.filterData
+    ? dataService.filterData(allServers, currentUser)
+    : allServers.filter(
+        (server) => server.owner === currentUser.username || server.visibility === 'public',
+      );
+  return new Set(visible.map((server) => server.name));
+};
+
+const filterAttachableServers = async (
+  servers: IGroupServerConfig[],
+): Promise<IGroupServerConfig[]> => {
+  const allowed = await getAttachableServerNames();
+  if (!allowed) {
+    return servers;
+  }
+  return servers.filter((server) => allowed.has(server.name));
 };
 
 // Get all groups
@@ -61,10 +98,16 @@ export const getAllGroups = async (): Promise<IGroup[]> => {
   const groupDao = getGroupDao();
   const groups = await groupDao.findAll();
   const dataService = getDataService();
-  return dataService.filterData ? dataService.filterData(groups) : groups;
+  // Prefer DataService filter when available; also drop owner-less legacy groups for non-admins.
+  const filtered = dataService.filterData ? dataService.filterData(groups) : groups;
+  const currentUser = getCurrentUser();
+  if (!currentUser || currentUser.isAdmin) {
+    return filtered;
+  }
+  return filtered.filter((group) => canAccessGroup(group, currentUser));
 };
 
-// Get group by ID or name
+// Get group by ID or name (respects current-user visibility)
 export const getGroupByIdOrName = async (key: string): Promise<IGroup | undefined> => {
   const systemConfigDao = getSystemConfigDao();
 
@@ -82,6 +125,26 @@ export const getGroupByIdOrName = async (key: string): Promise<IGroup | undefine
   );
 };
 
+/**
+ * Load a group by id/name without applying user filter.
+ * Used by runtime MCP paths that already authorized access via bearer key scope.
+ */
+export const getGroupByIdOrNameUnfiltered = async (key: string): Promise<IGroup | undefined> => {
+  const systemConfigDao = getSystemConfigDao();
+  const systemConfig = await systemConfigDao.get();
+  const enableGroupNameRoute = systemConfig?.routing?.enableGroupNameRoute ?? true;
+
+  const groupDao = getGroupDao();
+  const byId = await groupDao.findById(key);
+  if (byId) {
+    return byId;
+  }
+  if (!enableGroupNameRoute) {
+    return undefined;
+  }
+  return (await groupDao.findByName(key)) || undefined;
+};
+
 // Create a new group
 export const createGroup = async (
   name: string,
@@ -93,19 +156,25 @@ export const createGroup = async (
     const groupDao = getGroupDao();
     const serverDao = getServerDao();
 
-    // Check if group with same name already exists
-    const existingGroup = await groupDao.findByName(name);
+    const currentUser = getCurrentUser();
+    const resolvedOwner = owner || currentUser?.username || 'admin';
+
+    // Uniqueness is per-owner: different users may share the same group name.
+    const existingGroup = await groupDao.findByOwnerAndName(resolvedOwner, name);
     if (existingGroup) {
       return null;
     }
 
-    // Normalize servers configuration and filter out non-existent servers
+    // Normalize servers, keep only existing + attachable servers for current user
     const normalizedServers = normalizeGroupServers(servers);
     const allServers = await serverDao.findAll();
+    // Attachable set is already owner-filtered at controller/service layer;
+    // still allow name match within attachable servers (own ∪ public).
     const serverNames = new Set(allServers.map((s) => s.name));
-    const validServers: IGroupServerConfig[] = normalizedServers.filter((serverConfig) =>
+    const existingServers: IGroupServerConfig[] = normalizedServers.filter((serverConfig) =>
       serverNames.has(serverConfig.name),
     );
+    const validServers = await filterAttachableServers(existingServers);
     if (hasDuplicateExposedServerName(validServers)) {
       return null;
     }
@@ -115,7 +184,7 @@ export const createGroup = async (
       name,
       description,
       servers: validServers,
-      owner: owner || 'admin',
+      owner: resolvedOwner,
     };
 
     const createdGroup = await groupDao.create(newGroup);
@@ -137,23 +206,32 @@ export const updateGroup = async (id: string, data: Partial<IGroup>): Promise<IG
       return null;
     }
 
-    // Check for name uniqueness if name is being updated
+    // Check for name uniqueness within the same owner if name is being updated
     if (data.name && data.name !== existingGroup.name) {
-      const groupWithName = await groupDao.findByName(data.name);
-      if (groupWithName) {
+      const owner = existingGroup.owner || 'admin';
+      const groupWithName = await groupDao.findByOwnerAndName(owner, data.name);
+      if (groupWithName && groupWithName.id !== existingGroup.id) {
         return null;
       }
     }
 
-    // If servers array is provided, validate server existence and normalize format
+    // If servers array is provided, validate server existence/attachability and normalize format
     if (data.servers) {
       const normalizedServers = normalizeGroupServers(data.servers);
       const allServers = await serverDao.findAll();
       const serverNames = new Set(allServers.map((s) => s.name));
-      data.servers = normalizedServers.filter((serverConfig) => serverNames.has(serverConfig.name));
+      const existingServers = normalizedServers.filter((serverConfig) =>
+        serverNames.has(serverConfig.name),
+      );
+      data.servers = await filterAttachableServers(existingServers);
       if (hasDuplicateExposedServerName(data.servers)) {
         return null;
       }
+    }
+
+    // Never allow ownership transfer through generic update payloads
+    if ('owner' in data) {
+      delete (data as Partial<IGroup>).owner;
     }
 
     const updatedGroup = await groupDao.update(id, data);
@@ -184,13 +262,14 @@ export const updateGroupServers = async (
       return null;
     }
 
-    // Normalize and filter out non-existent servers
+    // Normalize and filter out non-existent / non-attachable servers
     const normalizedServers = normalizeGroupServers(servers);
     const allServers = await serverDao.findAll();
     const serverNames = new Set(allServers.map((s) => s.name));
-    const validServers = normalizedServers.filter((serverConfig) =>
+    const existingServers = normalizedServers.filter((serverConfig) =>
       serverNames.has(serverConfig.name),
     );
+    const validServers = await filterAttachableServers(existingServers);
     if (hasDuplicateExposedServerName(validServers)) {
       return null;
     }
@@ -234,9 +313,13 @@ export const addServerToGroup = async (
     const groupDao = getGroupDao();
     const serverDao = getServerDao();
 
-    // Verify server exists
+    // Verify server exists and is attachable for current user
     const server = await serverDao.findById(serverName);
     if (!server) {
+      return null;
+    }
+    const attachable = await filterAttachableServers([{ name: serverName, tools: 'all' }]);
+    if (attachable.length === 0) {
       return null;
     }
 

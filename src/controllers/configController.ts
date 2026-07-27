@@ -79,12 +79,20 @@ export const getPublicConfig = async (req: Request, res: Response): Promise<void
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
 
+    // Surface only a boolean so the register page can require email without
+    // exposing SMTP credentials. True only when the service is fully configured.
+    const emailCfg = systemConfig?.email;
+    const emailEnabled = Boolean(
+      emailCfg?.enabled && emailCfg.host && emailCfg.port && emailCfg.user && emailCfg.password,
+    );
+
     res.json({
       success: true,
       data: {
         skipAuth,
         permissions,
         betterAuth: await getBetterAuthRuntimeConfig(systemConfig),
+        emailEnabled,
       },
     });
   } catch (error) {

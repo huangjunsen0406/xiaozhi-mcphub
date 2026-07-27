@@ -82,24 +82,24 @@ export class XiaozhiEndpointService {
     } as XiaozhiConfig;
   }
 
-  // 初始化所有启用的端点
+  // 初始化所有启用的端点（按 endpoint.enabled，不再依赖全局总开关）
   public async initializeEndpoints(): Promise<void> {
     // 始终从数据库读取最新配置
     await this.loadConfig();
-    if (!this.isEnabled()) {
-      console.log('小智端点服务未启用');
+
+    const enabledEndpoints = (this.config?.endpoints || []).filter((ep) => ep.enabled);
+    if (enabledEndpoints.length === 0) {
+      console.log('没有已启用的小智端点，跳过连接');
       return;
     }
 
-    console.log('正在初始化小智端点...');
-    
-    for (const endpoint of this.config!.endpoints) {
-      if (endpoint.enabled) {
-        try {
-          await this.connectEndpoint(endpoint);
-        } catch (error) {
-          console.error(`初始化端点 ${endpoint.name} 失败:`, error);
-        }
+    console.log(`正在初始化小智端点（${enabledEndpoints.length} 个已启用）...`);
+
+    for (const endpoint of enabledEndpoints) {
+      try {
+        await this.connectEndpoint(endpoint);
+      } catch (error) {
+        console.error(`初始化端点 ${endpoint.name} 失败:`, error);
       }
     }
   }
@@ -199,10 +199,11 @@ export class XiaozhiEndpointService {
 
       // 处理ListTools请求 - 根据端点分组过滤
       if (message.method === 'tools/list') {
-        const smartRoutingConfig = await getSmartRoutingConfig();
+        // Resolve smart-routing enablement from the endpoint owner's personal config
+        const smartRoutingConfig = await getSmartRoutingConfig(endpoint.owner);
         const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
 
-        // 端点级：仅当全局开启 且 端点选择使用智能路由 时，才切到 $smart
+        // 端点级：仅当该用户开启 且 端点选择使用智能路由 时，才切到 $smart
         // 若端点配置了分组，使用 $smart/{group} 将智能路由限定在该分组内
         if (smartRoutingConfig.enabled && (endpoint as any).useSmartRouting) {
           extraParams.group =
@@ -221,13 +222,14 @@ export class XiaozhiEndpointService {
 
       // 处理CallTool请求
       if (message.method === 'tools/call') {
-        const smartRoutingConfig = await getSmartRoutingConfig();
+        // Resolve smart-routing enablement from the endpoint owner's personal config
+        const smartRoutingConfig = await getSmartRoutingConfig(endpoint.owner);
         const toolName = message.params?.name;
         const isSmartRoutingTool = toolName === 'search_tools' || toolName === 'call_tool';
 
         const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
 
-        // 端点级：仅当全局开启 且 端点选择使用智能路由 且 调用的是智能路由虚拟工具 时
+        // 端点级：仅当该用户开启 且 端点选择使用智能路由 且 调用的是智能路由虚拟工具 时
         // 若端点配置了分组，使用 $smart/{group} 将向量检索限定在该分组的服务器内
         if (smartRoutingConfig.enabled && (endpoint as any).useSmartRouting && isSmartRoutingTool) {
           extraParams.group =
@@ -408,9 +410,18 @@ export class XiaozhiEndpointService {
     console.log(`端点 ${connection.endpoint.name} 已断开`);
   }
 
-  // 公共方法：检查是否启用
+  /**
+   * Whether any endpoint is currently enabled.
+   * Global xiaozhi_config.enabled is ignored — connections are gated only by
+   * each endpoint's own `enabled` flag so users don't share one master switch.
+   */
   public isEnabled(): boolean {
-    return this.config?.enabled === true && this.config.endpoints.length > 0;
+    return (this.config?.endpoints || []).some((ep) => ep.enabled);
+  }
+
+  /** Whether the given user has at least one enabled endpoint (admin: any). */
+  public isEnabledForUser(username: string, isAdmin: boolean): boolean {
+    return this.getEndpointsForUser(username, isAdmin).some((ep) => ep.enabled);
   }
 
   // 公共方法：获取所有端点
@@ -463,7 +474,8 @@ export class XiaozhiEndpointService {
 
     this.config!.endpoints.push(endpoint);
 
-    if (endpoint.enabled && this.config!.enabled) {
+    // Connect solely based on the endpoint's own enabled flag
+    if (endpoint.enabled) {
       await this.connectEndpoint(endpoint);
     }
 
@@ -491,7 +503,7 @@ export class XiaozhiEndpointService {
     if (updateData.webSocketUrl || updateData.enabled !== undefined) {
       await this.disconnectEndpoint(endpointId);
       const ep = this.config!.endpoints.find(e => e.id === endpointId)!;
-      if (ep.enabled && this.config!.enabled) {
+      if (ep.enabled) {
         await this.connectEndpoint(ep);
       }
     }
@@ -524,8 +536,8 @@ export class XiaozhiEndpointService {
     if (!endpoint) return false;
 
     await this.disconnectEndpoint(endpointId);
-    
-    if (endpoint.enabled && this.config.enabled) {
+
+    if (endpoint.enabled) {
       await this.connectEndpoint(endpoint);
     }
 
@@ -573,17 +585,12 @@ export class XiaozhiEndpointService {
     console.log('所有小智端点已断开');
   }
 
-  // 公共方法：重新加载配置
+  // 公共方法：重新加载配置并按各 endpoint.enabled 重建连接
   public async reloadConfig(): Promise<void> {
-    const oldEnabled = this.config?.enabled;
     await this.loadConfig();
-    if (oldEnabled !== this.config?.enabled) {
-      console.log('小智端点配置已更改，重新初始化连接...');
-      await this.disconnect();
-      if (this.isEnabled()) {
-        await this.initializeEndpoints();
-      }
-    }
+    console.log('小智端点配置已重新加载，按 endpoint.enabled 重建连接...');
+    await this.disconnect();
+    await this.initializeEndpoints();
   }
 
   // 公共方法：通知工具列表更新

@@ -2,9 +2,22 @@
 import { Request, Response } from 'express';
 import logService from '../services/logService.js';
 
-// Get all logs
+type AuthUser = { username?: string; isAdmin?: boolean };
+
+const requireAdmin = (req: Request, res: Response): boolean => {
+  const user = ((req as any).user || {}) as AuthUser;
+  if (user.isAdmin) {
+    return true;
+  }
+  res.status(403).json({ success: false, error: 'Admin privileges required' });
+  return false;
+};
+
+// Get all logs — system-wide, admin only
 export const getAllLogs = (req: Request, res: Response): void => {
   try {
+    if (!requireAdmin(req, res)) return;
+
     const logs = logService.getLogs();
     res.json({ success: true, data: logs });
   } catch (error) {
@@ -13,9 +26,11 @@ export const getAllLogs = (req: Request, res: Response): void => {
   }
 };
 
-// Clear all logs
+// Clear all logs — admin only
 export const clearLogs = (req: Request, res: Response): void => {
   try {
+    if (!requireAdmin(req, res)) return;
+
     logService.clearLogs();
     res.json({ success: true, message: 'Logs cleared successfully' });
   } catch (error) {
@@ -24,9 +39,11 @@ export const clearLogs = (req: Request, res: Response): void => {
   }
 };
 
-// Stream logs via SSE
+// Stream logs via SSE — admin only
 export const streamLogs = (req: Request, res: Response): void => {
   try {
+    if (!requireAdmin(req, res)) return;
+
     // Set headers for SSE
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
