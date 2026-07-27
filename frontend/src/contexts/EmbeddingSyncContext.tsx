@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { logStreamManager } from '@/services/logService';
 
 interface EmbeddingSyncProgressState {
@@ -49,8 +50,14 @@ const isValidProgressState = (
 export const EmbeddingSyncProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeSyncs, setActiveSyncs] = useState<EmbeddingSyncProgressState[]>([]);
   const hideTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const { auth } = useAuth();
+  const isAdmin = auth.user?.isAdmin === true;
 
   useEffect(() => {
+    // The log stream is admin-only; subscribing as a non-admin would just
+    // retry a 403 forever.
+    if (!isAdmin) return;
+
     const clearHideTimer = (serverName: string) => {
       const timer = hideTimersRef.current.get(serverName);
       if (timer) {
@@ -128,7 +135,7 @@ export const EmbeddingSyncProvider: React.FC<{ children: React.ReactNode }> = ({
       clearAllHideTimers();
       unsubscribe();
     };
-  }, []);
+  }, [isAdmin]);
 
   const value = useMemo(
     () => ({

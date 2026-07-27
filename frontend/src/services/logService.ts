@@ -46,11 +46,20 @@ export const clearLogs = async (): Promise<void> => {
  * across all subscribers so that multiple components (e.g. the Logs page and
  * the embedding-sync alert listener) reuse one HTTP connection.
  */
+const MAX_RECONNECT_ATTEMPTS = 5;
+
 class LogStreamManager {
   private eventSource: EventSource | null = null;
   private subscribers = new Set<(event: MessageEvent) => void>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private openAttempts = 0;
+  /**
+   * Set once the stream is considered permanently unavailable for this session
+   * (e.g. the account lacks permission — `/logs/stream` is admin-only, and an
+   * EventSource cannot read the 403 status, it only sees a generic error).
+   * Without this, every failure would retry forever and flood the network tab.
+   */
+  private givenUp = false;
 
   /** Subscribe to incoming SSE messages.  Returns an unsubscribe callback. */
   subscribe(callback: (event: MessageEvent) => void): () => void {
@@ -58,6 +67,7 @@ class LogStreamManager {
     if (this.subscribers.size === 1) {
       // Reset attempts when first subscriber added
       this.openAttempts = 0;
+      this.givenUp = false;
       this.openEventSource();
     }
     return () => {
@@ -93,6 +103,13 @@ class LogStreamManager {
       console.log('[LogStreamManager] Opening EventSource:', redactedUrl);
       this.eventSource = new EventSource(url);
 
+      // Only a real open resets the backoff. Resetting synchronously after the
+      // constructor would keep every retry at the 1s floor.
+      this.eventSource.onopen = () => {
+        this.openAttempts = 0;
+        console.log('[LogStreamManager] EventSource opened successfully');
+      };
+
       this.eventSource.onmessage = (event) => {
         this.subscribers.forEach((cb) => cb(event));
       };
@@ -104,10 +121,6 @@ class LogStreamManager {
           this.scheduleReconnect();
         }
       };
-
-      // Reset attempts on successful connection
-      this.openAttempts = 0;
-      console.log('[LogStreamManager] EventSource opened successfully');
     } catch (error) {
       console.error('[LogStreamManager] Failed to open EventSource:', error);
       this.closeEventSource();
@@ -125,7 +138,16 @@ class LogStreamManager {
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimer !== null) return;
+    if (this.reconnectTimer !== null || this.givenUp) return;
+
+    if (this.openAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      this.givenUp = true;
+      console.warn(
+        `[LogStreamManager] Giving up after ${this.openAttempts} failed attempts — ` +
+          'the log stream is unavailable for this account (admin only).',
+      );
+      return;
+    }
 
     // Exponential backoff: 1s, 2s, 4s, 8s max
     const delayMs = Math.min(1000 * Math.pow(2, this.openAttempts), 8000);

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useToast } from '@/contexts/ToastContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { logStreamManager } from '@/services/logService';
 
 const EMBED_SYNC_ERROR_MARKER = '[EMBED_SYNC_ERROR]';
@@ -19,9 +20,15 @@ type EmbeddingSyncStreamPayload = {
 
 const EmbeddingSyncAlertListener = () => {
   const { showToast } = useToast();
+  const { auth } = useAuth();
+  const isAdmin = auth.user?.isAdmin === true;
   const recentToastRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
+    // The log stream is admin-only; subscribing as a non-admin would just
+    // retry a 403 forever.
+    if (!isAdmin) return;
+
     const shouldSuppressToast = (key: string): boolean => {
       const now = Date.now();
 
@@ -111,7 +118,7 @@ const EmbeddingSyncAlertListener = () => {
     };
 
     return logStreamManager.subscribe(handleMessage);
-  }, [showToast]);
+  }, [showToast, isAdmin]);
 
   return null;
 };
