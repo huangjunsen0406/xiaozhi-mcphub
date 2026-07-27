@@ -251,6 +251,23 @@ export interface XiaozhiEndpoint {
   status?: 'connected' | 'disconnected' | 'connecting';
 }
 
+/** Live reconnect / connection diagnostics for one endpoint. */
+export interface XiaozhiEndpointRuntime {
+  reconnectAttempts: number;
+  infiniteRetryCount: number;
+  isInInfiniteReconnectMode: boolean;
+  isInSleepMode: boolean;
+  lastError?: string;
+  lastCloseCode?: number;
+  lastCloseReason?: string;
+  /** ISO time when the next reconnect is scheduled, if any */
+  nextReconnectAt?: string;
+  /** ISO time when the current socket opened */
+  connectedAt?: string;
+  /** Seconds the current socket has been open */
+  uptimeSeconds?: number;
+}
+
 // 小智端点状态信息
 export interface XiaozhiEndpointStatus {
   endpoint: XiaozhiEndpoint;
@@ -259,10 +276,25 @@ export interface XiaozhiEndpointStatus {
   tools?: Tool[];
   lastConnected?: string;
   error?: string;
+  runtime?: XiaozhiEndpointRuntime;
+}
+
+/** Compact Xiaozhi slice for GET /health */
+export interface XiaozhiHealthSummary {
+  /** False when DB is off / Xiaozhi subsystem unavailable */
+  available: boolean;
+  enabledTotal: number;
+  connected: number;
+  disconnected: number;
+  pendingReconnects: number;
 }
 
 // 小智多端点配置
 export interface XiaozhiConfig {
+  /**
+   * Legacy global flag kept for admin diagnostics only.
+   * Connections are gated solely by each endpoint.enabled.
+   */
   enabled: boolean;
   endpoints: XiaozhiEndpoint[];
   loadBalancing?: {

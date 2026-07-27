@@ -92,8 +92,8 @@ export class AppServer {
 
       // Preload Xiaozhi configuration from database before initializing upstream servers
       try {
-        const { xiaozhiClientService } = await import('./services/xiaozhiClientService.js');
-        await xiaozhiClientService.reloadConfig();
+        const { xiaozhiEndpointService } = await import('./services/xiaozhiEndpointService.js');
+        await xiaozhiEndpointService.reloadConfig();
         console.log('Preloaded Xiaozhi configuration from database');
       } catch (error) {
         console.warn('Failed to preload Xiaozhi configuration:', error);

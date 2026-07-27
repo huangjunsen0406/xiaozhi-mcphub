@@ -154,6 +154,38 @@ const XiaozhiEndpointCard: React.FC<XiaozhiEndpointCardProps> = ({
             </div>
           </div>
         </div>
+
+        {(status?.error || status?.runtime?.nextReconnectAt || (status?.runtime?.uptimeSeconds ?? 0) > 0) && (
+          <div
+            className="space-y-1 rounded-md px-2 py-1.5"
+            style={{ background: 'var(--hub-bg-2)', border: '1px solid var(--hub-line)', fontSize: 12 }}
+          >
+            {status?.error && !status.connected && (
+              <div className="truncate" style={{ color: 'var(--hub-danger, #c44)' }} title={status.error}>
+                {status.error}
+              </div>
+            )}
+            {status?.runtime?.nextReconnectAt && !status.connected && endpoint.enabled && (
+              <div style={{ color: 'var(--hub-ink-3)' }}>
+                {t('xiaozhi.reconnect.nextAt', {
+                  defaultValue: 'Next reconnect',
+                })}
+                {': '}
+                {formatDate(status.runtime.nextReconnectAt)}
+                {status.runtime.reconnectAttempts > 0
+                  ? ` (#${status.runtime.reconnectAttempts})`
+                  : ''}
+              </div>
+            )}
+            {status?.connected && (status.runtime?.uptimeSeconds ?? 0) > 0 && (
+              <div style={{ color: 'var(--hub-ink-3)' }}>
+                {t('xiaozhi.status.uptime', { defaultValue: 'Uptime' })}
+                {': '}
+                {status.runtime!.uptimeSeconds}s
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}

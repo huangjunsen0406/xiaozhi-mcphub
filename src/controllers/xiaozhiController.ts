@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import { xiaozhiClientService } from '../services/xiaozhiClientService.js';
 import { xiaozhiEndpointService } from '../services/xiaozhiEndpointService.js';
 import { getXiaozhiConfigRepository } from '../db/repositories/index.js';
 import { getGroupDao } from '../dao/index.js';
@@ -48,14 +47,14 @@ const assertGroupOwnership = async (
 export const getXiaozhiStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = getAuthUser(req);
-    const status = xiaozhiClientService.getStatus();
+    const status = xiaozhiEndpointService.getAggregateStatus();
     const endpoints = xiaozhiEndpointService.getEndpointsForUser(
       user.username || '',
       isAdminUser(user),
     );
     const endpointIds = new Set(endpoints.map((e) => e.id));
-    const filteredEndpoints = (status.endpoints || []).filter((e: any) => endpointIds.has(e.id));
-    const connected = filteredEndpoints.some((e: any) => e.status === 'connected');
+    const filteredEndpoints = (status.endpoints || []).filter((e) => endpointIds.has(e.id));
+    const connected = filteredEndpoints.some((e) => e.status === 'connected');
     // Per-user "enabled" = any of their endpoints is enabled (no shared master switch)
     const enabled = xiaozhiEndpointService.isEnabledForUser(
       user.username || '',
@@ -79,7 +78,7 @@ export const getXiaozhiStatus = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// 获取小智客户端配置（兼容老API）
+// Legacy single-endpoint config shape (deprecated; prefer /xiaozhi/endpoints).
 export const getXiaozhiConfig = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = getAuthUser(req);
@@ -194,11 +193,11 @@ export const restartXiaozhiClient = async (req: Request, res: Response): Promise
     if (!requireAdmin(req, res)) return;
 
     // 先断开连接
-    await xiaozhiClientService.disconnect();
+    await xiaozhiEndpointService.disconnect();
 
     // 重新初始化
-    if (xiaozhiClientService.isEnabled()) {
-      await xiaozhiClientService.initialize();
+    if (xiaozhiEndpointService.isEnabled()) {
+      await xiaozhiEndpointService.initializeEndpoints();
       res.json({
         success: true,
         message: '小智客户端重启成功',
@@ -223,7 +222,7 @@ export const stopXiaozhiClient = async (req: Request, res: Response): Promise<vo
   try {
     if (!requireAdmin(req, res)) return;
 
-    await xiaozhiClientService.disconnect();
+    await xiaozhiEndpointService.disconnect();
     res.json({
       success: true,
       message: '小智客户端已停止',
@@ -242,7 +241,7 @@ export const startXiaozhiClient = async (req: Request, res: Response): Promise<v
   try {
     if (!requireAdmin(req, res)) return;
 
-    await xiaozhiClientService.initialize();
+    await xiaozhiEndpointService.initializeEndpoints();
     res.json({
       success: true,
       message: '小智客户端启动成功（已连接所有启用的端点）',
