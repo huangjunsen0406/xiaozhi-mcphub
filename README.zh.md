@@ -43,10 +43,11 @@
 docker pull huangjunsen/xiaozhi-mcphub:latest
 
 # 运行（请按需修改数据库地址与口令）
+# 1.1.x 使用 DB_URL；v1.0.3 的 DATABASE_URL 仍可作为兼容回退
 docker run -d \
   --name xiaozhi-mcphub \
   -p 3000:3000 \
-  -e DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub" \
+  -e DB_URL="postgres://xiaozhi:xiaozhi123456@host.docker.internal:5432/xiaozhi_mcphub" \
   -e SMART_ROUTING_ENABLED="false" \
   -v $(pwd)/data:/app/data \
   huangjunsen/xiaozhi-mcphub:latest
@@ -76,9 +77,25 @@ docker compose logs -f mcphub
 
 关键变量（可在 compose 中修改）
 
-- `DATABASE_URL`: `postgres://xiaozhi:密码@db:5432/xiaozhi_mcphub`
+- `DB_URL`: `postgres://xiaozhi:密码@db:5432/xiaozhi_mcphub`（旧名 `DATABASE_URL` 仍兼容）
 - `SMART_ROUTING_ENABLED`: 开启/关闭智能路由（默认 "false"）
 - 可选：`BASE_PATH`、`JWT_SECRET`、`OPENAI_API_KEY` 等（见上）
+
+### 从 v1.0.3 升级
+
+如果已经升到 1.1.x 且 servers 看起来丢了，**不要清 Postgres volume**。
+只要库里还留着旧表 `mcp_servers`，新版本启动时会把缺失的行补偿拷进 `servers`。
+推荐把环境变量改成：
+
+```bash
+# 旧（v1.0.3）
+DATABASE_URL=postgres://xiaozhi:…@db:5432/xiaozhi_mcphub
+
+# 新（1.1.x）— 同一套账号 / 同一 volume
+DB_URL=postgres://xiaozhi:…@db:5432/xiaozhi_mcphub
+```
+
+详见 [documents/docs/configuration/upgrade-from-v103.md](documents/docs/configuration/upgrade-from-v103.md)。
 
 ### 方式三：本地开发
 
@@ -93,7 +110,7 @@ pnpm install
 docker compose up -d db
 
 # 设置数据库连接（或写入 .env）
-export DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
+export DB_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
 
 # 同时启动后端（:3000）与前端（Vite :5173）
 pnpm dev

@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Request, Response } from 'express';
+import { getDatabaseUrlFromEnv } from '../config/dbEnv.js';
 import {
   ApiResponse,
   AddServerRequest,
@@ -314,17 +315,23 @@ export const getAllSettings = async (req: Request, res: Response): Promise<void>
     const systemConfig = systemConfigResult || {};
 
     // Ensure smart routing config has DB URL set if environment variable is present
-    const dbUrlEnv = process.env.DB_URL || '';
+    // Prefer DB_URL; accept legacy DATABASE_URL so upgraded v1.0.3 installs still work.
+    const dbUrlEnv = getDatabaseUrlFromEnv() || '';
+    const dbUrlPlaceholder = process.env.DB_URL
+      ? '${DB_URL}'
+      : process.env.DATABASE_URL
+        ? '${DATABASE_URL}'
+        : '';
     if (!systemConfig.smartRouting) {
       systemConfig.smartRouting = {
         enabled: false,
-        dbUrl: dbUrlEnv ? '${DB_URL}' : '',
+        dbUrl: dbUrlEnv ? dbUrlPlaceholder : '',
         openaiApiBaseUrl: '',
         openaiApiKey: '',
         openaiApiEmbeddingModel: '',
       };
     } else if (!systemConfig.smartRouting.dbUrl) {
-      systemConfig.smartRouting.dbUrl = dbUrlEnv ? '${DB_URL}' : '';
+      systemConfig.smartRouting.dbUrl = dbUrlEnv ? dbUrlPlaceholder : '';
     }
 
     if (!systemConfig.toolResultCompression) {
@@ -1812,7 +1819,7 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
         // If enabling Smart Routing, validate required fields
         if (smartRouting.enabled) {
           const currentDbUrl =
-            process.env.DB_URL || smartRouting.dbUrl || systemConfig.smartRouting.dbUrl;
+            getDatabaseUrlFromEnv() || smartRouting.dbUrl || systemConfig.smartRouting.dbUrl;
 
           if (!currentDbUrl) {
             res.status(400).json({

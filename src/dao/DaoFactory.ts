@@ -169,9 +169,9 @@ export function getDaoFactory(): DaoFactory {
  * This is synchronous and should be called during app initialization
  */
 export async function initializeDaoFactory(): Promise<void> {
-  // If USE_DB is explicitly set, use its value; otherwise, auto-detect based on DB_URL presence
-  const useDatabase =
-    process.env.USE_DB !== undefined ? process.env.USE_DB === 'true' : !!process.env.DB_URL;
+  // USE_DB wins when set; otherwise auto-detect from DB_URL / legacy DATABASE_URL
+  const { isDatabaseModeEnabled } = await import('../config/dbEnv.js');
+  const useDatabase = isDatabaseModeEnabled();
   if (useDatabase) {
     console.log('Using database-backed DAO implementations');
     // Dynamic import to avoid circular dependencies

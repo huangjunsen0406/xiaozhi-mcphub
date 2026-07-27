@@ -3,6 +3,7 @@ import { genericOAuth } from 'better-auth/plugins';
 import { PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
 import defaultConfig, { loadSettings } from './config/index.js';
+import { getDatabaseUrlFromEnv } from './config/dbEnv.js';
 import { resolveBetterAuthRuntimeConfig } from './services/betterAuthConfig.js';
 import { resolveInstallBaseUrl } from './utils/installBaseUrl.js';
 import { getCachedSystemConfig, isDatabaseModeEnabled } from './utils/systemConfigCache.js';
@@ -94,9 +95,9 @@ const baseURL = resolveBaseURL(
   runtimeConfig.basePath,
 );
 
-const databaseUrl = process.env.DB_URL;
+const databaseUrl = getDatabaseUrlFromEnv();
 if (!databaseUrl) {
-  throw new Error('DB_URL is required for Better Auth PostgreSQL storage.');
+  throw new Error('DB_URL (or legacy DATABASE_URL) is required for Better Auth PostgreSQL storage.');
 }
 
 const pool = new Pool({

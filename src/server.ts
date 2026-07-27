@@ -254,8 +254,8 @@ export class AppServer {
     }
 
     // Close database connection if in database mode
-    const useDatabase =
-      process.env.USE_DB !== undefined ? process.env.USE_DB === 'true' : !!process.env.DB_URL;
+    const { isDatabaseModeEnabled } = await import('./config/dbEnv.js');
+    const useDatabase = isDatabaseModeEnabled();
     if (useDatabase) {
       try {
         const { closeDatabase } = await import('./db/connection.js');

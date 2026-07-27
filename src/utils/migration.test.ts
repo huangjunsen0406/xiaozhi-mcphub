@@ -4,11 +4,26 @@ import { jest } from '@jest/globals';
 
 const initializeDatabaseMock = jest.fn(async () => undefined);
 const createQueryBuilderMock = jest.fn();
+const getAppDataSourceMock = jest.fn(() => ({
+  createQueryBuilder: createQueryBuilderMock,
+}));
 jest.mock('../db/connection.js', () => ({
   initializeDatabase: initializeDatabaseMock,
-  getAppDataSource: jest.fn(() => ({
-    createQueryBuilder: createQueryBuilderMock,
-  })),
+  getAppDataSource: getAppDataSourceMock,
+}));
+
+const runLegacySchemaMigrationsMock = jest.fn(async () => ({
+  serversCopied: 0,
+  serversSkipped: 0,
+  endpointOwnersBackfilled: 0,
+  groupOwnersBackfilled: 0,
+  userAdminColumnAligned: false,
+  systemConfigColumnsAligned: false,
+  existingUserCount: 0,
+  adminUserPresent: false,
+}));
+jest.mock('./legacySchemaMigration.js', () => ({
+  runLegacySchemaMigrations: runLegacySchemaMigrationsMock,
 }));
 
 const setDaoFactoryMock = jest.fn();
@@ -191,6 +206,33 @@ describe('initializeDatabaseMode legacy bearer auth migration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockOwnerBackfillUpdates(0);
+    runLegacySchemaMigrationsMock.mockClear();
+    runLegacySchemaMigrationsMock.mockResolvedValue({
+      serversCopied: 0,
+      serversSkipped: 0,
+      endpointOwnersBackfilled: 0,
+      groupOwnersBackfilled: 0,
+      userAdminColumnAligned: false,
+      systemConfigColumnsAligned: false,
+      existingUserCount: 0,
+      adminUserPresent: false,
+    });
+  });
+
+  it('runs v1.0.x schema migration before DAO switch', async () => {
+    userRepoCountMock.mockResolvedValue(1);
+    bearerKeyCountMock.mockResolvedValue(1);
+    systemConfigGetMock.mockResolvedValue({});
+
+    const { initializeDatabaseMode } = await import('./migration.js');
+    const ok = await initializeDatabaseMode();
+
+    expect(ok).toBe(true);
+    expect(initializeDatabaseMock).toHaveBeenCalled();
+    expect(runLegacySchemaMigrationsMock).toHaveBeenCalledTimes(1);
+    expect(runLegacySchemaMigrationsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      setDaoFactoryMock.mock.invocationCallOrder[0],
+    );
   });
 
   it('skips legacy migration when bearerKeys table already has data', async () => {
@@ -205,6 +247,7 @@ describe('initializeDatabaseMode legacy bearer auth migration', () => {
 
     expect(ok).toBe(true);
     expect(initializeDatabaseMock).toHaveBeenCalled();
+    expect(runLegacySchemaMigrationsMock).toHaveBeenCalled();
     expect(loadOriginalSettingsMock).not.toHaveBeenCalled();
     expect(systemConfigGetMock).not.toHaveBeenCalled();
     expect(bearerKeyCreateMock).not.toHaveBeenCalled();

@@ -126,11 +126,21 @@ describe('initializeDefaultUser', () => {
   });
 
   it('should not create a user when users already exist', async () => {
-    mockFindAll.mockResolvedValue([{ username: 'existing', password: 'hash', isAdmin: true }]);
+    mockFindAll.mockResolvedValue([{ username: 'admin', password: 'hash', isAdmin: true }]);
 
     await initializeDefaultUser();
 
     expect(mockCreateWithHashedPassword).not.toHaveBeenCalled();
+    expect(loggedMessages()).toContain('reusing existing admin credentials');
+  });
+
+  it('should keep a non-empty store without inventing admin when username admin is absent', async () => {
+    mockFindAll.mockResolvedValue([{ username: 'alice', password: 'hash', isAdmin: false }]);
+
+    await initializeDefaultUser();
+
+    expect(mockCreateWithHashedPassword).not.toHaveBeenCalled();
+    expect(loggedMessages()).toContain('no admin username');
   });
 
   it('should generate different passwords on successive calls (randomness check)', async () => {

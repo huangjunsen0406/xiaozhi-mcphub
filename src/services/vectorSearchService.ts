@@ -1060,6 +1060,14 @@ export const saveToolsAsVectorEmbeddings = async (
       return;
     }
 
+    if (!smartRoutingConfig.dbUrl) {
+      console.warn(
+        '[EMBED_SYNC_ERROR] Skipping tool embedding sync because DB URL is not configured',
+        { serverName },
+      );
+      return;
+    }
+
     // Ensure database is initialized before starting
     if (!isDatabaseConnected()) {
       console.log('Database not initialized, initializing...');
@@ -1536,7 +1544,8 @@ export const getAllVectorizedTools = async (
 export const removeServerToolEmbeddings = async (serverName: string): Promise<void> => {
   try {
     const smartRoutingConfig = await getSmartRoutingConfig();
-    if (!smartRoutingConfig.dbUrl && !process.env.DB_URL) {
+    const { getDatabaseUrlFromEnv } = await import('../config/dbEnv.js');
+    if (!smartRoutingConfig.dbUrl && !getDatabaseUrlFromEnv()) {
       console.warn('Skipping embedding cleanup because DB URL is not configured', {
         serverName,
       });
@@ -1625,7 +1634,14 @@ export const syncAllServerToolsEmbeddings = async (): Promise<void> => {
 async function checkDatabaseVectorDimensions(dimensionsNeeded: number): Promise<boolean> {
   try {
     // First check if database is initialized
-    if (!getAppDataSource().isInitialized) {
+    if (!isDatabaseConnected()) {
+      const smartRoutingConfig = await getSmartRoutingConfig();
+      if (!smartRoutingConfig.dbUrl) {
+        console.warn(
+          'Skipping vector dimension check because DB URL is not configured',
+        );
+        return false;
+      }
       console.info('Database not initialized, initializing...');
       await initializeDatabase();
     }

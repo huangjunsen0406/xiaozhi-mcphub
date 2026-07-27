@@ -96,3 +96,5 @@ curl -s http://localhost:3000/health
 | 登录后空白 | 检查 `BASE_PATH`、反向代理与静态资源路径 |
 | 拉镜像 401 | Docker Hub 登录或镜像名是否为 `huangjunsen/xiaozhi-mcphub` |
 | 关于-更新检查失败 | 出站访问 GitHub；或设 `DISABLE_UPDATE_CHECK=true` |
+| 从 1.0.3 升级后 servers 为空 | 见 [从 v1.0.3 升级](/configuration/upgrade-from-v103)；确认未删 `pgdata`，日志是否有 `mcp_servers` 补偿迁移 |
+| `ECONNREFUSED 127.0.0.1:5432` | 容器内未配置有效 `DB_URL`/`DATABASE_URL`，或误把主机写成 localhost |

@@ -168,10 +168,9 @@ async function boot() {
   try {
     setupGlobalProxyFetch();
 
-    // Check if database mode is enabled
-    // If USE_DB is explicitly set, use its value; otherwise, auto-detect based on DB_URL presence
-    const useDatabase =
-      process.env.USE_DB !== undefined ? process.env.USE_DB === 'true' : !!process.env.DB_URL;
+    // Check if database mode is enabled (DB_URL, legacy DATABASE_URL, or explicit USE_DB)
+    const { isDatabaseModeEnabled } = await import('./config/dbEnv.js');
+    const useDatabase = isDatabaseModeEnabled();
     if (useDatabase) {
       console.log('Database mode enabled, initializing...');
       const dbInitialized = await initializeDatabaseMode();

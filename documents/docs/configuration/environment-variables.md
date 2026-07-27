@@ -1,7 +1,8 @@
 # 环境变量
 
 xiaozhi-mcphub **1.1.0** 通过环境变量与（可选）`mcp_settings.json` / 数据库系统配置共同生效。  
-与旧版文档的重要差异：数据库连接使用 **`DB_URL`**（不是 `DATABASE_URL`）。
+与旧版文档的重要差异：数据库连接使用 **`DB_URL`**。  
+从 **v1.0.3** 升级时旧名 **`DATABASE_URL` 仍可读**（会打 deprecation 警告）；请尽快改成 `DB_URL`。详见 [从 v1.0.3 升级](/configuration/upgrade-from-v103)。
 
 ## 核心
 
@@ -21,7 +22,8 @@ xiaozhi-mcphub **1.1.0** 通过环境变量与（可选）`mcp_settings.json` / 
 | 变量 | 说明 |
 |------|------|
 | `DB_URL` | PostgreSQL 连接串。配置后通常启用数据库模式；**小智端点等依赖 DB** |
-| `USE_DB` | 可选，显式开关 DB 模式（一般随 `DB_URL` 自动判断） |
+| `DATABASE_URL` | **兼容旧版**：与 `DB_URL` 同义；仅当 `DB_URL` 未设时生效 |
+| `USE_DB` | 可选，显式开关 DB 模式（一般随 `DB_URL` / `DATABASE_URL` 自动判断） |
 
 ```bash
 DB_URL=postgres://xiaozhi:密码@127.0.0.1:5432/xiaozhi_mcphub
