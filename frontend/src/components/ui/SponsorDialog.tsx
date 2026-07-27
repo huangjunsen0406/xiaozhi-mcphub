@@ -13,23 +13,23 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ open, onOpenChange }) => 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full">
-        <div className="p-6 relative">
+    <div className="flex fixed inset-0 z-50 justify-center items-center p-4 bg-black/50">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-lg dark:bg-gray-800">
+        <div className="relative p-6">
           {/* Close button (X) in the top-right corner */}
           <button
             onClick={() => onOpenChange(false)}
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
             aria-label={t('common.close')}
           >
-            <X className="h-5 w-5" />
+            <X className="w-5 h-5" />
           </button>
 
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+          <h3 className="mb-4 text-lg font-medium text-gray-900 dark:text-gray-100">
             {t('sponsor.title')}
           </h3>
 
-          <div className="flex flex-col items-center justify-center py-4">
+          <div className="flex flex-col justify-center items-center py-4">
             {i18n.language === 'zh' ? (
               <img
                 src="./assets/reward.png"

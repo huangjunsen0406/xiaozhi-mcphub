@@ -93,19 +93,18 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
     <div ref={menuRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-md ${isOpen ? 'bg-gray-100 dark:bg-gray-700' : ''
-          }`}
+        className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-md ${isOpen ? 'bg-gray-100 dark:bg-gray-700' : ''}`}
       >
-        <div className="flex-shrink-0 relative">
-          <div className="w-5 h-5 flex items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
-            <User className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+        <div className="relative flex-shrink-0">
+          <div className="flex justify-center items-center w-5 h-5 bg-gray-50 rounded-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+            <User className="w-4 h-4 text-gray-700 dark:text-gray-300" />
           </div>
           {showNewVersionInfo && (
-            <span className="absolute -top-1 -right-1 block w-2 h-2 bg-red-500 rounded-full"></span>
+            <span className="block absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           )}
         </div>
         {!collapsed && (
-          <div className="ml-3 flex flex-col items-start">
+          <div className="flex flex-col items-start ml-3">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               {auth.user?.username || t('auth.user')}
             </span>
@@ -114,50 +113,30 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
       </button>
 
       {isOpen && (
-        <div className="absolute top-0 transform -translate-y-full left-0 w-full min-w-max bg-white border border-gray-200 dark:border-gray-700 dark:bg-gray-800 z-50">
+        <div className="absolute top-0 left-0 z-50 w-full min-w-max bg-white border border-gray-200 transform -translate-y-full dark:border-gray-700 dark:bg-gray-800">
           <button
             onClick={handleSponsorClick}
-            className="flex items-center w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
+            className="flex items-center px-4 py-2 w-full text-sm text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
           >
-            <SponsorIcon className="h-4 w-4 mr-2" />
+            <SponsorIcon className="mr-2 w-4 h-4" />
             {t('sponsor.label')}
           </button>
 
-          {i18n.language === 'zh' ? (
-            <button
-              onClick={handleWeChatClick}
-              className="flex items-center w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-            >
-              <WeChatIcon className="h-4 w-4 mr-2" />
-              {t('wechat.label')}
-            </button>
-          ) : (
-            <a
-              href="https://discord.gg/2BJehJZVH5"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-            >
-              <DiscordIcon className="h-4 w-4 mr-2" />
-              {t('discord.label')}
-            </a>
-          )}
-
           <button
             onClick={handleSettingsClick}
-            className="flex items-center w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
+            className="flex items-center px-4 py-2 w-full text-sm text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
           >
-            <Settings className="h-4 w-4 mr-2" />
+            <Settings className="mr-2 w-4 h-4" />
             {t('nav.settings')}
           </button>
           <button
             onClick={handleAboutClick}
-            className="flex items-center w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 relative"
+            className="flex relative items-center px-4 py-2 w-full text-sm text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
           >
-            <Info className="h-4 w-4 mr-2" />
+            <Info className="mr-2 w-4 h-4" />
             {t('about.title')}
             {showNewVersionInfo && (
-              <span className="absolute top-2 right-4 block w-2 h-2 bg-red-500 rounded-full"></span>
+              <span className="block absolute top-2 right-4 w-2 h-2 bg-red-500 rounded-full"></span>
             )}
           </button>
 
@@ -165,9 +144,9 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
 
           <button
             onClick={handleLogoutClick}
-            className="flex items-center w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
+            className="flex items-center px-4 py-2 w-full text-sm text-left text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
           >
-            <LogOut className="h-4 w-4 mr-2" />
+            <LogOut className="mr-2 w-4 h-4" />
             {t('app.logout')}
           </button>
         </div>
@@ -190,9 +169,6 @@ const UserProfileMenu: React.FC<UserProfileMenuProps> = ({ collapsed, version })
 
       {/* Sponsor dialog */}
       <SponsorDialog open={sponsorDialogOpen} onOpenChange={setSponsorDialogOpen} />
-
-      {/* WeChat dialog */}
-      <WeChatDialog open={wechatDialogOpen} onOpenChange={setWechatDialogOpen} />
     </div>
   );
 };
