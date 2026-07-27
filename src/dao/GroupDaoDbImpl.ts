@@ -152,6 +152,18 @@ export class GroupDaoDbImpl implements GroupDao {
     };
   }
 
+  async findByOwnerAndName(owner: string, name: string): Promise<IGroup | null> {
+    const group = await this.repository.findByOwnerAndName(owner, name);
+    if (!group) return null;
+    return {
+      id: group.id,
+      name: group.name,
+      description: group.description,
+      servers: group.servers as any,
+      owner: group.owner,
+    };
+  }
+
   async updateServerName(oldName: string, newName: string): Promise<number> {
     const allGroups = await this.repository.findAll();
     let updatedCount = 0;

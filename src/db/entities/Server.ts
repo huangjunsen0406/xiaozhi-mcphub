@@ -4,17 +4,21 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 /**
- * Server configuration entity for database storage
+ * Server configuration entity for database storage.
+ * Uniqueness is per-owner so different users may install the same display name
+ * (e.g. both A and B can have an "amap" server).
  */
 @Entity({ name: 'servers' })
+@Index(['owner', 'name'], { unique: true })
 export class Server {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
+  @Column({ type: 'varchar', length: 255 })
   name: string;
 
   @Column({ type: 'varchar', length: 50, nullable: true })

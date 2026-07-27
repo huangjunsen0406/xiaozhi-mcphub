@@ -38,15 +38,39 @@ export class UserConfigDaoDbImpl implements UserConfigDao {
   }
 
   async update(username: string, config: Partial<UserConfig>): Promise<UserConfig> {
-    const { routing, ...additionalConfig } = config;
-    const updated = await this.repository.update(username, {
-      routing,
-      additionalConfig,
-    });
+    // Split first-class columns vs bag fields; deep-merge the bag so partial
+    // updates (e.g. only modelscope) do not wipe smartRouting / mcpRouter / etc.
+    const { routing, ...incomingAdditional } = config;
+    const existing = await this.repository.get(username);
+    const existingAdditional = (existing?.additionalConfig || {}) as Record<string, any>;
+
+    const mergedAdditional = this.deepMerge(existingAdditional, incomingAdditional || {});
+
+    const updatePayload: Record<string, any> = {
+      additionalConfig: mergedAdditional,
+    };
+    if (routing !== undefined) {
+      updatePayload.routing = this.deepMerge(existing?.routing || {}, routing || {});
+    }
+
+    const updated = await this.repository.update(username, updatePayload as any);
     return {
       routing: updated.routing,
       ...updated.additionalConfig,
     };
+  }
+
+  private deepMerge(target: any, source: any): any {
+    const result = { ...(target || {}) };
+    for (const key of Object.keys(source || {})) {
+      const value = source[key];
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        result[key] = this.deepMerge(target?.[key] || {}, value);
+      } else if (value !== undefined) {
+        result[key] = value;
+      }
+    }
+    return result;
   }
 
   async delete(username: string): Promise<boolean> {

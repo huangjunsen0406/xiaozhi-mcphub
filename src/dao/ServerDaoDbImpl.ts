@@ -71,7 +71,19 @@ export class ServerDaoDbImpl implements ServerDao {
     return server ? this.mapToServerConfig(server) : null;
   }
 
+  async findByOwnerAndName(
+    owner: string,
+    name: string,
+  ): Promise<ServerConfigWithName | null> {
+    const server = await this.repository.findByOwnerAndName(owner, name);
+    return server ? this.mapToServerConfig(server) : null;
+  }
+
   async create(entity: ServerConfigWithName): Promise<ServerConfigWithName> {
+    const owner = entity.owner || 'admin';
+    if (await this.repository.exists(entity.name, owner)) {
+      throw new Error(`Server ${entity.name} already exists`);
+    }
     const server = await this.repository.create({
       name: entity.name,
       type: entity.type,
@@ -82,7 +94,7 @@ export class ServerDaoDbImpl implements ServerDao {
       env: entity.env,
       headers: entity.headers,
       enabled: entity.enabled !== undefined ? entity.enabled : true,
-      owner: entity.owner,
+      owner,
       visibility: entity.visibility ?? 'private',
       enableKeepAlive: entity.enableKeepAlive,
       keepAliveInterval: entity.keepAliveInterval,
@@ -159,6 +171,14 @@ export class ServerDaoDbImpl implements ServerDao {
     return await this.repository.exists(name);
   }
 
+  async existsForOwner(owner: string, name: string): Promise<boolean> {
+    return await this.repository.exists(name, owner);
+  }
+
+  async deleteByOwnerAndName(owner: string, name: string): Promise<boolean> {
+    return await this.repository.deleteByOwnerAndName(owner, name);
+  }
+
   async count(): Promise<number> {
     return await this.repository.count();
   }
@@ -207,13 +227,20 @@ export class ServerDaoDbImpl implements ServerDao {
     return result !== null;
   }
 
-  async rename(oldName: string, newName: string): Promise<boolean> {
-    // Check if newName already exists
-    if (await this.repository.exists(newName)) {
+  async rename(oldName: string, newName: string, owner?: string): Promise<boolean> {
+    const existing = owner
+      ? await this.repository.findByOwnerAndName(owner, oldName)
+      : await this.repository.findByName(oldName);
+    if (!existing) {
+      return false;
+    }
+    const ownerNamespace = owner || existing.owner || 'admin';
+    // Conflict only within the same owner namespace
+    if (await this.repository.exists(newName, ownerNamespace)) {
       throw new Error(`Server ${newName} already exists`);
     }
 
-    return await this.repository.rename(oldName, newName);
+    return await this.repository.renameByOwner(ownerNamespace, oldName, newName);
   }
 
   private mapToServerConfig(server: {

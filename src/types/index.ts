@@ -332,8 +332,28 @@ export interface SystemConfig {
   };
 }
 
+/**
+ * Per-user configuration overrides.
+ * System-level infra (dbUrl, Better Auth, routing middleware, install env) stays in SystemConfig.
+ * User may override personal API keys and feature toggles listed below.
+ */
 export interface UserConfig {
-  routing?: Record<string, any>; // User-specific routing configuration
+  routing?: Record<string, any>; // reserved / legacy user routing prefs
+  /**
+   * Partial smart-routing overrides. `dbUrl` is ignored when writing from non-admin
+   * (vector store remains instance-global).
+   */
+  smartRouting?: Partial<SmartRoutingConfig>;
+  toolResultCompression?: ToolResultCompressionConfig;
+  mcpRouter?: {
+    apiKey?: string;
+    referer?: string;
+    title?: string;
+    baseUrl?: string;
+  };
+  modelscope?: {
+    apiKey?: string;
+  };
   [key: string]: any; // Allow additional dynamic properties
 }
 

@@ -82,9 +82,27 @@ export interface ServerDao extends BaseDao<ServerConfigWithName, string> {
   ): Promise<boolean>;
 
   /**
-   * Rename a server (change its name/key)
+   * Rename a server (change its name/key).
+   * When `owner` is provided, only that owner's instance is renamed and
+   * uniqueness is checked within that namespace.
    */
-  rename(oldName: string, newName: string): Promise<boolean>;
+  rename(oldName: string, newName: string, owner?: string): Promise<boolean>;
+
+  /**
+   * Find by owner + name (authoritative uniqueness key after multi-account isolation).
+   */
+  findByOwnerAndName(owner: string, name: string): Promise<ServerConfigWithName | null>;
+
+  /**
+   * Check whether a name exists within an owner namespace.
+   * When owner is omitted, falls back to global existence (legacy).
+   */
+  existsForOwner(owner: string, name: string): Promise<boolean>;
+
+  /**
+   * Delete a server within an owner namespace.
+   */
+  deleteByOwnerAndName(owner: string, name: string): Promise<boolean>;
 }
 
 /**
@@ -95,17 +113,40 @@ export interface ServerConfigWithName extends ServerConfig {
 }
 
 /**
- * JSON file-based Server DAO implementation
+ * JSON file-based Server DAO implementation.
+ * Storage keys are `${owner}::${name}` so different users may share a display name.
+ * Legacy entries keyed only by `name` are still loaded (owner defaults from config/admin).
  */
 export class ServerDaoImpl extends JsonFileBaseDao implements ServerDao {
+  private static storageKey(owner: string | undefined, name: string): string {
+    return `${owner || 'admin'}::${name}`;
+  }
+
+  private static parseStorageKey(
+    key: string,
+    config: ServerConfig,
+  ): { name: string; owner: string } {
+    const sep = '::';
+    const idx = key.indexOf(sep);
+    if (idx > 0) {
+      return {
+        owner: key.slice(0, idx) || config.owner || 'admin',
+        name: key.slice(idx + sep.length) || key,
+      };
+    }
+    return { name: key, owner: config.owner || 'admin' };
+  }
+
   protected async getAll(): Promise<ServerConfigWithName[]> {
     const settings = await this.loadSettings();
     const servers: ServerConfigWithName[] = [];
 
-    for (const [name, config] of Object.entries(settings.mcpServers || {})) {
+    for (const [key, config] of Object.entries(settings.mcpServers || {})) {
+      const { name, owner } = ServerDaoImpl.parseStorageKey(key, config);
       servers.push({
         name,
         ...config,
+        owner: config.owner || owner,
       });
     }
 
@@ -118,7 +159,9 @@ export class ServerDaoImpl extends JsonFileBaseDao implements ServerDao {
 
     for (const server of servers) {
       const { name, ...config } = server;
-      settings.mcpServers[name] = config;
+      const owner = config.owner || 'admin';
+      const key = ServerDaoImpl.storageKey(owner, name);
+      settings.mcpServers[key] = { ...config, owner };
     }
 
     await this.saveSettings(settings);
@@ -157,15 +200,20 @@ export class ServerDaoImpl extends JsonFileBaseDao implements ServerDao {
     data: Omit<ServerConfigWithName, 'name'> & { name: string },
   ): Promise<ServerConfigWithName> {
     const servers = await this.getAll();
+    const owner = data.owner || 'admin';
 
-    // Check if server already exists
-    if (servers.find((server) => server.name === data.name)) {
+    // Uniqueness is per-owner: different users may share the same display name.
+    if (
+      servers.find(
+        (server) => server.name === data.name && (server.owner || 'admin') === owner,
+      )
+    ) {
       throw new Error(`Server ${data.name} already exists`);
     }
 
     const newServer: ServerConfigWithName = {
       enabled: true, // Default to enabled
-      owner: 'admin', // Default owner
+      owner,
       ...data,
     };
 
@@ -208,6 +256,36 @@ export class ServerDaoImpl extends JsonFileBaseDao implements ServerDao {
   async exists(name: string): Promise<boolean> {
     const server = await this.findById(name);
     return server !== null;
+  }
+
+  async existsForOwner(owner: string, name: string): Promise<boolean> {
+    const servers = await this.getAll();
+    return servers.some(
+      (server) => server.name === name && (server.owner || 'admin') === owner,
+    );
+  }
+
+  async findByOwnerAndName(
+    owner: string,
+    name: string,
+  ): Promise<ServerConfigWithName | null> {
+    const servers = await this.getAll();
+    return (
+      servers.find(
+        (server) => server.name === name && (server.owner || 'admin') === owner,
+      ) || null
+    );
+  }
+
+  async deleteByOwnerAndName(owner: string, name: string): Promise<boolean> {
+    const servers = await this.getAll();
+    const index = servers.findIndex(
+      (server) => server.name === name && (server.owner || 'admin') === owner,
+    );
+    if (index === -1) return false;
+    servers.splice(index, 1);
+    await this.saveAll(servers);
+    return true;
   }
 
   async count(): Promise<number> {
@@ -347,16 +425,28 @@ export class ServerDaoImpl extends JsonFileBaseDao implements ServerDao {
     return result !== null;
   }
 
-  async rename(oldName: string, newName: string): Promise<boolean> {
+  async rename(oldName: string, newName: string, owner?: string): Promise<boolean> {
     const servers = await this.getAll();
-    const index = servers.findIndex((server) => server.name === oldName);
+    const index = servers.findIndex((server) => {
+      if (server.name !== oldName) return false;
+      if (owner) return (server.owner || 'admin') === owner;
+      return true;
+    });
 
     if (index === -1) {
       return false;
     }
 
-    // Check if newName already exists
-    if (servers.find((server) => server.name === newName)) {
+    // Conflict only within the same owner namespace
+    const ownerNamespace = owner || servers[index].owner || 'admin';
+    if (
+      servers.find(
+        (server) =>
+          server.name === newName &&
+          (server.owner || 'admin') === ownerNamespace &&
+          server !== servers[index],
+      )
+    ) {
       throw new Error(`Server ${newName} already exists`);
     }
 

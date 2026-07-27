@@ -38,6 +38,11 @@ export interface GroupDao extends BaseDao<IGroup, string> {
   findByName(name: string): Promise<IGroup | null>;
 
   /**
+   * Find group by owner + name (authoritative uniqueness after multi-account isolation)
+   */
+  findByOwnerAndName(owner: string, name: string): Promise<IGroup | null>;
+
+  /**
    * Update server name in all groups (when server is renamed)
    */
   updateServerName(oldName: string, newName: string): Promise<number>;
@@ -90,13 +95,18 @@ export class GroupDaoImpl extends JsonFileBaseDao implements GroupDao {
 
   async create(data: Omit<IGroup, 'id'>): Promise<IGroup> {
     const groups = await this.getAll();
+    const owner = data.owner || 'admin';
 
-    // Check if group name already exists
-    if (groups.find((group) => group.name === data.name)) {
+    // Uniqueness is per-owner
+    if (
+      groups.find(
+        (group) => group.name === data.name && (group.owner || 'admin') === owner,
+      )
+    ) {
       throw new Error(`Group with name ${data.name} already exists`);
     }
 
-    const newGroup = this.createEntity(data);
+    const newGroup = this.createEntity({ ...data, owner });
     groups.push(newGroup);
     await this.saveAll(groups);
 
@@ -111,9 +121,15 @@ export class GroupDaoImpl extends JsonFileBaseDao implements GroupDao {
       return null;
     }
 
-    // Check if name update would cause conflict
+    // Check if name update would cause conflict within the same owner
     if (updates.name && updates.name !== groups[index].name) {
-      const existingGroup = groups.find((group) => group.name === updates.name && group.id !== id);
+      const owner = (updates.owner ?? groups[index].owner) || 'admin';
+      const existingGroup = groups.find(
+        (group) =>
+          group.name === updates.name &&
+          group.id !== id &&
+          (group.owner || 'admin') === owner,
+      );
       if (existingGroup) {
         throw new Error(`Group with name ${updates.name} already exists`);
       }
@@ -222,6 +238,15 @@ export class GroupDaoImpl extends JsonFileBaseDao implements GroupDao {
   async findByName(name: string): Promise<IGroup | null> {
     const groups = await this.getAll();
     return groups.find((group) => group.name === name) || null;
+  }
+
+  async findByOwnerAndName(owner: string, name: string): Promise<IGroup | null> {
+    const groups = await this.getAll();
+    return (
+      groups.find(
+        (group) => group.name === name && (group.owner || 'admin') === owner,
+      ) || null
+    );
   }
 
   async updateServerName(oldName: string, newName: string): Promise<number> {

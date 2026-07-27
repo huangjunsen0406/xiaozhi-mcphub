@@ -20,10 +20,29 @@ export class ServerRepository {
   }
 
   /**
-   * Find server by name
+   * Find server by name (first match). Prefer findByOwnerAndName when owner is known.
    */
   async findByName(name: string): Promise<Server | null> {
     return await this.repository.findOne({ where: { name } });
+  }
+
+  /**
+   * Find server by owner + name (authoritative uniqueness key).
+   * Treats null/empty owner as matching the given owner for legacy rows.
+   */
+  async findByOwnerAndName(owner: string, name: string): Promise<Server | null> {
+    // Prefer exact owner match
+    const exact = await this.repository.findOne({ where: { owner, name } });
+    if (exact) return exact;
+    // Legacy rows may have null/empty owner — only match them for the admin namespace
+    if (owner === 'admin') {
+      return await this.repository
+        .createQueryBuilder('server')
+        .where('server.name = :name', { name })
+        .andWhere('(server.owner IS NULL OR server.owner = :empty)', { empty: '' })
+        .getOne();
+    }
+    return null;
   }
 
   /**
@@ -35,7 +54,7 @@ export class ServerRepository {
   }
 
   /**
-   * Update an existing server
+   * Update an existing server by name (first match). Prefer updateByOwnerAndName.
    */
   async update(name: string, serverData: Partial<Server>): Promise<Server | null> {
     const server = await this.findByName(name);
@@ -47,17 +66,45 @@ export class ServerRepository {
   }
 
   /**
-   * Delete a server
+   * Update server identified by (owner, name).
+   */
+  async updateByOwnerAndName(
+    owner: string,
+    name: string,
+    serverData: Partial<Server>,
+  ): Promise<Server | null> {
+    const server = await this.findByOwnerAndName(owner, name);
+    if (!server) {
+      return null;
+    }
+    const updated = this.repository.merge(server, serverData);
+    return await this.repository.save(updated);
+  }
+
+  /**
+   * Delete a server by name (all owners). Prefer deleteByOwnerAndName.
    */
   async delete(name: string): Promise<boolean> {
     const result = await this.repository.delete({ name });
     return (result.affected ?? 0) > 0;
   }
 
+  async deleteByOwnerAndName(owner: string, name: string): Promise<boolean> {
+    const server = await this.findByOwnerAndName(owner, name);
+    if (!server) return false;
+    const result = await this.repository.delete({ id: server.id });
+    return (result.affected ?? 0) > 0;
+  }
+
   /**
-   * Check if server exists
+   * Check if a server name exists within an owner namespace.
+   * When owner is omitted, checks global existence (legacy / admin tooling).
    */
-  async exists(name: string): Promise<boolean> {
+  async exists(name: string, owner?: string): Promise<boolean> {
+    if (owner) {
+      const found = await this.findByOwnerAndName(owner, name);
+      return found !== null;
+    }
     const count = await this.repository.count({ where: { name } });
     return count > 0;
   }
@@ -148,12 +195,28 @@ export class ServerRepository {
   }
 
   /**
-   * Rename a server
+   * Rename a server (first match by old name). Prefer renameByOwner.
    */
   async rename(oldName: string, newName: string): Promise<boolean> {
     const server = await this.findByName(oldName);
     if (!server) {
       return false;
+    }
+    server.name = newName;
+    await this.repository.save(server);
+    return true;
+  }
+
+  /**
+   * Rename within an owner namespace. Fails if target name already taken by same owner.
+   */
+  async renameByOwner(owner: string, oldName: string, newName: string): Promise<boolean> {
+    const server = await this.findByOwnerAndName(owner, oldName);
+    if (!server) {
+      return false;
+    }
+    if (await this.exists(newName, owner)) {
+      throw new Error(`Server ${newName} already exists for owner ${owner}`);
     }
     server.name = newName;
     await this.repository.save(server);

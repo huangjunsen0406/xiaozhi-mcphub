@@ -27,10 +27,26 @@ export class GroupRepository {
   }
 
   /**
-   * Find group by name
+   * Find group by name (first match). Prefer findByOwnerAndName when owner is known.
    */
   async findByName(name: string): Promise<Group | null> {
     return await this.repository.findOne({ where: { name } });
+  }
+
+  /**
+   * Find group by owner + name.
+   */
+  async findByOwnerAndName(owner: string, name: string): Promise<Group | null> {
+    const exact = await this.repository.findOne({ where: { owner, name } });
+    if (exact) return exact;
+    if (owner === 'admin') {
+      return await this.repository
+        .createQueryBuilder('grp')
+        .where('grp.name = :name', { name })
+        .andWhere('(grp.owner IS NULL OR grp.owner = :empty)', { empty: '' })
+        .getOne();
+    }
+    return null;
   }
 
   /**
@@ -70,11 +86,15 @@ export class GroupRepository {
   }
 
   /**
-   * Check if group exists by name
+   * Check if group exists by name (global). Prefer existsByOwnerAndName.
    */
   async existsByName(name: string): Promise<boolean> {
     const count = await this.repository.count({ where: { name } });
     return count > 0;
+  }
+
+  async existsByOwnerAndName(owner: string, name: string): Promise<boolean> {
+    return (await this.findByOwnerAndName(owner, name)) !== null;
   }
 
   /**

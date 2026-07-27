@@ -4,12 +4,15 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 /**
- * Group entity for database storage
+ * Group entity for database storage.
+ * Uniqueness is per-owner so different users may reuse the same group name.
  */
 @Entity({ name: 'groups' })
+@Index(['owner', 'name'], { unique: true })
 export class Group {
   @PrimaryGeneratedColumn('uuid')
   id: string;
