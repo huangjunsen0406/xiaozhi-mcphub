@@ -15,16 +15,17 @@ export class SystemConfig {
   @Column({ type: 'simple-json', nullable: true })
   install?: Record<string, any>;
 
-  @Column({ type: 'simple-json', nullable: true })
+  // Explicit snake_case names preserve v1.0.3 system_config columns under synchronize.
+  @Column({ type: 'simple-json', name: 'smart_routing', nullable: true })
   smartRouting?: Record<string, any>;
 
   @Column({ type: 'simple-json', nullable: true })
   toolResultCompression?: Record<string, any>;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'simple-json', name: 'mcp_router', nullable: true })
   mcpRouter?: Record<string, any>;
 
-  @Column({ type: 'simple-json', nullable: true })
+  @Column({ type: 'simple-json', name: 'modelscope', nullable: true })
   modelscope?: Record<string, any>;
 
   @Column({ type: 'simple-json', nullable: true })

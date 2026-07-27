@@ -49,9 +49,25 @@ const createRequiredExtensions = async (dataSource: DataSource): Promise<void> =
   }
 };
 
-// Get database URL from smart routing config or fallback to environment variable
+// Get database URL from smart routing config, env (DB_URL / legacy DATABASE_URL),
+// and fail loudly instead of letting `pg` default to 127.0.0.1:5432.
 const getDatabaseUrl = async (): Promise<string> => {
-  return (await getSmartRoutingConfig()).dbUrl;
+  const fromConfig = ((await getSmartRoutingConfig()).dbUrl || '').trim();
+  if (fromConfig) {
+    return fromConfig;
+  }
+
+  // Direct env fallback in case smartRouting settings are not hydrated yet.
+  const { getDatabaseUrlFromEnv } = await import('../config/dbEnv.js');
+  const fromEnv = getDatabaseUrlFromEnv();
+  if (fromEnv) {
+    return fromEnv;
+  }
+
+  throw new Error(
+    'Database URL is not configured. Set DB_URL (or legacy DATABASE_URL for v1.0.3 upgrades). ' +
+      'Refusing to fall back to localhost:5432.',
+  );
 };
 
 const ensureEmbeddingColumnIsVector = async (dataSource: DataSource): Promise<void> => {

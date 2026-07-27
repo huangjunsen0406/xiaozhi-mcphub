@@ -20,7 +20,8 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   password: string;
 
-  @Column({ type: 'boolean', default: false })
+  // Keep explicit snake_case column name so v1.0.3 databases (is_admin) keep working.
+  @Column({ type: 'boolean', default: false, name: 'is_admin' })
   isAdmin: boolean;
 
   @Column({ type: 'varchar', length: 255, nullable: true, unique: true })

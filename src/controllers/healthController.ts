@@ -1,11 +1,8 @@
 import { Request, Response } from 'express';
+import { isDatabaseModeEnabled } from '../config/dbEnv.js';
 import { getDatabaseHealth } from '../db/connection.js';
 import { getServerConnectionStats } from '../services/mcpService.js';
 import { xiaozhiEndpointService } from '../services/xiaozhiEndpointService.js';
-
-const isDatabaseModeEnabled = (): boolean => {
-  return process.env.USE_DB !== undefined ? process.env.USE_DB === 'true' : !!process.env.DB_URL;
-};
 
 /**
  * Health check endpoint.

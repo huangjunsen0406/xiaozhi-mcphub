@@ -43,10 +43,11 @@
 docker pull huangjunsen/xiaozhi-mcphub:latest
 
 # Run (adjust DB URL and password to your environment)
+# Use DB_URL (1.1.x). Legacy DATABASE_URL from v1.0.3 is still accepted as a fallback.
 docker run -d \
   --name xiaozhi-mcphub \
   -p 3000:3000 \
-  -e DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub" \
+  -e DB_URL="postgres://xiaozhi:xiaozhi123456@host.docker.internal:5432/xiaozhi_mcphub" \
   -e SMART_ROUTING_ENABLED="false" \
   -v $(pwd)/data:/app/data \
   huangjunsen/xiaozhi-mcphub:latest
@@ -77,9 +78,25 @@ docker compose logs -f mcphub
 
 Key variables (edit in compose if needed):
 
-- `DATABASE_URL`: `postgres://xiaozhi:<password>@db:5432/xiaozhi_mcphub`
+- `DB_URL`: `postgres://xiaozhi:<password>@db:5432/xiaozhi_mcphub` (legacy `DATABASE_URL` still works)
 - `SMART_ROUTING_ENABLED`: Enable/disable smart routing (default "false").
 - Optional: `BASE_PATH`, `JWT_SECRET`, `OPENAI_API_KEY`, etc. (see above)
+
+### Upgrading from v1.0.3
+
+If you already jumped to 1.1.x and servers disappeared, **do not wipe the Postgres volume**.
+1.1.x+ will detect the legacy `mcp_servers` table (when still present) and copy any missing
+rows into the new `servers` table on startup. Prefer renaming the env var:
+
+```bash
+# before (v1.0.3)
+DATABASE_URL=postgres://xiaozhi:…@db:5432/xiaozhi_mcphub
+
+# after (1.1.x) — same credentials / same volume
+DB_URL=postgres://xiaozhi:…@db:5432/xiaozhi_mcphub
+```
+
+Details: [documents/docs/configuration/upgrade-from-v103.md](documents/docs/configuration/upgrade-from-v103.md).
 
 ### Method 3: Local development
 
@@ -94,7 +111,7 @@ pnpm install
 docker compose up -d db
 
 # Set database connection (or write to .env)
-export DATABASE_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
+export DB_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
 
 # Start both backend (:3000) and frontend (Vite :5173)
 pnpm dev

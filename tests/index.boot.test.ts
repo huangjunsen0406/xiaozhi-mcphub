@@ -74,16 +74,36 @@ describe('index boot', () => {
 
     delete process.env.USE_DB;
     delete process.env.DB_URL;
+    delete process.env.DATABASE_URL;
   });
 
   it('starts the app without waiting for the hosted Redis subscriber to connect', async () => {
     await import('../src/index.js');
-    await Promise.resolve();
-    await Promise.resolve();
+
+    // boot() is async and may await dynamic imports (dbEnv) + hydrate + initialize.
+    // Flush microtasks until start() has run instead of a fixed tick count.
+    for (let i = 0; i < 20 && startMock.mock.calls.length === 0; i += 1) {
+      await Promise.resolve();
+    }
 
     expect(hydrateSystemConfigCacheMock).toHaveBeenCalledTimes(1);
     expect(startHostedEventSubscriberMock).toHaveBeenCalledTimes(1);
     expect(initializeMock).toHaveBeenCalledTimes(1);
+    expect(startMock).toHaveBeenCalledTimes(1);
+    expect(backfillMissingOwnersInJsonSettingsMock).toHaveBeenCalledTimes(1);
+    expect(initializeDatabaseModeMock).not.toHaveBeenCalled();
+  });
+
+  it('enables database mode when only legacy DATABASE_URL is set', async () => {
+    process.env.DATABASE_URL = 'postgres://xiaozhi:pw@db:5432/xiaozhi_mcphub';
+
+    await import('../src/index.js');
+    for (let i = 0; i < 20 && startMock.mock.calls.length === 0; i += 1) {
+      await Promise.resolve();
+    }
+
+    expect(initializeDatabaseModeMock).toHaveBeenCalledTimes(1);
+    expect(backfillMissingOwnersInJsonSettingsMock).not.toHaveBeenCalled();
     expect(startMock).toHaveBeenCalledTimes(1);
   });
 });

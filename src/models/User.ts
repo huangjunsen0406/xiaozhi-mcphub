@@ -154,29 +154,47 @@ export const initializeDefaultUser = async (): Promise<void> => {
   const userDao = getUserDao();
   const users = await userDao.findAll();
 
-  if (users.length === 0) {
-    const createDefaultAdmin = async (password: string): Promise<void> => {
-      await userDao.createWithHashedPassword('admin', password, true);
-      console.log('Default admin user created');
-    };
-
-    const adminPasswordFromEnv = process.env.ADMIN_PASSWORD;
-    if (adminPasswordFromEnv) {
-      await createDefaultAdmin(adminPasswordFromEnv);
-      return;
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      await createDefaultAdmin('admin123');
-      console.log('Using development admin password: admin123');
-      return;
-    }
-
-    const generatedPassword = generateRandomPassword();
-    await createDefaultAdmin(generatedPassword);
-    console.log('========================================');
-    console.log('  Generated admin password: ' + generatedPassword);
-    console.log('  Please change this password after first login.');
-    console.log('========================================');
+  if (users.length > 0) {
+    // Existing installs (including v1.0.3 Postgres `users` rows) keep their
+    // hashed passwords as-is. Never overwrite admin when the table is non-empty.
+    const hasAdmin = users.some((user) => user.username === 'admin');
+    console.log(
+      `User store already has ${users.length} account(s)` +
+        (hasAdmin
+          ? '; reusing existing admin credentials (not regenerating password)'
+          : ' (no admin username — not auto-creating one because the store is non-empty)'),
+    );
+    return;
   }
+
+  const createDefaultAdmin = async (password: string): Promise<void> => {
+    await userDao.createWithHashedPassword('admin', password, true);
+    console.log('Default admin user created');
+  };
+
+  const adminPasswordFromEnv = process.env.ADMIN_PASSWORD;
+  if (adminPasswordFromEnv) {
+    await createDefaultAdmin(adminPasswordFromEnv);
+    return;
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    await createDefaultAdmin('admin123');
+    console.log('Using development admin password: admin123');
+    return;
+  }
+
+  const generatedPassword = generateRandomPassword();
+  await createDefaultAdmin(generatedPassword);
+  console.log('========================================');
+  console.log('  Generated admin password: ' + generatedPassword);
+  console.log('  Please change this password after first login.');
+  console.log(
+    '  Note: this only runs on an empty user store. If you upgraded from v1.0.3',
+  );
+  console.log(
+    '  and expected your old password, reconnect DB_URL to the original Postgres',
+  );
+  console.log('  volume — the legacy admin hash lives in the users table.');
+  console.log('========================================');
 };

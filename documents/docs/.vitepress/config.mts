@@ -16,6 +16,7 @@ export default defineConfig({
         items: [
           { text: 'Docker 部署', link: '/configuration/docker-setup' },
           { text: '环境变量', link: '/configuration/environment-variables' },
+          { text: '从 v1.0.3 升级', link: '/configuration/upgrade-from-v103' },
           { text: 'MCP 配置', link: '/configuration/mcp-settings' },
           { text: 'Nginx', link: '/configuration/nginx' },
           { text: '小智接入', link: '/configuration/xiaozhi' },
@@ -54,6 +55,7 @@ export default defineConfig({
           items: [
             { text: 'Docker 部署', link: '/configuration/docker-setup' },
             { text: '环境变量', link: '/configuration/environment-variables' },
+            { text: '从 v1.0.3 升级', link: '/configuration/upgrade-from-v103' },
             { text: 'MCP 配置', link: '/configuration/mcp-settings' },
             { text: 'Nginx', link: '/configuration/nginx' },
             { text: '小智接入', link: '/configuration/xiaozhi' },

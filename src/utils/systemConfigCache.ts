@@ -1,9 +1,9 @@
 import { SystemConfig } from '../types/index.js';
+import { isDatabaseModeEnabled as resolveDatabaseModeEnabled } from '../config/dbEnv.js';
 
 let cachedSystemConfig: SystemConfig | null = null;
 
-export const isDatabaseModeEnabled = (): boolean =>
-  process.env.USE_DB !== undefined ? process.env.USE_DB === 'true' : Boolean(process.env.DB_URL);
+export const isDatabaseModeEnabled = (): boolean => resolveDatabaseModeEnabled();
 
 export const getCachedSystemConfig = (): SystemConfig | null => cachedSystemConfig;
 

@@ -1,0 +1,466 @@
+import { DataSource } from 'typeorm';
+
+/** Legacy resources without an owner are attributed to the default admin account. */
+const LEGACY_OWNER = 'admin';
+
+/**
+ * One-shot schema upgrades for installs that started on xiaozhi-mcphub v1.0.x
+ * (notably 1.0.3) and jump to 1.1.x.
+ *
+ * Critical change: MCP server rows lived in `mcp_servers` (name PK). 1.1.x uses
+ * `servers` (uuid PK + unique (owner, name)). TypeORM synchronize creates the
+ * new empty table and never copies legacy rows, so upgraded users lose every
+ * server unless we move them here.
+ *
+ * Also normalizes a few shared tables that changed column naming / nullability
+ * between those releases.
+ */
+
+export type LegacySchemaMigrationResult = {
+  serversCopied: number;
+  serversSkipped: number;
+  endpointOwnersBackfilled: number;
+  groupOwnersBackfilled: number;
+  userAdminColumnAligned: boolean;
+  systemConfigColumnsAligned: boolean;
+  /** Existing rows in `users` after column alignment (0 means empty / new install). */
+  existingUserCount: number;
+  /** Whether an `admin` username row is present in `users`. */
+  adminUserPresent: boolean;
+};
+
+type LegacyMcpServerRow = {
+  name: string;
+  type: string | null;
+  url: string | null;
+  command: string | null;
+  args: string | null;
+  env: string | null;
+  headers: string | null;
+  enabled: boolean | null;
+  owner: string | null;
+  keep_alive_interval: number | null;
+  tools: string | null;
+  prompts: string | null;
+  options: string | null;
+  openapi: string | null;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
+};
+
+const tableExists = async (dataSource: DataSource, tableName: string): Promise<boolean> => {
+  const rows = await dataSource.query(
+    `
+    SELECT EXISTS (
+      SELECT FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = $1
+    ) AS exists
+    `,
+    [tableName],
+  );
+  return Boolean(rows?.[0]?.exists);
+};
+
+const columnExists = async (
+  dataSource: DataSource,
+  tableName: string,
+  columnName: string,
+): Promise<boolean> => {
+  const rows = await dataSource.query(
+    `
+    SELECT EXISTS (
+      SELECT FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = $1
+        AND column_name = $2
+    ) AS exists
+    `,
+    [tableName, columnName],
+  );
+  return Boolean(rows?.[0]?.exists);
+};
+
+const resolveOwner = (owner: string | null | undefined): string => {
+  if (owner === null || owner === undefined) {
+    return LEGACY_OWNER;
+  }
+  const trimmed = String(owner).trim();
+  return trimmed.length > 0 ? trimmed : LEGACY_OWNER;
+};
+
+const toTimestamp = (value: Date | string | null | undefined): Date | null => {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+/**
+ * Parse a legacy simple-json / json / simple-array cell into a JS value.
+ */
+const parseLegacyJson = <T>(value: unknown, fallback: T): T => {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+  if (typeof value === 'object') {
+    return value as T;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return fallback;
+    }
+    try {
+      return JSON.parse(trimmed) as T;
+    } catch {
+      // simple-array historically stored comma-separated values
+      return trimmed.split(',').map((part) => part.trim()).filter(Boolean) as T;
+    }
+  }
+  return fallback;
+};
+
+/**
+ * Copy `mcp_servers` → `servers` when the legacy table still has rows that are
+ * missing from the new table. Idempotent: rows already present for the same
+ * (owner, name) are skipped. Legacy table is left in place as a backup.
+ *
+ * Uses the TypeORM Server repository so column naming matches synchronize.
+ */
+export async function migrateMcpServersTable(
+  dataSource: DataSource,
+): Promise<Pick<LegacySchemaMigrationResult, 'serversCopied' | 'serversSkipped'>> {
+  const result = { serversCopied: 0, serversSkipped: 0 };
+
+  if (!(await tableExists(dataSource, 'mcp_servers'))) {
+    return result;
+  }
+  if (!(await tableExists(dataSource, 'servers'))) {
+    console.warn(
+      '[legacy-schema] mcp_servers found but servers table is missing; skipping server copy',
+    );
+    return result;
+  }
+
+  const legacyRows: LegacyMcpServerRow[] = await dataSource.query(
+    `SELECT * FROM mcp_servers ORDER BY created_at ASC NULLS LAST, name ASC`,
+  );
+
+  if (!legacyRows.length) {
+    console.log('[legacy-schema] mcp_servers is empty; nothing to copy');
+    return result;
+  }
+
+  // Recovery path for installs that already jumped to 1.1.x: the old table is
+  // often still present with the real server configs while `servers` is empty
+  // or only partially re-created. Copy any missing (owner, name) pairs.
+  console.log(
+    `[legacy-schema] Found legacy mcp_servers with ${legacyRows.length} row(s); ` +
+      'copying any missing servers into the 1.1.x `servers` table (idempotent recovery)…',
+  );
+
+  // Entity import is local to avoid pulling DAO/migration graphs at module load.
+  const serverModule = await import('../db/entities/Server.js');
+  const ServerEntity = serverModule.default ?? serverModule.Server;
+  const repository = dataSource.getRepository(ServerEntity);
+
+  for (const row of legacyRows) {
+    if (!row?.name) {
+      result.serversSkipped += 1;
+      continue;
+    }
+
+    const owner = resolveOwner(row.owner);
+    const existing = await repository
+      .createQueryBuilder('server')
+      .where('server.name = :name', { name: row.name })
+      .andWhere(
+        '(server.owner = :owner OR (:owner = :legacy AND (server.owner IS NULL OR server.owner = :empty)))',
+        { owner, legacy: LEGACY_OWNER, empty: '' },
+      )
+      .getOne();
+
+    if (existing) {
+      result.serversSkipped += 1;
+      continue;
+    }
+
+    const enabled = row.enabled === null || row.enabled === undefined ? true : Boolean(row.enabled);
+    const entity = repository.create({
+      name: row.name,
+      type: row.type ?? undefined,
+      url: row.url ?? undefined,
+      command: row.command ?? undefined,
+      args: parseLegacyJson<string[] | undefined>(row.args, undefined),
+      env: parseLegacyJson<Record<string, string> | undefined>(row.env, undefined),
+      headers: parseLegacyJson<Record<string, string> | undefined>(row.headers, undefined),
+      enabled,
+      owner,
+      visibility: 'private',
+      enableKeepAlive: false,
+      keepAliveInterval: row.keep_alive_interval ?? undefined,
+      tools: parseLegacyJson(row.tools, undefined),
+      prompts: parseLegacyJson(row.prompts, undefined),
+      options: parseLegacyJson(row.options, undefined),
+      openapi: parseLegacyJson(row.openapi, undefined),
+    });
+
+    // Preserve original timestamps when the driver/column allows assignment.
+    const createdAt = toTimestamp(row.created_at);
+    const updatedAt = toTimestamp(row.updated_at) ?? createdAt;
+    if (createdAt) {
+      entity.createdAt = createdAt;
+    }
+    if (updatedAt) {
+      entity.updatedAt = updatedAt;
+    }
+
+    await repository.save(entity);
+    result.serversCopied += 1;
+    console.log(`  - migrated server: ${row.name} (owner=${owner})`);
+  }
+
+  console.log(
+    `[legacy-schema] mcp_servers migration done: copied=${result.serversCopied}, skipped=${result.serversSkipped}`,
+  );
+  return result;
+}
+
+/**
+ * Attribute empty group owners to admin (groups table name is stable).
+ */
+export async function backfillGroupOwners(dataSource: DataSource): Promise<number> {
+  if (!(await tableExists(dataSource, 'groups'))) {
+    return 0;
+  }
+  if (!(await columnExists(dataSource, 'groups', 'owner'))) {
+    await dataSource.query(`ALTER TABLE groups ADD COLUMN IF NOT EXISTS owner character varying`);
+  }
+
+  const nullCountRows = await dataSource.query(
+    `
+    SELECT COUNT(*)::int AS count
+    FROM groups
+    WHERE owner IS NULL OR owner = ''
+    `,
+  );
+  const pending = Number(nullCountRows?.[0]?.count ?? 0);
+  if (pending === 0) {
+    return 0;
+  }
+
+  await dataSource.query(
+    `
+    UPDATE groups
+    SET owner = $1
+    WHERE owner IS NULL OR owner = ''
+    `,
+    [LEGACY_OWNER],
+  );
+  return pending;
+}
+
+/**
+ * v1.0.3 stored users.is_admin; some 1.1 builds briefly used "isAdmin".
+ * Prefer the snake_case column and copy data if a camelCase leftover exists.
+ */
+export async function alignUserAdminColumn(dataSource: DataSource): Promise<boolean> {
+  if (!(await tableExists(dataSource, 'users'))) {
+    return false;
+  }
+
+  const hasSnake = await columnExists(dataSource, 'users', 'is_admin');
+  const hasCamel = await columnExists(dataSource, 'users', 'isAdmin');
+
+  if (!hasSnake && hasCamel) {
+    await dataSource.query(
+      `ALTER TABLE users RENAME COLUMN "isAdmin" TO is_admin`,
+    );
+    console.log('[legacy-schema] renamed users."isAdmin" → is_admin');
+    return true;
+  }
+
+  if (hasSnake && hasCamel) {
+    await dataSource.query(
+      `
+      UPDATE users
+      SET is_admin = COALESCE(is_admin, "isAdmin", false)
+      `,
+    );
+    await dataSource.query(`ALTER TABLE users DROP COLUMN IF EXISTS "isAdmin"`);
+    console.log('[legacy-schema] merged users."isAdmin" into is_admin and dropped camelCase column');
+    return true;
+  }
+
+  if (!hasSnake) {
+    await dataSource.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin boolean NOT NULL DEFAULT false`,
+    );
+    console.log('[legacy-schema] added users.is_admin column');
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Ensure system_config keeps the v1.0.3 snake_case JSON columns that TypeORM
+ * may have also created under camelCase when column names were omitted.
+ */
+export async function alignSystemConfigColumns(dataSource: DataSource): Promise<boolean> {
+  if (!(await tableExists(dataSource, 'system_config'))) {
+    return false;
+  }
+
+  let changed = false;
+
+  const mergeJsonColumn = async (snake: string, camel: string): Promise<void> => {
+    const hasSnake = await columnExists(dataSource, 'system_config', snake);
+    const hasCamel = await columnExists(dataSource, 'system_config', camel);
+
+    if (!hasSnake && hasCamel) {
+      await dataSource.query(
+        `ALTER TABLE system_config RENAME COLUMN "${camel}" TO ${snake}`,
+      );
+      console.log(`[legacy-schema] renamed system_config."${camel}" → ${snake}`);
+      changed = true;
+      return;
+    }
+
+    if (hasSnake && hasCamel) {
+      await dataSource.query(
+        `
+        UPDATE system_config
+        SET ${snake} = COALESCE(${snake}, "${camel}")
+        WHERE ${snake} IS NULL AND "${camel}" IS NOT NULL
+        `,
+      );
+      await dataSource.query(
+        `ALTER TABLE system_config DROP COLUMN IF EXISTS "${camel}"`,
+      );
+      console.log(
+        `[legacy-schema] merged system_config."${camel}" into ${snake} and dropped camelCase column`,
+      );
+      changed = true;
+    }
+  };
+
+  await mergeJsonColumn('smart_routing', 'smartRouting');
+  await mergeJsonColumn('mcp_router', 'mcpRouter');
+  await mergeJsonColumn('modelscope', 'modelscope');
+
+  return changed;
+}
+
+/**
+ * Report how many users (and whether admin) already live in the shared `users`
+ * table. Passwords are bcrypt hashes stored in-place — there is nothing to
+ * "migrate" for admin credentials when reconnecting to a v1.0.3 database.
+ */
+export async function inspectLegacyUsers(dataSource: DataSource): Promise<{
+  existingUserCount: number;
+  adminUserPresent: boolean;
+}> {
+  if (!(await tableExists(dataSource, 'users'))) {
+    return { existingUserCount: 0, adminUserPresent: false };
+  }
+
+  const countRows = await dataSource.query(`SELECT COUNT(*)::int AS count FROM users`);
+  const existingUserCount = Number(countRows?.[0]?.count ?? 0);
+  const adminRows = await dataSource.query(
+    `SELECT 1 FROM users WHERE username = $1 LIMIT 1`,
+    ['admin'],
+  );
+  const adminUserPresent = Array.isArray(adminRows) && adminRows.length > 0;
+
+  if (existingUserCount > 0) {
+    console.log(
+      `[legacy-schema] Reusing ${existingUserCount} existing user(s) from the database` +
+        (adminUserPresent
+          ? ' (including admin). Keep the password you set before the upgrade — ' +
+            'the random password printed during a failed 1.1.x boot only applied to ' +
+            'an empty file-mode install and is NOT written back over this row.'
+          : '.') ,
+    );
+  } else {
+    console.log(
+      '[legacy-schema] users table is empty; a default admin will be created on first boot if needed',
+    );
+  }
+
+  return { existingUserCount, adminUserPresent };
+}
+
+/**
+ * Run all v1.0.x → 1.1.x in-place schema upgrades. Safe to call on every boot.
+ */
+export async function runLegacySchemaMigrations(
+  dataSource: DataSource,
+): Promise<LegacySchemaMigrationResult> {
+  console.log('[legacy-schema] Checking for v1.0.x → 1.1.x upgrades…');
+
+  const userAdminColumnAligned = await alignUserAdminColumn(dataSource);
+  const systemConfigColumnsAligned = await alignSystemConfigColumns(dataSource);
+  const { existingUserCount, adminUserPresent } = await inspectLegacyUsers(dataSource);
+  const serverCopy = await migrateMcpServersTable(dataSource);
+
+  // Count endpoint owner backfill more reliably than driver rowCount
+  let endpointOwnersBackfilled = 0;
+  if (await tableExists(dataSource, 'xiaozhi_endpoints')) {
+    if (!(await columnExists(dataSource, 'xiaozhi_endpoints', 'owner'))) {
+      await dataSource.query(
+        `ALTER TABLE xiaozhi_endpoints ADD COLUMN IF NOT EXISTS owner character varying`,
+      );
+      console.log('[legacy-schema] added xiaozhi_endpoints.owner column');
+    }
+    const pending = await dataSource.query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM xiaozhi_endpoints
+      WHERE owner IS NULL OR owner = ''
+      `,
+    );
+    endpointOwnersBackfilled = Number(pending?.[0]?.count ?? 0);
+    if (endpointOwnersBackfilled > 0) {
+      await dataSource.query(
+        `
+        UPDATE xiaozhi_endpoints
+        SET owner = $1
+        WHERE owner IS NULL OR owner = ''
+        `,
+        [LEGACY_OWNER],
+      );
+      console.log(
+        `[legacy-schema] backfilled owner on ${endpointOwnersBackfilled} xiaozhi endpoint(s)`,
+      );
+    }
+  }
+
+  const groupOwnersBackfilled = await backfillGroupOwners(dataSource);
+  if (groupOwnersBackfilled > 0) {
+    console.log(`[legacy-schema] backfilled owner on ${groupOwnersBackfilled} group(s)`);
+  }
+
+  const summary: LegacySchemaMigrationResult = {
+    serversCopied: serverCopy.serversCopied,
+    serversSkipped: serverCopy.serversSkipped,
+    endpointOwnersBackfilled,
+    groupOwnersBackfilled,
+    userAdminColumnAligned,
+    systemConfigColumnsAligned,
+    existingUserCount,
+    adminUserPresent,
+  };
+
+  console.log(
+    `[legacy-schema] Done: serversCopied=${summary.serversCopied}, serversSkipped=${summary.serversSkipped}, ` +
+      `endpointOwners=${summary.endpointOwnersBackfilled}, groupOwners=${summary.groupOwnersBackfilled}, ` +
+      `users=${summary.existingUserCount}, adminPresent=${summary.adminUserPresent}`,
+  );
+
+  return summary;
+}

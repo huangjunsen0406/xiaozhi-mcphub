@@ -436,9 +436,14 @@ export async function initializeDatabaseMode(): Promise<boolean> {
   try {
     console.log('Initializing database mode...');
 
-    // Initialize database connection
+    // Initialize database connection (TypeORM synchronize creates missing 1.1 tables)
     await initializeDatabase();
     console.log('Database connection established');
+
+    // v1.0.x → 1.1.x in-place upgrades (mcp_servers → servers, column renames, owners)
+    // Must run before DAO reads so upgraded installs see their existing data.
+    const { runLegacySchemaMigrations } = await import('./legacySchemaMigration.js');
+    await runLegacySchemaMigrations(getAppDataSource());
 
     // Switch to database factory
     setDaoFactory(DatabaseDaoFactory.getInstance());
@@ -458,7 +463,7 @@ export async function initializeDatabaseMode(): Promise<boolean> {
         throw new Error('Migration failed');
       }
     } else {
-      console.log(`Database already contains ${userCount} users, skipping migration`);
+      console.log(`Database already contains ${userCount} users, skipping file→DB migration`);
 
       // One-time migration for legacy bearer auth config stored inside DB routing settings.
       // If bearerKeys table already has data, do nothing.

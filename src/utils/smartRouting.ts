@@ -1,4 +1,5 @@
 import { expandEnvVars } from '../config/index.js';
+import { getDatabaseUrlFromEnv } from '../config/dbEnv.js';
 import {
   getUserConfigOrEmpty,
   mergeSmartRoutingSettings,
@@ -63,7 +64,7 @@ export interface SmartRoutingConfig {
  *
  * Priority order for each setting:
  * 1. Specific environment variables (ENABLE_SMART_ROUTING, SMART_ROUTING_ENABLED, etc.)
- * 2. Generic environment variables (OPENAI_API_KEY, DB_URL, etc.)
+ * 2. Generic environment variables (OPENAI_API_KEY, DB_URL / legacy DATABASE_URL, etc.)
  * 3. Effective settings: systemConfig.smartRouting merged with optional UserConfig overrides
  * 4. Default values
  *
@@ -98,7 +99,8 @@ export async function getSmartRoutingConfig(
     ),
 
     // Database configuration (system/env only — mergeSmartRoutingSettings already forces system dbUrl)
-    dbUrl: getConfigValue([process.env.DB_URL], smartRoutingSettings.dbUrl, '', expandEnvVars),
+    // Prefer DB_URL; fall back to legacy DATABASE_URL for v1.0.3 compose upgrades.
+    dbUrl: getConfigValue([getDatabaseUrlFromEnv()], smartRoutingSettings.dbUrl, '', expandEnvVars),
 
     basePacingDelayMs: getConfigValue<number>(
       [process.env.SMART_ROUTING_BASE_PACING_DELAY_MS],

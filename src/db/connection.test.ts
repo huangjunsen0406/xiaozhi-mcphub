@@ -115,6 +115,27 @@ describe('database connection recovery', () => {
     expect(dataSource.initialize).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses to connect when no DB URL is configured instead of defaulting to localhost', async () => {
+    getSmartRoutingConfigMock.mockResolvedValueOnce({ dbUrl: '' });
+    const previousDbUrl = process.env.DB_URL;
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    delete process.env.DB_URL;
+    delete process.env.DATABASE_URL;
+
+    await expect(updateDataSourceConfig()).rejects.toThrow(/Database URL is not configured/);
+
+    if (previousDbUrl === undefined) {
+      delete process.env.DB_URL;
+    } else {
+      process.env.DB_URL = previousDbUrl;
+    }
+    if (previousDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+  });
+
   it('cleans up an initialized connection when post-initialization setup fails', async () => {
     jest.useFakeTimers();
     const dataSource = await updateDataSourceConfig();
