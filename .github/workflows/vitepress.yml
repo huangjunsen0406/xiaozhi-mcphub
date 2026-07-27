@@ -23,10 +23,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Version comes from package.json "packageManager" (do not also set version here).
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,8 +34,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: documents/pnpm-lock.yaml
 
-      # Root pnpm-workspace layout can skip installing documents/node_modules;
-      # --ignore-workspace forces a real local install for the docs package.
+      # Root layout can skip documents/node_modules; force a local install.
       - name: Install documentation dependencies
         working-directory: documents
         run: pnpm install --ignore-workspace --frozen-lockfile=false
