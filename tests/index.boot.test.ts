@@ -10,6 +10,11 @@ const AppServerMock = jest.fn(() => ({
 }));
 
 const initializeDatabaseModeMock = jest.fn(async () => true);
+const backfillMissingOwnersInJsonSettingsMock = jest.fn(() => ({
+  servers: 0,
+  groups: 0,
+  xiaozhiEndpoints: 0,
+}));
 const createFetchWithProxyMock = jest.fn();
 const getProxyConfigFromEnvMock = jest.fn(() => ({}));
 const isRetryableDbErrorMock = jest.fn(() => false);

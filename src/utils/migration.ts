@@ -1,7 +1,10 @@
-import { loadOriginalSettings } from '../config/index.js';
-import { initializeDatabase } from '../db/connection.js';
+import { loadOriginalSettings, saveSettings } from '../config/index.js';
+import { getAppDataSource, initializeDatabase } from '../db/connection.js';
 import { setDaoFactory } from '../dao/DaoFactory.js';
 import { DatabaseDaoFactory } from '../dao/DatabaseDaoFactory.js';
+import Server from '../db/entities/Server.js';
+import Group from '../db/entities/Group.js';
+import XiaozhiEndpoint from '../db/entities/XiaozhiEndpoint.js';
 import { UserRepository } from '../db/repositories/UserRepository.js';
 import { ServerRepository } from '../db/repositories/ServerRepository.js';
 import { GroupRepository } from '../db/repositories/GroupRepository.js';
@@ -12,6 +15,131 @@ import { OAuthTokenRepository } from '../db/repositories/OAuthTokenRepository.js
 import { BearerKeyRepository } from '../db/repositories/BearerKeyRepository.js';
 import { BuiltinPromptRepository } from '../db/repositories/BuiltinPromptRepository.js';
 import { BuiltinResourceRepository } from '../db/repositories/BuiltinResourceRepository.js';
+import { McpSettings } from '../types/index.js';
+
+/** Legacy resources without an owner are attributed to the default admin account. */
+export const LEGACY_OWNER = 'admin';
+
+export type OwnerBackfillResult = {
+  servers: number;
+  groups: number;
+  xiaozhiEndpoints: number;
+};
+
+const isMissingOwner = (owner: string | null | undefined): boolean =>
+  owner === null || owner === undefined || owner === '';
+
+/**
+ * Apply admin ownership defaults on an in-memory settings object.
+ * Returns how many records were changed (does not persist).
+ */
+export function applyLegacyOwnerDefaults(settings: McpSettings): OwnerBackfillResult {
+  const result: OwnerBackfillResult = { servers: 0, groups: 0, xiaozhiEndpoints: 0 };
+
+  if (settings.mcpServers) {
+    for (const config of Object.values(settings.mcpServers)) {
+      if (isMissingOwner(config.owner)) {
+        config.owner = LEGACY_OWNER;
+        result.servers += 1;
+      }
+    }
+  }
+
+  if (Array.isArray(settings.groups)) {
+    for (const group of settings.groups) {
+      if (isMissingOwner(group.owner)) {
+        group.owner = LEGACY_OWNER;
+        result.groups += 1;
+      }
+    }
+  }
+
+  // Xiaozhi endpoints normally live in DB only; keep a defensive path for any
+  // legacy file-mode payloads that still embed them under settings.xiaozhi.
+  const legacyXiaozhi = (settings as McpSettings & {
+    xiaozhi?: { endpoints?: Array<{ owner?: string | null }> };
+  }).xiaozhi;
+  if (legacyXiaozhi?.endpoints) {
+    for (const endpoint of legacyXiaozhi.endpoints) {
+      if (isMissingOwner(endpoint.owner)) {
+        endpoint.owner = LEGACY_OWNER;
+        result.xiaozhiEndpoints += 1;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Persist admin ownership for legacy JSON settings (file mode).
+ * Idempotent: no-op when every resource already has an owner.
+ */
+export function backfillMissingOwnersInJsonSettings(): OwnerBackfillResult {
+  const settings = loadOriginalSettings();
+  const result = applyLegacyOwnerDefaults(settings);
+  const total = result.servers + result.groups + result.xiaozhiEndpoints;
+
+  if (total === 0) {
+    console.log('Legacy owner backfill (JSON): nothing to update');
+    return result;
+  }
+
+  const saved = saveSettings(settings);
+  if (!saved) {
+    console.error('Legacy owner backfill (JSON): failed to persist settings');
+    return { servers: 0, groups: 0, xiaozhiEndpoints: 0 };
+  }
+
+  console.log(
+    `Legacy owner backfill (JSON): servers=${result.servers}, groups=${result.groups}, xiaozhiEndpoints=${result.xiaozhiEndpoints} → owner=${LEGACY_OWNER}`,
+  );
+  return result;
+}
+
+/**
+ * Persist admin ownership for legacy DB rows with null/empty owner.
+ * Idempotent: safe to run on every startup.
+ */
+export async function backfillMissingOwnersInDatabase(): Promise<OwnerBackfillResult> {
+  const dataSource = getAppDataSource();
+  const result: OwnerBackfillResult = { servers: 0, groups: 0, xiaozhiEndpoints: 0 };
+
+  const serverUpdate = await dataSource
+    .createQueryBuilder()
+    .update(Server)
+    .set({ owner: LEGACY_OWNER })
+    .where('owner IS NULL OR owner = :empty', { empty: '' })
+    .execute();
+  result.servers = serverUpdate.affected ?? 0;
+
+  const groupUpdate = await dataSource
+    .createQueryBuilder()
+    .update(Group)
+    .set({ owner: LEGACY_OWNER })
+    .where('owner IS NULL OR owner = :empty', { empty: '' })
+    .execute();
+  result.groups = groupUpdate.affected ?? 0;
+
+  const endpointUpdate = await dataSource
+    .createQueryBuilder()
+    .update(XiaozhiEndpoint)
+    .set({ owner: LEGACY_OWNER })
+    .where('owner IS NULL OR owner = :empty', { empty: '' })
+    .execute();
+  result.xiaozhiEndpoints = endpointUpdate.affected ?? 0;
+
+  const total = result.servers + result.groups + result.xiaozhiEndpoints;
+  if (total === 0) {
+    console.log('Legacy owner backfill (DB): nothing to update');
+  } else {
+    console.log(
+      `Legacy owner backfill (DB): servers=${result.servers}, groups=${result.groups}, xiaozhiEndpoints=${result.xiaozhiEndpoints} → owner=${LEGACY_OWNER}`,
+    );
+  }
+
+  return result;
+}
 
 /**
  * Migrate from file-based configuration to database
@@ -61,6 +189,9 @@ export async function migrateToDatabase(): Promise<boolean> {
       }
     }
 
+    // Attribute legacy owner-less resources to admin before writing into DB
+    applyLegacyOwnerDefaults(settings);
+
     // Migrate servers
     if (settings.mcpServers) {
       const serverNames = Object.keys(settings.mcpServers);
@@ -78,7 +209,7 @@ export async function migrateToDatabase(): Promise<boolean> {
             env: config.env,
             headers: config.headers,
             enabled: config.enabled !== undefined ? config.enabled : true,
-            owner: config.owner,
+            owner: config.owner || LEGACY_OWNER,
             visibility: config.visibility ?? 'private',
             enableKeepAlive: config.enableKeepAlive,
             keepAliveInterval: config.keepAliveInterval,
@@ -108,7 +239,7 @@ export async function migrateToDatabase(): Promise<boolean> {
             name: group.name,
             description: group.description,
             servers: Array.isArray(group.servers) ? group.servers : [],
-            owner: group.owner,
+            owner: group.owner || LEGACY_OWNER,
           });
           console.log(`  - Created group: ${group.name}`);
         } else {
@@ -360,6 +491,9 @@ export async function initializeDatabaseMode(): Promise<boolean> {
         }
       }
     }
+
+    // Idempotent: attribute any remaining null/empty owners to admin
+    await backfillMissingOwnersInDatabase();
 
     console.log('✅ Database mode initialized successfully');
     return true;

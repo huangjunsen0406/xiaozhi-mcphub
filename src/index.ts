@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 import AppServer from './server.js';
-import { initializeDatabaseMode } from './utils/migration.js';
+import {
+  backfillMissingOwnersInJsonSettings,
+  initializeDatabaseMode,
+} from './utils/migration.js';
 import { createFetchWithProxy, getProxyConfigFromEnv } from './services/proxy.js';
 import { isRetryableDbError } from './utils/dbRetry.js';
 import { hydrateSystemConfigCache } from './utils/systemConfigCache.js';
@@ -176,6 +179,9 @@ async function boot() {
         console.error('Failed to initialize database mode');
         process.exit(1);
       }
+    } else {
+      // File mode: attribute legacy owner-less resources to admin (idempotent)
+      backfillMissingOwnersInJsonSettings();
     }
 
     await hydrateSystemConfigCache();
