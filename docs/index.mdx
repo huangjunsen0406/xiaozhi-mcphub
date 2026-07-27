@@ -35,13 +35,13 @@ MCPHub makes it easy to manage and scale multiple MCP (Model Context Protocol) s
 Get MCPHub running in minutes with Docker:
 
 ```bash
-docker run -p 3000:3000 samanhappy/mcphub
+docker run -p 3000:3000 huangjunsen/xiaozhi-mcphub
 ```
 
 Or with custom configuration:
 
 ```bash
-docker run -p 3000:3000 -v $(pwd)/mcp_settings.json:/app/mcp_settings.json samanhappy/mcphub
+docker run -p 3000:3000 -v $(pwd)/mcp_settings.json:/app/mcp_settings.json huangjunsen/xiaozhi-mcphub
 ```
 
 Access the dashboard at `http://localhost:3000` with username `admin`. On first launch, a random password is generated and printed to the server logs. Set `ADMIN_PASSWORD` env var to use a custom password.
@@ -83,13 +83,13 @@ MCPHub provides multiple ways to access your MCP servers:
 ## Community & Support
 
 <CardGroup cols={3}>
-  <Card title="GitHub" icon="github" href="https://github.com/samanhappy/mcphub">
+  <Card title="GitHub" icon="github" href="https://github.com/huangjunsen0406/xiaozhi-mcphub">
     Source code and issue tracking
   </Card>
   <Card title="Discord" icon="discord" href="https://discord.gg/2BJehJZVH5">
     Join our community discussions
   </Card>
-  <Card title="Sponsor" icon="heart" href="https://ko-fi.com/samanhappy">
+  <Card title="Sponsor" icon="heart" href="https://github.com/huangjunsen0406/xiaozhi-mcphub">
     Support the project development
   </Card>
 </CardGroup>

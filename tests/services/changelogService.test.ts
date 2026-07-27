@@ -10,7 +10,11 @@ describe('changelogService', () => {
   beforeEach(() => {
     clearChangelogUpdateCache();
     process.env = { ...originalEnv };
-    process.env.MCPHUB_CHANGELOG_API_BASE = 'https://updates.example.com/api/v1/changelog';
+    delete process.env.DISABLE_UPDATE_CHECK;
+    delete process.env.MCPHUB_GITHUB_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.GH_TOKEN;
+    process.env.MCPHUB_GITHUB_REPO = 'huangjunsen0406/xiaozhi-mcphub';
     process.env.MCPHUB_UPDATE_CHECK_CACHE_TTL_SECONDS = '21600';
     global.fetch = jest.fn();
   });
@@ -20,29 +24,44 @@ describe('changelogService', () => {
     global.fetch = originalFetch;
   });
 
-  it('fetches update info from mcphub-web and caches by version and locale', async () => {
-    const payload = {
-      latestVersion: '1.0.12',
-      hasUpdate: true,
-      entries: [],
-      totalUpdateCount: 1,
-      changelogUrl: 'https://www.mcphub.app/changelog/1.0.12',
-      allChangelogUrl: 'https://www.mcphub.app/changelog',
-      source: 'mcphub-web',
-    };
+  it('fetches update info from GitHub releases and caches by version and locale', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true, data: payload }),
+      json: async () => [
+        {
+          tag_name: 'v1.0.12',
+          name: 'v1.0.12',
+          body: '## What\'s Changed\n\n- feat: smarter routing\n- fix: reconnect race\n',
+          html_url: 'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases/tag/v1.0.12',
+          published_at: '2026-07-01T00:00:00Z',
+          draft: false,
+          prerelease: false,
+        },
+      ],
     });
 
     const first = await getChangelogUpdateInfo({ currentVersion: '1.0.11', locale: 'en' });
     const second = await getChangelogUpdateInfo({ currentVersion: '1.0.11', locale: 'en' });
 
-    expect(first).toEqual(payload);
-    expect(second).toEqual(payload);
+    expect(first.source).toBe('github');
+    expect(first.latestVersion).toBe('1.0.12');
+    expect(first.hasUpdate).toBe(true);
+    expect(first.totalUpdateCount).toBe(1);
+    expect(first.entries).toHaveLength(1);
+    expect(first.entries[0]).toMatchObject({
+      product: 'xiaozhi-mcphub',
+      version: '1.0.12',
+      tagName: 'v1.0.12',
+    });
+    expect(first.entries[0].highlights.length).toBeGreaterThan(0);
+    expect(first.changelogUrl).toContain('/releases/tag/v1.0.12');
+    expect(first.allChangelogUrl).toBe(
+      'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases',
+    );
+    expect(second).toEqual(first);
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(String((global.fetch as jest.Mock).mock.calls[0][0])).toContain(
-      'currentVersion=1.0.11',
+      '/repos/huangjunsen0406/xiaozhi-mcphub/releases',
     );
   });
 
@@ -56,81 +75,93 @@ describe('changelogService', () => {
       hasUpdate: false,
       entries: [],
       totalUpdateCount: 0,
-      changelogUrl: 'https://updates.example.com/zh/changelog',
-      allChangelogUrl: 'https://updates.example.com/zh/changelog',
+      changelogUrl: 'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases',
+      allChangelogUrl: 'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases',
       source: 'disabled',
     });
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('normalizes regional Chinese locales for update requests', async () => {
-    const payload = {
-      latestVersion: '1.0.12',
-      hasUpdate: true,
-      entries: [],
-      totalUpdateCount: 1,
-      changelogUrl: 'https://www.mcphub.app/zh/changelog/1.0.12',
-      allChangelogUrl: 'https://www.mcphub.app/zh/changelog',
-      source: 'mcphub-web',
-    };
+  it('skips draft and prerelease tags when computing latest', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true, data: payload }),
-    });
-
-    await getChangelogUpdateInfo({ currentVersion: '1.0.11', locale: 'zh-TW' });
-
-    expect(String((global.fetch as jest.Mock).mock.calls[0][0])).toContain('locale=zh');
-  });
-
-  it('falls back to npm latest without release details', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ success: false, message: 'unavailable' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ version: '1.0.12' }),
-      });
-
-    const result = await getChangelogUpdateInfo({ currentVersion: '1.0.11', locale: 'en' });
-
-    expect(result).toEqual({
-      latestVersion: '1.0.12',
-      hasUpdate: true,
-      entries: [],
-      totalUpdateCount: 1,
-      changelogUrl: 'https://updates.example.com/changelog/1.0.12',
-      allChangelogUrl: 'https://updates.example.com/changelog',
-      source: 'npm-fallback',
-    });
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('handles invalid npm fallback JSON without throwing', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ success: false, message: 'unavailable' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => {
-          throw new SyntaxError('Unexpected token');
+      json: async () => [
+        {
+          tag_name: 'v1.1.0-rc.1',
+          name: 'v1.1.0-rc.1',
+          body: 'prerelease',
+          html_url: 'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases/tag/v1.1.0-rc.1',
+          published_at: '2026-07-10T00:00:00Z',
+          draft: false,
+          prerelease: true,
         },
-      });
+        {
+          tag_name: 'v1.0.12',
+          name: 'v1.0.12',
+          body: '- feat: stable',
+          html_url: 'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases/tag/v1.0.12',
+          published_at: '2026-07-01T00:00:00Z',
+          draft: false,
+          prerelease: false,
+        },
+      ],
+    });
 
     const result = await getChangelogUpdateInfo({ currentVersion: '1.0.11', locale: 'en' });
 
-    expect(result).toEqual({
-      latestVersion: null,
-      hasUpdate: false,
-      entries: [],
-      totalUpdateCount: 0,
-      changelogUrl: 'https://updates.example.com/changelog',
-      allChangelogUrl: 'https://updates.example.com/changelog',
-      source: 'npm-fallback',
+    expect(result.latestVersion).toBe('1.0.12');
+    expect(result.hasUpdate).toBe(true);
+    expect(result.entries[0].version).toBe('1.0.12');
+  });
+
+  it('reports up-to-date when current version matches latest release', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          tag_name: 'v1.0.12',
+          name: 'v1.0.12',
+          body: '- feat: already installed',
+          html_url: 'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases/tag/v1.0.12',
+          published_at: '2026-07-01T00:00:00Z',
+          draft: false,
+          prerelease: false,
+        },
+      ],
     });
+
+    const result = await getChangelogUpdateInfo({ currentVersion: '1.0.12', locale: 'zh' });
+
+    expect(result.hasUpdate).toBe(false);
+    expect(result.latestVersion).toBe('1.0.12');
+    expect(result.totalUpdateCount).toBe(0);
+    expect(result.entries).toHaveLength(1);
+    expect(result.source).toBe('github');
+  });
+
+  it('propagates GitHub API failures without npm fallback', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ message: 'unavailable' }),
+    });
+
+    await expect(
+      getChangelogUpdateInfo({ currentVersion: '1.0.11', locale: 'en' }),
+    ).rejects.toThrow('GitHub releases request failed: 503');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends Authorization header when a GitHub token is configured', async () => {
+    process.env.MCPHUB_GITHUB_TOKEN = 'test-token';
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    });
+
+    await getChangelogUpdateInfo({ currentVersion: '1.0.11', locale: 'en' });
+
+    const init = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test-token');
   });
 });

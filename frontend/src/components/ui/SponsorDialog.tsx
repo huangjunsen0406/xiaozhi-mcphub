@@ -41,7 +41,7 @@ const SponsorDialog: React.FC<SponsorDialogProps> = ({ open, onOpenChange }) => 
               <div className="text-center">
                 <p className="mb-4 text-gray-700 dark:text-gray-300">{t('sponsor.supportMessage')}</p>
                 <a
-                  href="https://ko-fi.com/samanhappy"
+                  href="https://github.com/huangjunsen0406/xiaozhi-mcphub"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center bg-[#13C3FF] text-white px-4 py-2 rounded-md hover:bg-[#00A5E5] transition-colors"

@@ -174,18 +174,18 @@
     "links": [
       {
         "label": "Demo",
-        "href": "https://demo.mcphub.app"
+        "href": "https://github.com/huangjunsen0406/xiaozhi-mcphub"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Get Started",
-      "href": "https://docs.mcphub.app/quickstart"
+      "href": "https://github.com/huangjunsen0406/xiaozhi-mcphub#readme/quickstart"
     }
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/samanhappy/mcphub",
+      "github": "https://github.com/huangjunsen0406/xiaozhi-mcphub",
       "discord": "https://discord.gg/2BJehJZVH5"
     }
   }

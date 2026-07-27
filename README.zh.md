@@ -2,7 +2,7 @@
 
 [English Version](README.md) | 中文版
 
-**xiaozhi-mcphub** 是在 [MCPHub](https://github.com/samanhappy/mcphub) 基础上二次开发的 MCP（Model Context Protocol）桥接与管理平台，重点增强与小智 AI 平台的集成能力，并提供多端点管理、自动重连、向量智能路由、OpenAPI 兼容访问等特性。
+**xiaozhi-mcphub** 是面向小智 AI 平台优化的 MCP（Model Context Protocol）桥接与管理平台，提供多端点管理、自动重连、向量智能路由、OpenAPI 兼容访问等特性。
 
 ![控制面板预览](assets/dashboard.zh.png)
 
@@ -27,11 +27,11 @@
   - 暴露 OpenAPI 文档与统计端点。
   - 通过 OpenAPI 兼容端点直接调用指定服务器的工具。
 
-## 🧩 与上游项目的主要差异
+## 🧩 核心差异与增强
 
-- 新增小智端点的**多端点管理与状态**能力，兼容老接口但以多端点为主。
-- 新增端点级**重连策略**与全局**快速重连**开关。
-- 增强 `$smart` 智能路由接入（可选），并与小智端点自动联动。
+- 小智端点的**多端点管理与状态**能力，兼容老接口但以多端点为主。
+- 端点级**重连策略**与全局**快速重连**开关。
+- `$smart` 智能路由接入（可选），并与小智端点自动联动。
 - 数据库使用 **PostgreSQL + pgvector**，默认会初始化示例服务器与管理员账户。
 
 ## 🔧 快速开始
@@ -121,15 +121,9 @@ pnpm dev
 - 默认管理员：`admin` / `admin123`
 - 默认 MCP 服务器：amap / playwright / fetch / slack（可在控制台修改与配置 ENV）
 
-## 📄 许可与归属（Apache License 2.0）
+## 📄 许可（Apache License 2.0）
 
-本项目在 [MCPHub](https://github.com/samanhappy/mcphub) 基础上二次开发，遵循 **Apache License 2.0**：
-
-- 保留上游与本项目的版权与许可声明，包含 `LICENSE` 与 `NOTICE`。
-- 若修改并再分发源代码或二进制，请在告知性文件中注明变更。
-- 需在再分发中附带许可证与免责声明，不得暗示原作者为你的修改背书。
-
-详情请查阅仓库中的 [`LICENSE`](LICENSE) 与 [`NOTICE`](NOTICE)。
+本项目采用 **Apache License 2.0**。再分发时请保留 `LICENSE` 与 `NOTICE`，并在告知性文件中注明变更。详情见 [`LICENSE`](LICENSE) 与 [`NOTICE`](NOTICE)。
 
 ## 🤝 贡献
 
@@ -137,6 +131,6 @@ pnpm dev
 
 ## 🔗 相关链接
 
-- 上游项目：<https://github.com/samanhappy/mcphub>
+- 本项目：<https://github.com/huangjunsen0406/xiaozhi-mcphub>
 - 小智 AI 平台：<https://xiaozhi.me>
 - Model Context Protocol：<https://modelcontextprotocol.io>

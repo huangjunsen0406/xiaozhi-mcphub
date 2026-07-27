@@ -315,7 +315,7 @@ const DashboardPage: React.FC = () => {
           </div>
           <a
             className="hub-btn ghost"
-            href="https://docs.mcphub.app"
+            href="https://github.com/huangjunsen0406/xiaozhi-mcphub#readme"
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: 'var(--hub-ink-3)' }}

@@ -28,13 +28,13 @@ Optional for Smart Routing:
 
     ```bash
     # Pull the latest image
-    docker pull samanhappy/mcphub:latest
+    docker pull huangjunsen/xiaozhi-mcphub:latest
 
     # Run with default settings
     docker run -d \
       --name mcphub \
       -p 3000:3000 \
-      samanhappy/mcphub:latest
+      huangjunsen/xiaozhi-mcphub:latest
     ```
 
     #### 2. With Custom Configuration
@@ -61,7 +61,7 @@ Optional for Smart Routing:
       --name mcphub \
       -p 3000:3000 \
       -v $(pwd)/mcp_settings.json:/app/mcp_settings.json \
-      samanhappy/mcphub:latest
+      huangjunsen/xiaozhi-mcphub:latest
     ```
 
     #### 3. With Environment Variables
@@ -72,7 +72,7 @@ Optional for Smart Routing:
       -p 3000:3000 \
       -e PORT=3000 \
       -e BASE_PATH="" \
-      samanhappy/mcphub:latest
+      huangjunsen/xiaozhi-mcphub:latest
     ```
 
     #### 4. Docker Compose
@@ -83,7 +83,7 @@ Optional for Smart Routing:
     version: '3.8'
     services:
       mcphub:
-        image: samanhappy/mcphub:latest
+        image: huangjunsen/xiaozhi-mcphub:latest
         ports:
           - "3000:3000"
         volumes:
@@ -117,58 +117,6 @@ Optional for Smart Routing:
 
   </Tab>
 
-  <Tab title="npm Package">
-    ### npm Package Installation
-
-    Install MCPHub as a global npm package:
-
-    #### 1. Global Installation
-
-    ```bash
-    # Install globally
-    npm install -g @samanhappy/mcphub
-
-    # Or with yarn
-    yarn global add @samanhappy/mcphub
-
-    # Or with pnpm
-    pnpm add -g @samanhappy/mcphub
-    ```
-
-    #### 2. Running MCPHub
-
-    ```bash
-    # Run with default settings
-    mcphub
-
-    # Run with custom port
-    PORT=8080 mcphub
-    ```
-
-    {/* #### 3. Local Installation
-
-    You can also install MCPHub locally in a project:
-
-    ```bash
-    # Create a new directory
-    mkdir my-mcphub
-    cd my-mcphub
-
-    # Initialize package.json
-    npm init -y
-
-    # Install MCPHub locally
-    npm install @samanhappy/mcphub
-
-    # Create a start script
-    echo '#!/bin/bash\nnpx mcphub' > start.sh
-    chmod +x start.sh
-
-    # Run MCPHub
-    ./start.sh
-    ``` */}
-  </Tab>
-
   <Tab title="Local Development">
     ### Local Development Setup
 
@@ -178,8 +126,8 @@ Optional for Smart Routing:
 
     ```bash
     # Clone the repository
-    git clone https://github.com/samanhappy/mcphub.git
-    cd mcphub
+    git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
+    cd xiaozhi-mcphub
     ```
 
     #### 2. Install Dependencies
@@ -311,7 +259,7 @@ Optional for Smart Routing:
                   mountPath: /etc/mcphub
           containers:
             - name: mcphub
-              image: samanhappy/mcphub:latest
+              image: huangjunsen/xiaozhi-mcphub:latest
               ports:
                 - containerPort: 3000
               resources:
@@ -510,7 +458,7 @@ curl -X POST http://localhost:3000/mcp \
     lsof -i :3000
 
     # Use a different port
-    docker run -p 8080:3000 samanhappy/mcphub
+    docker run -p 8080:3000 huangjunsen/xiaozhi-mcphub
     ```
 
     **Container won't start:**
@@ -519,30 +467,7 @@ curl -X POST http://localhost:3000/mcp \
     docker logs mcphub
 
     # Run interactively for debugging
-    docker run -it --rm samanhappy/mcphub /bin/bash
-    ```
-
-  </Accordion>
-
-  <Accordion title="npm Installation Issues">
-    **Permission errors:**
-    ```bash
-    # Use npx instead of global install
-    npx @samanhappy/mcphub
-
-    # Or fix npm permissions
-    npm config set prefix ~/.npm-global
-    export PATH=~/.npm-global/bin:$PATH
-    ```
-
-    **Node version issues:**
-    ```bash
-    # Check Node version
-    node --version
-
-    # Install Node 18+ using nvm
-    nvm install 18
-    nvm use 18
+    docker run -it --rm huangjunsen/xiaozhi-mcphub /bin/bash
     ```
 
   </Accordion>

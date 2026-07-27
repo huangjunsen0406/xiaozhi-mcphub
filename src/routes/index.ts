@@ -436,7 +436,7 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.get('/registry/servers/versions', getRegistryServerVersions);
   authenticatedRouter.get('/registry/servers/version', getRegistryServerVersion);
 
-  // Changelog routes (proxy to mcphub-web changelog API)
+  // Changelog routes (own GitHub Releases)
   authenticatedRouter.get('/changelog/update-info', getChangelogUpdateInfoHandler);
 
   // Log routes

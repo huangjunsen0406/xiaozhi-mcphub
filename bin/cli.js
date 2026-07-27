@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 // Subcommands routed to the CLI dispatcher in dist/cli/main.js. Anything else
 // (including no args) falls through to the legacy server bootstrap so
-// `npx @samanhappy/mcphub` keeps working exactly as before.
+// `npx @huangjunsen0406/xiaozhi-mcphub` / local `xiaozhi-mcphub` keep working.
 const CLI_COMMANDS = new Set([
   'login',
   'logout',
@@ -55,8 +55,7 @@ function findPackageRoot() {
       try {
         const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
         if (
-          pkg.name === 'mcphub' ||
-          pkg.name === '@samanhappy/mcphub' ||
+          pkg.name === 'xiaozhi-mcphub' ||
           pkg.name === '@huangjunsen0406/xiaozhi-mcphub'
         ) {
           if (isDebug) {

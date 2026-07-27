@@ -90,7 +90,8 @@ export interface MarketServer {
 export type ChangelogCategory = 'feature' | 'fix' | 'breaking' | 'security';
 
 export interface ChangelogEntry {
-  product: 'mcphub';
+  /** Product id for this fork's release stream */
+  product: 'xiaozhi-mcphub' | string;
   version: string;
   tagName: string;
   publishedAt: string;
@@ -115,7 +116,8 @@ export interface ChangelogUpdateInfo {
   totalUpdateCount: number;
   changelogUrl: string;
   allChangelogUrl: string;
-  source: 'mcphub-web' | 'npm-fallback' | 'disabled';
+  /** github = own GitHub Releases */
+  source: 'github' | 'disabled';
 }
 
 // Cloud Market Server types (for MCPRouter API)

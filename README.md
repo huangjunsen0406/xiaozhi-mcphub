@@ -2,7 +2,7 @@
 
 [中文版](README.zh.md) | English
 
-**xiaozhi-mcphub** is a second-stage development based on [MCPHub](https://github.com/samanhappy/mcphub). It enhances integration with the Xiaozhi AI platform and provides multi-endpoint management, automatic reconnection, vector-based smart routing, and OpenAPI-compatible access.
+**xiaozhi-mcphub** is an MCP (Model Context Protocol) bridge and management console optimized for the Xiaozhi AI platform. It provides multi-endpoint management, automatic reconnection, vector-based smart routing, and OpenAPI-compatible access.
 
 ![Dashboard Preview](assets/dashboard.png)
 
@@ -122,15 +122,9 @@ Set `SMART_ROUTING_ENABLED` to `true` and provide `OPENAI_API_KEY` to enable it.
 - Default admin: `admin` / `admin123`
 - Default MCP servers: amap / playwright / fetch / slack (can be modified in the console and configured via ENV)
 
-## 📄 License & Attribution (Apache License 2.0)
+## 📄 License (Apache License 2.0)
 
-This project is a derivative work of [MCPHub](https://github.com/samanhappy/mcphub) and follows the **Apache License 2.0**:
-
-- Keep upstream and project license and notice files, including `LICENSE` and `NOTICE`.
-- If you modify and redistribute the source or binaries, indicate the changes.
-- Include the license and disclaimer in redistribution; do not imply endorsement by original authors.
-
-See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) for details.
+This project is licensed under the **Apache License 2.0**. Keep `LICENSE` and `NOTICE` when redistributing, and document any modifications. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
 ## 🤝 Contributing
 
@@ -138,6 +132,6 @@ Contributions are welcome! Please open issues/PRs for improvements.
 
 ## 🔗 Links
 
-- Upstream project: <https://github.com/samanhappy/mcphub>
+- This project: <https://github.com/huangjunsen0406/xiaozhi-mcphub>
 - Xiaozhi AI Platform: <https://xiaozhi.me>
 - Model Context Protocol: <https://modelcontextprotocol.io>

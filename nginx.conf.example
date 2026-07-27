@@ -56,7 +56,7 @@ server {
 # version: '3.8'
 # services:
 #   mcphub:
-#     image: samanhappy/mcphub
+#     image: huangjunsen/xiaozhi-mcphub
 #     environment:
 #       - BASE_PATH=/mcphub
 #     volumes:

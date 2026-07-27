@@ -142,11 +142,11 @@ const AboutDialog: React.FC<AboutDialogProps> = ({
                   <p className="mt-3 text-[13px] leading-relaxed" style={{ color: 'var(--hub-ink-2)' }}>
                     {latestEntry.summary}
                   </p>
-                ) : updateInfo?.source === 'npm-fallback' ? (
+                ) : (
                   <p className="mt-3 text-[13px]" style={{ color: 'var(--hub-ink-2)' }}>
                     {t('about.releaseNotesUnavailable')}
                   </p>
-                ) : null}
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--hub-ink-2)' }}>
@@ -212,7 +212,11 @@ const AboutDialog: React.FC<AboutDialogProps> = ({
                 {isChecking ? t('about.checking') : t('about.checkForUpdates')}
               </button>
               <a
-                href={updateInfo?.changelogUrl || 'https://www.mcphub.app/changelog'}
+                href={
+                  updateInfo?.changelogUrl ||
+                  updateInfo?.allChangelogUrl ||
+                  'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases'
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hub-btn primary"

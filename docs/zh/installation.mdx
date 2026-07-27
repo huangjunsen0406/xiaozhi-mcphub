@@ -28,13 +28,13 @@ description: '各种平台的详细安装说明'
 
     ```bash
     # 拉取最新镜像
-    docker pull samanhappy/mcphub:latest
+    docker pull huangjunsen/xiaozhi-mcphub:latest
 
     # 使用默认设置运行
     docker run -d \
       --name mcphub \
       -p 3000:3000 \
-      samanhappy/mcphub:latest
+      huangjunsen/xiaozhi-mcphub:latest
     ```
 
     #### 2. 使用自定义配置
@@ -61,7 +61,7 @@ description: '各种平台的详细安装说明'
       --name mcphub \
       -p 3000:3000 \
       -v $(pwd)/mcp_settings.json:/app/mcp_settings.json \
-      samanhappy/mcphub:latest
+      huangjunsen/xiaozhi-mcphub:latest
     ```
 
     #### 3. 使用环境变量
@@ -72,7 +72,7 @@ description: '各种平台的详细安装说明'
       -p 3000:3000 \
       -e PORT=3000 \
       -e BASE_PATH="" \
-      samanhappy/mcphub:latest
+      huangjunsen/xiaozhi-mcphub:latest
     ```
 
     #### 4. Docker Compose
@@ -83,7 +83,7 @@ description: '各种平台的详细安装说明'
     version: '3.8'
     services:
       mcphub:
-        image: samanhappy/mcphub:latest
+        image: huangjunsen/xiaozhi-mcphub:latest
         ports:
           - "3000:3000"
         volumes:
@@ -117,58 +117,6 @@ description: '各种平台的详细安装说明'
 
   </Tab>
 
-  <Tab title="npm 包">
-    ### npm 包安装
-
-    将 MCPHub 安装为全局 npm 包：
-
-    #### 1. 全局安装
-
-    ```bash
-    # 全局安装
-    npm install -g @samanhappy/mcphub
-
-    # 或使用 yarn
-    yarn global add @samanhappy/mcphub
-
-    # 或使用 pnpm
-    pnpm add -g @samanhappy/mcphub
-    ```
-
-    #### 2. 运行 MCPHub
-
-    ```bash
-    # 使用默认设置运行
-    mcphub
-
-    # 使用自定义端口运行
-    PORT=8080 mcphub
-    ```
-
-    {/* #### 3. 本地安装
-
-    您也可以在项目中本地安装 MCPHub：
-
-    ```bash
-    # 创建新目录
-    mkdir my-mcphub
-    cd my-mcphub
-
-    # 初始化 package.json
-    npm init -y
-
-    # 本地安装 MCPHub
-    npm install @samanhappy/mcphub
-
-    # 创建启动脚本
-    echo '#!/bin/bash\nnpx mcphub' > start.sh
-    chmod +x start.sh
-
-    # 运行 MCPHub
-    ./start.sh
-    ``` */}
-  </Tab>
-
   <Tab title="本地开发">
     ### 本地开发环境设置
 
@@ -178,8 +126,8 @@ description: '各种平台的详细安装说明'
 
     ```bash
     # 克隆仓库
-    git clone https://github.com/samanhappy/mcphub.git
-    cd mcphub
+    git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
+    cd xiaozhi-mcphub
     ```
 
     #### 2. 安装依赖
@@ -296,7 +244,7 @@ description: '各种平台的详细安装说明'
         spec:
           containers:
           - name: mcphub
-            image: samanhappy/mcphub:latest
+            image: huangjunsen/xiaozhi-mcphub:latest
             ports:
             - containerPort: 3000
             env:
@@ -483,7 +431,7 @@ curl -X POST http://localhost:3000/mcp \
     lsof -i :3000
 
     # 使用不同的端口
-    docker run -p 8080:3000 samanhappy/mcphub
+    docker run -p 8080:3000 huangjunsen/xiaozhi-mcphub
     ```
 
     **容器无法启动：**
@@ -492,30 +440,7 @@ curl -X POST http://localhost:3000/mcp \
     docker logs mcphub
 
     # 交互式运行以进行调试
-    docker run -it --rm samanhappy/mcphub /bin/bash
-    ```
-
-  </Accordion>
-
-  <Accordion title="npm 安装问题">
-    **权限错误：**
-    ```bash
-    # 使用 npx 而不是全局安装
-    npx @samanhappy/mcphub
-
-    # 或修复 npm 权限
-    npm config set prefix ~/.npm-global
-    export PATH=~/.npm-global/bin:$PATH
-    ```
-
-    **Node 版本问题：**
-    ```bash
-    # 检查 Node 版本
-    node --version
-
-    # 使用 nvm 安装 Node 18+
-    nvm install 18
-    nvm use 18
+    docker run -it --rm huangjunsen/xiaozhi-mcphub /bin/bash
     ```
 
   </Accordion>

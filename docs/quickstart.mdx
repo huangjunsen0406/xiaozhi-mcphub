@@ -11,7 +11,7 @@ description: 'Get MCPHub running in 5 minutes'
 
     ```bash
     # Run with default configuration
-    docker run -p 3000:3000 samanhappy/mcphub
+    docker run -p 3000:3000 huangjunsen/xiaozhi-mcphub
     ```
 
     Or mount your custom configuration:
@@ -20,7 +20,7 @@ description: 'Get MCPHub running in 5 minutes'
     # Run with custom MCP settings
     docker run -p 3000:3000 \
       -v $(pwd)/mcp_settings.json:/app/mcp_settings.json \
-      samanhappy/mcphub
+      huangjunsen/xiaozhi-mcphub
     ```
 
   </Tab>
@@ -29,8 +29,8 @@ description: 'Get MCPHub running in 5 minutes'
 
     ```bash
     # Clone the repository
-    git clone https://github.com/samanhappy/mcphub.git
-    cd mcphub
+    git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
+    cd xiaozhi-mcphub
 
     # Install dependencies
     pnpm install
@@ -40,18 +40,6 @@ description: 'Get MCPHub running in 5 minutes'
     ```
 
     This starts both backend (port 3000) and frontend (port 5173) in development mode. The Vite dev server proxies API and MCP traffic to the backend. Local development uses `admin` / `admin123` and stores writable settings in `data/mcp_settings.dev.json`.
-
-  </Tab>
-  <Tab title="npm Package">
-    Install MCPHub as a global package:
-
-    ```bash
-    # Install globally
-    npm install -g @samanhappy/mcphub
-
-    # Run MCPHub
-    mcphub
-    ```
 
   </Tab>
 </Tabs>
@@ -68,13 +56,13 @@ http://localhost:3000
 
 ### 2. Login
 
-The default username is `admin`. For local development with `pnpm dev`, use `admin123`. Docker, npm package, and production starts do not include a default user; if no `ADMIN_PASSWORD` environment variable is set on first launch, a random password is generated and printed to the server logs.
+The default username is `admin`. For local development with `pnpm dev`, use `admin123`. Docker and production starts do not include a default user; if no `ADMIN_PASSWORD` environment variable is set on first launch, a random password is generated and printed to the server logs.
 
 To pre-set the admin password:
 
 ```bash
 # Via environment variable
-ADMIN_PASSWORD=your-secure-password docker run -p 3000:3000 samanhappy/mcphub
+ADMIN_PASSWORD=your-secure-password docker run -p 3000:3000 huangjunsen/xiaozhi-mcphub
 ```
 
 <Warning>Change the admin password after first login for security.</Warning>

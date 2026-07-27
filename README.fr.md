@@ -8,20 +8,20 @@ MCPHub facilite la gestion et la mise à l'échelle de plusieurs serveurs MCP (M
 
 ## 🌐 Démo en direct et Documentation
 
-- **Documentation** : [docs.mcphub.app](https://docs.mcphub.app/)
-- **Environnement de démo** : [demo.mcphub.app](https://demo.mcphub.app/)
+- **Documentation** : [Documentation](https://github.com/huangjunsen0406/xiaozhi-mcphub#readme)
+- **Environnement de démo** : [GitHub](https://github.com/huangjunsen0406/xiaozhi-mcphub)
 
 ## 🚀 Fonctionnalités
 
 - **Gestion centralisée** - Surveillez et contrôlez tous les serveurs MCP depuis un tableau de bord unifié
 - **Routage flexible** - Accédez à tous les serveurs, groupes spécifiques ou serveurs individuels via HTTP/SSE
 - **Visibilité granulaire par groupe** - Contrôlez indépendamment la visibilité des Tools, Prompts et Resources de chaque serveur dans un groupe
-- **Routage intelligent** - Découverte d'outils propulsée par IA utilisant la recherche sémantique vectorielle ([En savoir plus](https://docs.mcphub.app/features/smart-routing))
+- **Routage intelligent** - Découverte d'outils propulsée par IA utilisant la recherche sémantique vectorielle ([En savoir plus](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmefeatures/smart-routing))
 - **Compression des résultats d'outils** - Réduisez automatiquement les grands résultats texte avant qu'ils n'atteignent les clients
 - **Configuration à chaud** - Ajoutez, supprimez ou mettez à jour les serveurs sans temps d'arrêt
-- **Support OAuth 2.0** - Modes client et serveur pour une authentification sécurisée ([En savoir plus](https://docs.mcphub.app/features/oauth))
+- **Support OAuth 2.0** - Modes client et serveur pour une authentification sécurisée ([En savoir plus](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmefeatures/oauth))
 - **Connexion Sociale** - Support de connexion GitHub et Google via Better Auth (nécessite le mode Base de données)
-- **Mode Base de données** - Stockez la configuration dans PostgreSQL pour les environnements de production ([En savoir plus](https://docs.mcphub.app/configuration/database-configuration))
+- **Mode Base de données** - Stockez la configuration dans PostgreSQL pour les environnements de production ([En savoir plus](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmeconfiguration/database-configuration))
 - **Prêt pour Docker** - Déployez instantanément avec la configuration conteneurisée
 
 ## 🔧 Démarrage rapide
@@ -45,24 +45,24 @@ Créez un fichier `mcp_settings.json` :
 }
 ```
 
-📖 Consultez le [Guide de configuration](https://docs.mcphub.app/configuration/mcp-settings) pour les options complètes incluant OAuth, les variables d'environnement, et plus.
+📖 Consultez le [Guide de configuration](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmeconfiguration/mcp-settings) pour les options complètes incluant OAuth, les variables d'environnement, et plus.
 
 ### Déploiement avec Docker
 
 ```bash
 # Exécutez avec une configuration personnalisée (recommandé)
-docker run -p 3000:3000 -v ./mcp_settings.json:/app/mcp_settings.json -v ./data:/app/data samanhappy/mcphub
+docker run -p 3000:3000 -v ./mcp_settings.json:/app/mcp_settings.json -v ./data:/app/data huangjunsen/xiaozhi-mcphub
 
 # Ou exécutez avec les paramètres par défaut (montez ./data pour préserver l'état entre redémarrages)
-docker run -p 3000:3000 -v ./data:/app/data samanhappy/mcphub
+docker run -p 3000:3000 -v ./data:/app/data huangjunsen/xiaozhi-mcphub
 ```
 
-Deux variantes d'image sont publiées sous `samanhappy/mcphub` :
+Deux variantes d'image sont publiées sous `huangjunsen/xiaozhi-mcphub` :
 
 - **`latest`** — l'image par défaut. Inclut Node.js/pnpm, Python, uv/uvx, Git et les outils de compilation. Couvre la plupart des serveurs MCP.
 - **`latest-full`** — l'image étendue. Ajoute la chaîne d'outils Rust (Cargo/rustc), Docker Engine, et les navigateurs Playwright (Chrome + Firefox, amd64 uniquement). À utiliser pour les serveurs Rust ou les workflows conteneur-dans-conteneur. Téléchargement plus volumineux.
 
-Voir [Configuration Docker](https://docs.mcphub.app/configuration/docker-setup) pour les options de build et la configuration Docker-in-Docker.
+Voir [Configuration Docker](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmeconfiguration/docker-setup) pour les options de build et la configuration Docker-in-Docker.
 
 ### Accéder au tableau de bord
 
@@ -70,7 +70,7 @@ Ouvrez `http://localhost:3000` et connectez-vous avec le nom d'utilisateur `admi
 
 ```bash
 # Docker : définir le mot de passe admin via une variable d'environnement
-docker run -p 3000:3000 -e ADMIN_PASSWORD=your-secure-password samanhappy/mcphub
+docker run -p 3000:3000 -e ADMIN_PASSWORD=your-secure-password huangjunsen/xiaozhi-mcphub
 ```
 
 > **Conseil :** Changez le mot de passe admin après la première connexion pour plus de sécurité.
@@ -91,23 +91,23 @@ http://localhost:3000/mcp/$smart/{group}  # Routage intelligent dans un groupe
 
 > **Note de sécurité** : Les points de terminaison MCP nécessitent une authentification par défaut pour éviter toute exposition accidentelle. Pour autoriser l'accès MCP sans authentification, désactivez **Activer l'authentification Bearer** dans la section Clés. **Ignorer l'authentification** n'affecte que la connexion au tableau de bord. À utiliser uniquement dans des environnements de confiance.
 
-📖 Consultez la [Référence API](https://docs.mcphub.app/api-reference) pour la documentation détaillée des points de terminaison.
+📖 Consultez la [Référence API](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmeapi-reference) pour la documentation détaillée des points de terminaison.
 
 ## 📚 Documentation
 
 | Sujet                                                                                 | Description                                 |
 | ------------------------------------------------------------------------------------- | ------------------------------------------- |
-| [Démarrage rapide](https://docs.mcphub.app/quickstart)                               | Commencez en 5 minutes                      |
-| [Configuration](https://docs.mcphub.app/configuration/mcp-settings)                  | Options de configuration du serveur MCP     |
-| [Mode Base de données](https://docs.mcphub.app/configuration/database-configuration) | Configuration PostgreSQL pour la production |
-| [OAuth](https://docs.mcphub.app/features/oauth)                                      | Configuration client et serveur OAuth 2.0   |
-| [Routage intelligent](https://docs.mcphub.app/features/smart-routing)                | Découverte d'outils propulsée par IA        |
-| [Configuration Docker](https://docs.mcphub.app/configuration/docker-setup)           | Guide de déploiement Docker                 |
+| [Démarrage rapide](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmequickstart)                               | Commencez en 5 minutes                      |
+| [Configuration](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmeconfiguration/mcp-settings)                  | Options de configuration du serveur MCP     |
+| [Mode Base de données](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmeconfiguration/database-configuration) | Configuration PostgreSQL pour la production |
+| [OAuth](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmefeatures/oauth)                                      | Configuration client et serveur OAuth 2.0   |
+| [Routage intelligent](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmefeatures/smart-routing)                | Découverte d'outils propulsée par IA        |
+| [Configuration Docker](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmeconfiguration/docker-setup)           | Guide de déploiement Docker                 |
 
 ## 🧑‍💻 Développement local
 
 ```bash
-git clone https://github.com/samanhappy/mcphub.git
+git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
 cd mcphub
 pnpm install
 pnpm dev
@@ -117,7 +117,7 @@ Le développement local utilise `admin` / `admin123` et stocke sa copie de confi
 
 > Pour les utilisateurs Windows, démarrez le backend et le frontend séparément : `pnpm backend:dev`, `pnpm frontend:dev`
 
-📖 Consultez le [Guide de développement](https://docs.mcphub.app/development) pour les instructions de configuration détaillées.
+📖 Consultez le [Guide de développement](https://github.com/huangjunsen0406/xiaozhi-mcphub#readmedevelopment) pour les instructions de configuration détaillées.
 
 ## 🔍 Stack technique
 
@@ -133,11 +133,11 @@ Les contributions sont les bienvenues ! Rejoignez notre [communauté Discord](ht
 
 ## ❤️ Sponsor
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/samanhappy)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://github.com/huangjunsen0406/xiaozhi-mcphub)
 
 ## 🌟 Historique des étoiles
 
-[![Historique des étoiles](https://api.star-history.com/svg?repos=samanhappy/mcphub&type=Date)](https://www.star-history.com/#samanhappy/mcphub&Date)
+[![Historique des étoiles](https://api.star-history.com/svg?repos=huangjunsen0406/xiaozhi-mcphub&type=Date)](https://www.star-history.com/#huangjunsen0406/xiaozhi-mcphub&Date)
 
 ## 📄 Licence
 

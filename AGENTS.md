@@ -1,4 +1,4 @@
-# MCPHub — Agent Guide
+# xiaozhi-mcphub — Agent Guide
 
 Authoritative instructions for AI agents and contributors working in this repo. Trust this file first; only fall back to wider search when something here is missing or contradicts the code. When you discover a contradiction, **fix the code or fix this file** — never let them drift.
 
@@ -8,7 +8,7 @@ This guide is intentionally short. It points to where the details live rather th
 
 ## 1. What this repo is
 
-`@samanhappy/mcphub` is a TypeScript/Node (ESM) hub that aggregates multiple MCP (Model Context Protocol) servers behind a single HTTP surface, with a React/Vite dashboard.
+`@huangjunsen0406/xiaozhi-mcphub` is a TypeScript/Node (ESM) hub that aggregates multiple MCP (Model Context Protocol) servers behind a single HTTP surface, with a React/Vite dashboard optimized for Xiaozhi AI.
 
 | Layer    | Entry                                   | Notes                                        |
 | -------- | --------------------------------------- | -------------------------------------------- |
@@ -149,9 +149,9 @@ For deeper architecture context, read [docs/development/architecture.mdx](docs/d
 
 ```bash
 gh auth status
-gh api repos/samanhappy/mcphub/security-advisories/<ghsa_id>
-gh api repos/samanhappy/mcphub/code-scanning/alerts/<alert_number>
-gh api repos/samanhappy/mcphub/code-scanning/alerts/<alert_number>/instances
+gh api repos/huangjunsen0406/xiaozhi-mcphub/security-advisories/<ghsa_id>
+gh api repos/huangjunsen0406/xiaozhi-mcphub/code-scanning/alerts/<alert_number>
+gh api repos/huangjunsen0406/xiaozhi-mcphub/code-scanning/alerts/<alert_number>/instances
 ```
 
 Compare advisory details against current `main` and the tagged fix commit before deciding if the issue is still live.
@@ -190,7 +190,7 @@ This file is a living contract. Keep it accurate; resist the urge to grow it.
 
 ### Issue tracker
 
-GitHub Issues for `samanhappy/mcphub`, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+GitHub Issues for `huangjunsen0406/xiaozhi-mcphub`, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

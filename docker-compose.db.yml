@@ -21,10 +21,10 @@ services:
     networks:
       - mcphub-network
 
-  # MCPHub application
+  # xiaozhi-mcphub application
   mcphub:
-    image: samanhappy/mcphub:latest
-    container_name: mcphub
+    image: huangjunsen/xiaozhi-mcphub:latest
+    container_name: xiaozhi-mcphub
     environment:
       # Database connection (setting DB_URL automatically enables database mode)
       DB_URL: "postgresql://mcphub:${DB_PASSWORD:-mcphub_password}@postgres:5432/mcphub"

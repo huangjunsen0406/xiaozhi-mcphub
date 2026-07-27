@@ -35,7 +35,7 @@ const AuthPageShell: React.FC<AuthPageShellProps> = ({ subtitle, children }) => 
           <GitHubIcon className="h-4 w-4" />
         </a>
         <a
-          href="https://docs.mcphub.app"
+          href="https://github.com/huangjunsen0406/xiaozhi-mcphub#readme"
           target="_blank"
           rel="noopener noreferrer"
           className="hub-icon-btn"

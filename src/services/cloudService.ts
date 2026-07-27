@@ -28,7 +28,10 @@ const getMCPRouterConfig = async (username?: string | null) => {
 
   return {
     apiKey: mcpRouterConfig?.apiKey || process.env.MCPROUTER_API_KEY || '',
-    referer: mcpRouterConfig?.referer || process.env.MCPROUTER_REFERER || 'https://www.mcphub.app',
+    referer:
+      mcpRouterConfig?.referer ||
+      process.env.MCPROUTER_REFERER ||
+      'https://github.com/huangjunsen0406/xiaozhi-mcphub',
     title: mcpRouterConfig?.title || process.env.MCPROUTER_TITLE || 'MCPHub',
     baseUrl:
       mcpRouterConfig?.baseUrl || process.env.MCPROUTER_API_BASE || DEFAULT_MCPROUTER_API_BASE,
@@ -42,7 +45,8 @@ const getAxiosConfig = async (): Promise<AxiosRequestConfig> => {
   return {
     headers: {
       Authorization: mcpRouterConfig.apiKey ? `Bearer ${mcpRouterConfig.apiKey}` : '',
-      'HTTP-Referer': mcpRouterConfig.referer || 'https://www.mcphub.app',
+      'HTTP-Referer':
+        mcpRouterConfig.referer || 'https://github.com/huangjunsen0406/xiaozhi-mcphub',
       'X-Title': mcpRouterConfig.title || 'MCPHub',
       'Content-Type': 'application/json',
     },

@@ -47,7 +47,7 @@ docker run -d \
   -p 3000:3000 \
   -v ./mcp_settings.json:/app/mcp_settings.json \
   -e DB_URL="postgresql://user:password@your-db-host:5432/mcphub" \
-  samanhappy/mcphub
+  huangjunsen/xiaozhi-mcphub
 ```
 
 #### Option B: Using PostgreSQL as a separate service
@@ -70,7 +70,7 @@ services:
       - "5432:5432"
 
   mcphub:
-    image: samanhappy/mcphub:latest
+    image: huangjunsen/xiaozhi-mcphub:latest
     environment:
       USE_DB: "true"
       DB_URL: "postgresql://mcphub:your_secure_password@postgres:5432/mcphub"
@@ -108,7 +108,10 @@ EOF
 #### Step 2: Install MCPHub
 
 ```bash
-npm install -g @samanhappy/mcphub
+git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git
+cd xiaozhi-mcphub
+pnpm install
+pnpm build
 ```
 
 #### Step 3: Set Environment Variables

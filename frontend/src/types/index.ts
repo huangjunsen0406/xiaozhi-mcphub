@@ -58,7 +58,8 @@ export interface MarketServer {
 export type ChangelogCategory = 'feature' | 'fix' | 'breaking' | 'security';
 
 export interface ChangelogEntry {
-  product: 'mcphub';
+  /** Product id for this fork's release stream */
+  product: 'xiaozhi-mcphub' | string;
   version: string;
   tagName: string;
   publishedAt: string;
@@ -83,7 +84,8 @@ export interface ChangelogUpdateInfo {
   totalUpdateCount: number;
   changelogUrl: string;
   allChangelogUrl: string;
-  source: 'mcphub-web' | 'npm-fallback' | 'disabled';
+  /** github = own GitHub Releases */
+  source: 'github' | 'disabled';
 }
 
 // Cloud Server types (for MCPRouter API)
@@ -494,6 +496,8 @@ export interface AuthResponse {
   token?: string;
   user?: IUser;
   message?: string;
+  /** Stable password-strength error codes from the backend (auth.* i18n keys) */
+  errors?: string[];
   isUsingDefaultPassword?: boolean;
   emailVerificationRequired?: boolean;
   code?: string;

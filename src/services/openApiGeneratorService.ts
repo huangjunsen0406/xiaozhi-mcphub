@@ -265,24 +265,24 @@ export async function generateOpenAPISpec(
   const openApiDoc: OpenAPIV3.Document = {
     openapi: '3.0.3',
     info: {
-      title: options.title || 'MCPHub API',
+      title: options.title || 'xiaozhi-mcphub API',
       description:
         options.description ||
-        'OpenAPI specification for MCP tools managed by MCPHub. This enables integration with OpenWebUI and other OpenAPI-compatible systems.',
+        'OpenAPI specification for MCP tools managed by xiaozhi-mcphub. This enables integration with OpenWebUI and other OpenAPI-compatible systems.',
       version: options.version || '1.0.0',
       contact: {
-        name: 'MCPHub',
-        url: 'https://github.com/samanhappy/mcphub',
+        name: 'xiaozhi-mcphub',
+        url: 'https://github.com/huangjunsen0406/xiaozhi-mcphub',
       },
       license: {
-        name: 'ISC',
-        url: 'https://github.com/samanhappy/mcphub/blob/main/LICENSE',
+        name: 'Apache-2.0',
+        url: 'https://github.com/huangjunsen0406/xiaozhi-mcphub/blob/main/LICENSE',
       },
     },
     servers: [
       {
         url: serverUrl,
-        description: 'MCPHub API Server',
+        description: 'xiaozhi-mcphub API Server',
       },
     ],
     paths,

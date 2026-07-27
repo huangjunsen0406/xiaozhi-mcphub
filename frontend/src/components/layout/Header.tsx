@@ -102,7 +102,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
 
       <div className="ml-auto flex items-center gap-1 shrink-0">
         <a
-          href="https://github.com/samanhappy/mcphub"
+          href="https://github.com/huangjunsen0406/xiaozhi-mcphub"
           target="_blank"
           rel="noopener noreferrer"
           className="hub-icon-btn"
@@ -111,7 +111,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <GitHubIcon className="h-4 w-4" />
         </a>
         <a
-          href="https://docs.mcphub.app"
+          href="https://github.com/huangjunsen0406/xiaozhi-mcphub#readme"
           target="_blank"
           rel="noopener noreferrer"
           className="hub-icon-btn"

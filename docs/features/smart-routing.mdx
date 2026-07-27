@@ -65,7 +65,7 @@ Smart Routing requires additional setup compared to basic MCPHub usage:
     version: '3.8'
     services:
       mcphub:
-        image: samanhappy/mcphub:latest
+        image: huangjunsen/xiaozhi-mcphub:latest
         ports:
           - "3000:3000"
         environment:
@@ -176,7 +176,7 @@ Smart Routing requires additional setup compared to basic MCPHub usage:
         spec:
           containers:
           - name: mcphub
-            image: samanhappy/mcphub:latest
+            image: huangjunsen/xiaozhi-mcphub:latest
             env:
             - name: DB_URL
               value: "postgresql://mcphub:password@postgres:5432/mcphub"
