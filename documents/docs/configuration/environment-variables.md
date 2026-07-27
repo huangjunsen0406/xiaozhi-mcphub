@@ -1,284 +1,118 @@
-# 环境变量配置
+# 环境变量
 
-xiaozhi-mcphub 使用环境变量进行配置。本指南介绍实际支持的环境变量。
+xiaozhi-mcphub **1.1.0** 通过环境变量与（可选）`mcp_settings.json` / 数据库系统配置共同生效。  
+与旧版文档的重要差异：数据库连接使用 **`DB_URL`**（不是 `DATABASE_URL`）。
 
-## 核心应用设置
+## 核心
 
-### 服务器配置
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `PORT` | `3000` | HTTP 端口 |
+| `NODE_ENV` | `development` | `development` / `production` / `test` |
+| `BASE_PATH` | 空 | 子路径部署，如 `/mcphub` |
+| `READONLY` | `false` | `true` 时禁止修改类操作 |
+| `INIT_TIMEOUT` | `300000` | 初始化超时（ms） |
+| `DEFAULT_REQUEST_TIMEOUT` | `60000` | 上游 MCP 默认超时（ms） |
+| `MCPHUB_SETTING_PATH` | 自动检测 | 设置文件路径 |
+| `INSTALL_BASE_URL` | - | 公网安装/回调基址；Dashboard 里保存的 baseUrl 优先 |
 
-| 变量        | 默认值        | 描述                                            |
-| ----------- | ------------- | ----------------------------------------------- |
-| `PORT`      | `3000`        | HTTP 服务器端口号                               |
-| `HOST`      | `0.0.0.0`     | 服务器绑定的主机地址                            |
-| `NODE_ENV`  | `development` | 应用环境（`development`、`production`、`test`） |
-| `BASE_PATH` | -             | 应用基础路径（可选）                            |
+## 数据库
+
+| 变量 | 说明 |
+|------|------|
+| `DB_URL` | PostgreSQL 连接串。配置后通常启用数据库模式；**小智端点等依赖 DB** |
+| `USE_DB` | 可选，显式开关 DB 模式（一般随 `DB_URL` 自动判断） |
+
+```bash
+DB_URL=postgres://xiaozhi:密码@127.0.0.1:5432/xiaozhi_mcphub
+```
+
+智能路由向量存储使用同一套 PostgreSQL（需 **pgvector** 扩展）。
+
+## 认证
+
+| 变量 | 说明 |
+|------|------|
+| `JWT_SECRET` | JWT 签名密钥（生产必填；开发可自动生成） |
+| `ADMIN_PASSWORD` | **仅首次空用户库**时创建 `admin` 的密码；之后忽略 |
+
+密码策略（注册 / 改密 / 重置）：至少 8 位，含字母、数字与特殊字符。界面与 API 使用 i18n 错误码。
+
+### Better Auth（可选：GitHub / Google / OIDC）
+
+需 **`DB_URL`**（Better Auth 会话走 PostgreSQL）。非敏感项也可写在 `systemConfig.auth.betterAuth`，优先级：环境变量 > 系统配置 > 默认。
+
+| 变量 | 说明 |
+|------|------|
+| `BETTER_AUTH_ENABLED` | 总开关 |
+| `BETTER_AUTH_URL` | 公网 URL（回调） |
+| `BETTER_AUTH_BASE_PATH` | 默认 `/api/auth/better` |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | 额外可信来源 |
+| `BETTER_AUTH_GOOGLE_ENABLED` + `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google |
+| `BETTER_AUTH_GITHUB_ENABLED` + `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub |
+| `BETTER_AUTH_OIDC_ENABLED` 等 | 通用 OIDC（Keycloak / Authentik / Dex…） |
+
+第三方登录映射到本地用户时**不会自动授予管理员**。
+
+### 邮件（注册验证 / 找回密码）
+
+在控制台 **设置 → 邮件 (SMTP)** 配置，或写入系统配置。启用且 SMTP 完整时：
+
+- 注册可要求邮箱并发送验证信  
+- 支持忘记密码重置链接  
+- `getPublicConfig` 会暴露 `emailEnabled`（不含密钥）给前端  
+
+## 智能路由
+
+| 变量 | 说明 |
+|------|------|
+| `SMART_ROUTING_ENABLED` | 是否启用 |
+| `OPENAI_API_KEY` | Embedding 等 |
+| `OPENAI_API_BASE_URL` | 可选自定义网关 |
+| `OPENAI_API_EMBEDDING_MODEL` | 如 `text-embedding-3-small` |
+
+**`dbUrl`（向量库）为实例级基础设施**，仅管理员可在设置中查看/修改；普通用户可覆盖个人 API Key 等（见多账户配置）。
+
+## 小智重连（可选）
+
+| 变量 | 说明 |
+|------|------|
+| `XIAOZHI_AGGRESSIVE_RECONNECT` | 快速重连（弱退避） |
+| `XIAOZHI_RECONNECT_INTERVAL` | 快速重连间隔 ms |
+| `XIAOZHI_MAX_INFINITE_RETRIES` | 无限重连上限（0=不限制） |
+| `XIAOZHI_SLEEP_THRESHOLD` / `XIAOZHI_SLEEP_INTERVAL` | 休眠阈值与间隔 |
+
+端点级重连参数也可在 UI 中配置。详见 [小智接入](/configuration/xiaozhi)。
+
+## 更新检查
+
+| 变量 | 说明 |
+|------|------|
+| `DISABLE_UPDATE_CHECK` | `true` 关闭关于弹窗的更新检查 |
+| `MCPHUB_GITHUB_REPO` | 默认 `huangjunsen0406/xiaozhi-mcphub` |
+| `MCPHUB_GITHUB_TOKEN` / `GITHUB_TOKEN` | 提高 GitHub API 限额（私有仓需要） |
+| `MCPHUB_UPDATE_CHECK_TIMEOUT_MS` | 请求超时 |
+| `MCPHUB_UPDATE_CHECK_CACHE_TTL_SECONDS` | 进程内缓存 TTL |
+
+更新源为本仓库 **GitHub Releases**（无 npm 兜底）。
+
+## 代理与其它
+
+| 变量 | 说明 |
+|------|------|
+| `HTTP_PROXY` / `HTTPS_PROXY` | 出站代理 |
+| `NPM_REGISTRY` | 安装 MCP 依赖时的 npm 源（镜像内） |
+
+## 示例 `.env`
 
 ```bash
 PORT=3000
-HOST=0.0.0.0
 NODE_ENV=production
-BASE_PATH=/mcphub
+JWT_SECRET=replace-with-long-random-string
+DB_URL=postgres://xiaozhi:xiaozhi123456@127.0.0.1:5432/xiaozhi_mcphub
+# ADMIN_PASSWORD=only-on-first-bootstrap
+# SMART_ROUTING_ENABLED=false
+# DISABLE_UPDATE_CHECK=false
 ```
 
-### 数据库配置
-
-xiaozhi-mcphub 使用 PostgreSQL 数据库（需要 pgvector 扩展支持）：
-
-| 变量           | 默认值 | 描述                  |
-| -------------- | ------ | --------------------- |
-| `DATABASE_URL` | -      | PostgreSQL 连接字符串 |
-
-```bash
-# PostgreSQL 连接字符串（必需）
-DATABASE_URL=postgresql://username:password@localhost:5432/xiaozhi_mcphub
-```
-
-## 认证与安全
-
-### JWT 配置
-
-| 变量             | 默认值 | 描述                     |
-| ---------------- | ------ | ------------------------ |
-| `JWT_SECRET`     | -      | JWT 令牌签名密钥（必需） |
-| `JWT_EXPIRES_IN` | `24h`  | JWT 令牌过期时间         |
-
-```bash
-JWT_SECRET=your-super-secret-key-change-this-in-production
-JWT_EXPIRES_IN=24h
-```
-
-## MCP 服务器配置
-
-### 基本设置
-
-| 变量                 | 默认值              | 描述                      |
-| -------------------- | ------------------- | ------------------------- |
-| `MCP_SERVERS_PATH`   | `mcp_settings.json` | MCP 设置文件路径          |
-| `MCP_LOG_LEVEL`      | `info`              | MCP 服务器日志级别        |
-| `REQUEST_TIMEOUT`    | `60000`             | 请求超时时间（毫秒）      |
-| `INIT_TIMEOUT`       | `300000`            | 初始化超时时间（毫秒）    |
-
-```bash
-MCP_SERVERS_PATH=./mcp_settings.json
-MCP_LOG_LEVEL=info
-REQUEST_TIMEOUT=60000
-INIT_TIMEOUT=300000
-```
-
-### MCP 服务器 API 密钥
-
-这些环境变量用于 MCP 服务器，配置在各自的环境变量中：
-
-| 变量                             | 默认值 | 描述                    |
-| -------------------------------- | ------ | ----------------------- |
-| `AMAP_MAPS_API_KEY`              | -      | 高德地图 API 密钥       |
-| `SLACK_BOT_TOKEN`                | -      | Slack Bot Token         |
-| `SLACK_TEAM_ID`                  | -      | Slack Team ID           |
-| `GITHUB_PERSONAL_ACCESS_TOKEN`   | -      | GitHub Personal Access Token |
-| `ANTHROPIC_API_KEY`              | -      | Anthropic API 密钥      |
-
-```bash
-# 高德地图配置
-AMAP_MAPS_API_KEY=your-amap-api-key
-
-# Slack 配置
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-SLACK_TEAM_ID=T1234567890
-
-# GitHub 配置
-GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your-github-personal-access-token
-
-# Anthropic 配置（用于某些MCP服务器）
-ANTHROPIC_API_KEY=your-anthropic-api-key
-```
-
-## 智能路由配置
-
-智能路由使用 OpenAI API 和 PostgreSQL 向量搜索：
-
-| 变量                     | 默认值                   | 描述                            |
-| ------------------------ | ------------------------ | ------------------------------- |
-| `OPENAI_API_KEY`         | -                        | OpenAI API 密钥（用于智能路由） |
-| `OPENAI_EMBEDDING_MODEL` | `text-embedding-ada-002` | 向量嵌入模型                    |
-
-```bash
-OPENAI_API_KEY=sk-your-openai-api-key
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
-```
-
-## 日志配置
-
-| 变量               | 默认值 | 描述                             |
-| ------------------ | ------ | -------------------------------- |
-| `LOG_LEVEL`        | `info` | 日志级别（`error`、`warn`、`info`、`debug`） |
-| `LOG_FILE_ENABLED` | `false`| 是否启用文件日志                  |
-
-```bash
-LOG_LEVEL=info
-LOG_FILE_ENABLED=true
-```
-
-## 开发与调试
-
-| 变量    | 默认值 | 描述                            |
-| ------- | ------ | ------------------------------- |
-| `DEBUG` | -      | 调试命名空间（例如 `mcphub:*`） |
-
-```bash
-DEBUG=mcphub:*
-```
-
-## 配置示例
-
-### 开发环境
-
-```bash
-# .env.development
-NODE_ENV=development
-PORT=3000
-LOG_LEVEL=debug
-
-# 数据库
-DATABASE_URL=postgresql://mcphub:password@localhost:5432/xiaozhi_mcphub_dev
-
-# 认证
-JWT_SECRET=dev-secret-key-change-in-production
-JWT_EXPIRES_IN=24h
-
-# MCP 配置
-MCP_SERVERS_PATH=./mcp_settings.json
-MCP_LOG_LEVEL=debug
-
-# MCP 服务器 API 密钥（开发）
-AMAP_MAPS_API_KEY=your-dev-amap-key
-GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your-dev-github-token
-
-# 智能路由（可选）
-OPENAI_API_KEY=sk-your-dev-openai-key
-
-# 调试
-DEBUG=mcphub:*
-LOG_FILE_ENABLED=true
-```
-
-### 生产环境
-
-```bash
-# .env.production
-NODE_ENV=production
-PORT=3000
-HOST=0.0.0.0
-LOG_LEVEL=info
-
-# 数据库
-DATABASE_URL=postgresql://mcphub:secure-password@db.example.com:5432/xiaozhi_mcphub
-
-# 安全
-JWT_SECRET=your-super-secure-production-secret-64-chars-long
-JWT_EXPIRES_IN=24h
-
-# MCP 配置
-MCP_SERVERS_PATH=/app/mcp_settings.json
-MCP_LOG_LEVEL=info
-REQUEST_TIMEOUT=60000
-
-# MCP 服务器 API 密钥（生产）
-AMAP_MAPS_API_KEY=your-production-amap-key
-SLACK_BOT_TOKEN=xoxb-your-production-slack-bot-token
-GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your-production-github-token
-
-# 智能路由
-OPENAI_API_KEY=sk-your-production-openai-key
-
-# 日志
-LOG_FILE_ENABLED=true
-```
-
-### Docker 环境
-
-```bash
-# .env.docker
-NODE_ENV=production
-HOST=0.0.0.0
-PORT=3000
-
-# 使用 Docker 网络的服务名
-DATABASE_URL=postgresql://mcphub:password@postgres:5432/xiaozhi_mcphub
-
-# 安全
-JWT_SECRET=your-docker-secret-key
-
-# 容器中的文件路径
-MCP_SERVERS_PATH=/app/mcp_settings.json
-
-# MCP 服务器 API 密钥
-AMAP_MAPS_API_KEY=your-amap-api-key
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your-github-token
-
-# 日志
-LOG_LEVEL=info
-LOG_FILE_ENABLED=true
-```
-
-## 小智平台集成配置
-
-**重要**：小智平台集成配置不使用环境变量，而是在 `mcp_settings.json` 文件中配置。请参考 [MCP 设置文档](/configuration/mcp-settings) 了解详情。
-
-## 环境变量加载
-
-xiaozhi-mcphub 按以下顺序加载环境变量：
-
-1. 系统环境变量
-2. `.env.local`（被 git 忽略）
-3. `.env.{NODE_ENV}`（例如 `.env.production`）
-4. `.env`
-
-## 生产环境必需变量
-
-以下变量在生产环境中是必需的：
-
-- `JWT_SECRET` - JWT 令牌签名密钥
-- `DATABASE_URL` - PostgreSQL 数据库连接字符串
-- `OPENAI_API_KEY` - OpenAI API 密钥（如果使用智能路由）
-
-## 安全最佳实践
-
-::: warning 安全注意事项
-1. **永远不要提交密钥**到版本控制
-2. **为生产使用强唯一密钥**
-3. **定期轮换 API 密钥**
-4. **使用特定于环境的文件**
-5. **在容器部署中使用 Docker secrets**
-:::
-
-## 验证
-
-xiaozhi-mcphub 在启动时验证关键环境变量。缺少必需变量将阻止应用程序启动。
-
-### 检查配置
-
-```bash
-# 检查必需的环境变量
-if [ -z "$JWT_SECRET" ]; then
-  echo "错误：JWT_SECRET 环境变量未设置"
-  exit 1
-fi
-
-if [ -z "$DATABASE_URL" ]; then
-  echo "错误：DATABASE_URL 环境变量未设置"
-  exit 1
-fi
-```
-
-::: tip 提示
-使用 `.env.example` 文件作为模板：
-
-```bash
-# 创建配置文件
-cp .env.example .env
-# 编辑 .env 并填入您的实际值
-```
-:::
-
-此配置确保 xiaozhi-mcphub 能够正确运行，包括 MCP 服务器管理和智能路由功能。
+本地示例还可参考仓库根目录 `.env.example`。

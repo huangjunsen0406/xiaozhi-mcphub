@@ -1,29 +1,55 @@
 ---
-# https://vitepress.dev/reference/default-theme-home-page
 layout: home
 
 hero:
-  name: "XIAOZHI-MCPHUB"
-  tagline: XIAOZHI-MCPHUB 是一个强大的 Model Context Protocol (MCP) 服务器管理平台，提供智能路由、负载均衡和实时监控功能。
+  name: "xiaozhi-mcphub"
+  text: "为小智 AI 优化的 MCP 桥接与控制台"
+  tagline: "多端点小智接入 · 多账户隔离 · 智能路由 · 统一 MCP 入口。当前版本 1.1.0，上游基线 MCPHub v1.0.25。"
+  image:
+    src: /images/dashboard.zh.png
+    alt: xiaozhi-mcphub 仪表盘
   actions:
     - theme: brand
       text: 快速开始
       link: /quickstart
     - theme: alt
-      text: 查看源码
+      text: Docker 部署
+      link: /configuration/docker-setup
+    - theme: alt
+      text: GitHub
       link: https://github.com/huangjunsen0406/xiaozhi-mcphub
 
 features:
-  - title: 🚀 智能路由
-    details: 基于负载、延迟和健康状态的智能请求分发
-  - title: ⚖️ 负载均衡
-    details: 多种负载均衡策略，确保最优性能
-  - title: 📊 实时监控
-    details: 全面的性能指标和健康检查
-  - title: 🔐 安全认证
-    details: 企业级身份认证和访问控制
-  - title: 🏗️ 服务器组管理
-    details: 灵活的服务器分组和配置管理
-  - title: 🔄 故障转移
-    details: 自动故障检测和流量切换
+  - title: 小智多端点
+    details: 按用户管理多个 WebSocket 端点，支持启用/禁用、重连策略与分组 / $smart 绑定。
+  - title: 多账户隔离
+    details: Server / Group 按 owner 命名空间隔离；非管理员只能管理自己的资源。
+  - title: 注册与邮箱认证
+    details: 支持注册、邮箱验证、找回/重置密码；密码强度校验与中英文案。
+  - title: 智能路由
+    details: 可选向量检索，只把相关工具暴露给上游模型，降低上下文占用。
+  - title: 统一 MCP 入口
+    details: /mcp、/mcp/$smart、分组与单服务器路由，兼容 Claude Desktop / Cursor 等客户端。
+  - title: 自有更新检查
+    details: 「关于」弹窗检查本仓库 GitHub Releases，镜像 huangjunsen/xiaozhi-mcphub。
 ---
+
+## 控制台预览
+
+![仪表盘](./images/dashboard.zh.png)
+
+## 一分钟上手
+
+```bash
+docker pull huangjunsen/xiaozhi-mcphub:1.1.0
+# 或
+docker pull huangjunsen/xiaozhi-mcphub:latest
+
+docker run -d --name xiaozhi-mcphub -p 3000:3000 \
+  -e DB_URL="postgres://xiaozhi:xiaozhi123456@host.docker.internal:5432/xiaozhi_mcphub" \
+  huangjunsen/xiaozhi-mcphub:1.1.0
+```
+
+浏览器打开 `http://localhost:3000`。默认管理员多为 `admin` / `admin123`（生产请立刻改密；首次启动也可能在日志打印随机密码）。
+
+更多见 [快速开始](/quickstart) 与 [环境变量](/configuration/environment-variables)。

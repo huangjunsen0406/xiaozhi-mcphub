@@ -1,60 +1,97 @@
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vitepress'
-// https://vitepress.dev/reference/site-config
+
 export default defineConfig({
-  title: "XIAOZHI-MCPHUB",
-  description: "xiaozhi-mcphub 是一个智能MCP服务器管理平台，提供智能路由、服务器管理、组管理等功能。",
+  title: 'xiaozhi-mcphub',
+  description:
+    '为小智 AI 优化的 MCP 桥接与控制台：多端点、多账户隔离、智能路由。v1.1.0 / 上游基线 MCPHub v1.0.25。',
   base: '/xiaozhi-mcphub/',
+  ignoreDeadLinks: true,
   themeConfig: {
-    // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: '主页', link: '/' },
       { text: '快速开始', link: '/quickstart' },
       {
-        text: '开发指南',
-        link: '/development/getting-started'
-      },
-      {
         text: '配置',
         items: [
-          { text: 'Docker 设置', link: '/configuration/docker-setup' },
+          { text: 'Docker 部署', link: '/configuration/docker-setup' },
           { text: '环境变量', link: '/configuration/environment-variables' },
-          { text: 'MCP 设置', link: '/configuration/mcp-settings' },
-          { text: 'Nginx 配置', link: '/configuration/nginx' },
-          { text: '小智接入 配置', link: '/configuration/xiaozhi' }
-        ]
+          { text: 'MCP 配置', link: '/configuration/mcp-settings' },
+          { text: 'Nginx', link: '/configuration/nginx' },
+          { text: '小智接入', link: '/configuration/xiaozhi' },
+        ],
       },
       {
-        text: '功能特性',
+        text: '功能',
         items: [
-          { text: '认证功能', link: '/features/authentication' },
-          { text: '智能路由', link: '/features/smart-routing' },
+          { text: '认证与多账户', link: '/features/authentication' },
           { text: '服务器管理', link: '/features/server-management' },
-          { text: '组管理', link: '/features/group-management' },
-          { text: '监控功能', link: '/features/monitoring' }
-        ]
-      }
+          { text: '分组管理', link: '/features/group-management' },
+          { text: '智能路由', link: '/features/smart-routing' },
+          { text: '监控', link: '/features/monitoring' },
+          { text: '市场', link: '/features/mcp-marketplace' },
+        ],
+      },
+      { text: '开发', link: '/development/getting-started' },
+      {
+        text: 'v1.1.0',
+        items: [
+          {
+            text: 'Release 说明',
+            link: 'https://github.com/huangjunsen0406/xiaozhi-mcphub/releases/tag/v1.1.0',
+          },
+          {
+            text: 'GitHub',
+            link: 'https://github.com/huangjunsen0406/xiaozhi-mcphub',
+          },
+        ],
+      },
     ],
-
     sidebar: {
-      '/development/': [],
-      // 配置页面不显示侧边栏
-      '/configuration/': [],
-      // 功能特性页面不显示侧边栏
-      '/features/': [],
-      // 基础功能页面不显示侧边栏
-      '/essentials/': [],
-      // 快速开始页面不显示侧边栏
-      '/quickstart': []
+      '/configuration/': [
+        {
+          text: '配置',
+          items: [
+            { text: 'Docker 部署', link: '/configuration/docker-setup' },
+            { text: '环境变量', link: '/configuration/environment-variables' },
+            { text: 'MCP 配置', link: '/configuration/mcp-settings' },
+            { text: 'Nginx', link: '/configuration/nginx' },
+            { text: '小智接入', link: '/configuration/xiaozhi' },
+          ],
+        },
+      ],
+      '/features/': [
+        {
+          text: '功能',
+          items: [
+            { text: '认证与多账户', link: '/features/authentication' },
+            { text: '服务器管理', link: '/features/server-management' },
+            { text: '分组管理', link: '/features/group-management' },
+            { text: '智能路由', link: '/features/smart-routing' },
+            { text: '监控', link: '/features/monitoring' },
+            { text: '市场', link: '/features/mcp-marketplace' },
+          ],
+        },
+      ],
+      '/development/': [
+        {
+          text: '开发',
+          items: [
+            { text: '环境搭建', link: '/development/getting-started' },
+            { text: '开发说明', link: '/development' },
+          ],
+        },
+      ],
     },
-
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/huangjunsen0406/xiaozhi-mcphub' }
-    ]
+      { icon: 'github', link: 'https://github.com/huangjunsen0406/xiaozhi-mcphub' },
+    ],
+    footer: {
+      message: 'xiaozhi-mcphub 1.1.0 · 上游基线 MCPHub v1.0.25',
+      copyright: 'Apache-2.0',
+    },
   },
   vite: {
-    plugins: [
-        tailwindcss()
-    ]
-  }
+    plugins: [tailwindcss()],
+  },
 })

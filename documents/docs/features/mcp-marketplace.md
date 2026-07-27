@@ -1,4 +1,8 @@
-# MCP 服务器市场
+# MCP 市场
+
+> 适用于 xiaozhi-mcphub **1.1.0**。
+
+![MCP 市场](../images/market.zh.png)
 
 ## 概述
 

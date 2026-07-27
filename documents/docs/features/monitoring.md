@@ -1,4 +1,8 @@
-# 监控功能
+# 监控与日志
+
+> 适用于 xiaozhi-mcphub **1.1.0**。
+
+![监控与日志](../images/logs.zh.png)
 
 ## 概述
 
