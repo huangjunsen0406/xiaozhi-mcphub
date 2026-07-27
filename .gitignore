@@ -31,3 +31,4 @@ temp-test-config/
 
 # GitGuardian cache
 .cache_ggshield
+test-results/
