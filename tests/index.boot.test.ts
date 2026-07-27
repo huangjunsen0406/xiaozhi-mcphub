@@ -29,6 +29,7 @@ jest.mock('../src/server.js', () => ({
 
 jest.mock('../src/utils/migration.js', () => ({
   initializeDatabaseMode: initializeDatabaseModeMock,
+  backfillMissingOwnersInJsonSettings: backfillMissingOwnersInJsonSettingsMock,
 }));
 
 jest.mock('../src/services/proxy.js', () => ({
@@ -58,6 +59,7 @@ describe('index boot', () => {
     getAppMock.mockClear();
     AppServerMock.mockClear();
     initializeDatabaseModeMock.mockClear();
+    backfillMissingOwnersInJsonSettingsMock.mockClear();
     createFetchWithProxyMock.mockClear();
     getProxyConfigFromEnvMock.mockClear();
     isRetryableDbErrorMock.mockClear();
