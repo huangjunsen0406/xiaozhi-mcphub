@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import AdmZip from 'adm-zip';
 import { Request, Response } from 'express';
 import { uploadMcpbFile } from '../../src/controllers/mcpbController.js';
@@ -119,7 +120,6 @@ describe('mcpbController - uploadMcpbFile', () => {
 
     // Build a zip whose central-directory names still contain ".."
     // (AdmZip.addFile may collapse them; write raw zip via buffer from a known layout).
-    const { execFileSync } = require('child_process') as typeof import('child_process');
     const staging = path.join(tempRoot, 'slip-staging');
     fs.mkdirSync(staging, { recursive: true });
     fs.writeFileSync(
