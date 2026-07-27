@@ -294,7 +294,7 @@ function stripMarkdownLinkNoise(text: string): string {
 
 function looksLikeCodeOrCommand(line: string): boolean {
   return (
-    /^(npm|pnpm|yarn|npx|docker|curl|wget|git|cd|tar|chmod|sudo|export|\#\!)\b/.test(line) ||
+    /^(npm|pnpm|yarn|npx|docker|curl|wget|git|cd|tar|chmod|sudo|export|#!)\b/.test(line) ||
     line.startsWith('./') ||
     line.startsWith('/') ||
     (line.includes('=') && /^(export\s+)?[A-Z0-9_]+=/.test(line))
