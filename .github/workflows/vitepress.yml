@@ -23,20 +23,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: documents/pnpm-lock.yaml
 
-      - name: Enable corepack
-        run: corepack enable
-        continue-on-error: true
-
-      - name: Install pnpm
-        run: npm install -g pnpm@10
-
-      # Root pnpm-workspace / monorepo layout can skip installing documents/
-      # node_modules; --ignore-workspace forces a real local install.
+      # Root pnpm-workspace layout can skip installing documents/node_modules;
+      # --ignore-workspace forces a real local install for the docs package.
       - name: Install documentation dependencies
         working-directory: documents
         run: pnpm install --ignore-workspace --frozen-lockfile=false
@@ -46,7 +46,7 @@ jobs:
         run: pnpm docs:build
 
       - name: Deploy to gh-pages
-        uses: crazy-max/ghaction-github-pages@v2
+        uses: crazy-max/ghaction-github-pages@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
