@@ -37,7 +37,10 @@
     "frontend:preview": "cd frontend && vite preview",
     "dev": "concurrently \"pnpm backend:dev\" \"pnpm frontend:dev\"",
     "debug": "concurrently \"pnpm backend:debug\" \"pnpm frontend:dev\"",
-    "prepublishOnly": "npm run build && node scripts/verify-dist.js"
+    "prepublishOnly": "npm run build && node scripts/verify-dist.js",
+    "docs:dev": "pnpm --dir documents docs:dev",
+    "docs:build": "pnpm --dir documents docs:build",
+    "docs:preview": "pnpm --dir documents docs:preview"
   },
   "keywords": [
     "typescript",

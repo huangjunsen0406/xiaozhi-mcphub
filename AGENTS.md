@@ -15,7 +15,7 @@ This guide is intentionally short. It points to where the details live rather th
 | Backend  | [src/index.ts](src/index.ts) → [src/server.ts](src/server.ts) | Express + TypeORM (optional) + MCP SDK       |
 | Frontend | [frontend/src/](frontend/src/)          | Vite + React + Tailwind, i18n via react-i18next |
 | Config   | [mcp_settings.json](mcp_settings.json)  | MCP server defs, users, groups, OAuth state  |
-| Docs     | [docs/](docs/)                          | Public docs (Mintlify). See [docs/development/](docs/development/) for architecture |
+| Docs     | [documents/](documents/) (VitePress)    | Public user docs. Agent/ADR notes in [docs/](docs/) |
 
 Layout map (read the directory when you need specifics, don't expand it here):
 
@@ -111,7 +111,7 @@ Bearer keys have two explicit kinds: legacy and operator-created keys are `kind:
 - `/:user/mcp/{group|server}`, `/:user/sse/{group}` — user-scoped variants; the `:user` prefix selects which owner's servers/groups are visible. See `AppServer.initialize()` in [src/server.ts](src/server.ts).
 - Auth: JWT (HS256) + bcrypt for the dashboard, layered with bearer keys (`/api/auth/keys`), MCPHub's own OAuth authorization server (`@node-oauth/oauth2-server`), and optional Better Auth (GitHub/Google). Default admin password is randomized unless `ADMIN_PASSWORD` is set on first launch.
 
-For deeper architecture context, read [docs/development/architecture.mdx](docs/development/architecture.mdx).
+For deeper product/architecture context, start with [documents/docs/development/getting-started.md](documents/docs/development/getting-started.md) and ADRs under [docs/adr/](docs/adr/).
 
 ---
 
@@ -134,7 +134,7 @@ For deeper architecture context, read [docs/development/architecture.mdx](docs/d
 | Add a frontend page   | `frontend/src/pages/` (+ `frontend/src/components/`), wire in router |
 | Add a CLI subcommand  | `src/cli/commands/<name>.ts` + register in `src/cli/main.ts` dispatcher + `src/cli/help.ts` + tests in `tests/cli/commands/` |
 | Add a translation key | Add to all four `locales/*.json` files                                |
-| Update public docs    | `docs/` (Mintlify); reflect major changes in all README variants (`README*.md`) |
+| Update public docs    | `documents/docs/` (VitePress); `cd documents && pnpm docs:dev`; reflect major changes in README variants |
 
 ---
 

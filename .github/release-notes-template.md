@@ -37,4 +37,4 @@ One paragraph in English describing why this release matters.
 ## References
 
 - Pull requests, issues, or compare links.
-- Full changelog: https://github.com/samanhappy/mcphub/compare/vX.Y.Z...vX.Y.W
+- Full changelog: https://github.com/huangjunsen0406/xiaozhi-mcphub/compare/vX.Y.Z...vX.Y.W

@@ -78,50 +78,108 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
+          set -euo pipefail
           VERSION=${GITHUB_REF#refs/tags/v}
-          
-          # 获取上一个版本标签
+          REPO="${{ github.repository }}"
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          
-          # 生成更新日志
-          if [ -n "$PREV_TAG" ]; then
-            echo "## 🚀 What's Changed" > CHANGELOG.md
-            echo "" >> CHANGELOG.md
-            git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H))" $PREV_TAG..HEAD >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          else
-            echo "## 🚀 Initial Release" > CHANGELOG.md
-            echo "" >> CHANGELOG.md
-            echo "小智 MCP Hub 首次发布！" >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          fi
-          
-          # 添加 Docker 镜像信息
-          echo "## 🐳 Docker Images" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          echo "- **Base版本**: \`huangjunsen/xiaozhi-mcphub:$VERSION\`" >> CHANGELOG.md
-          echo "- **Latest版本**: \`huangjunsen/xiaozhi-mcphub:latest\`" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          echo "支持架构: \`linux/amd64\`, \`linux/arm64\`" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          
-          # 添加快速开始
-          echo "## 🚀 Quick Start" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          echo "\`\`\`bash" >> CHANGELOG.md
-          echo "# Docker Compose 方式（推荐）" >> CHANGELOG.md
-          echo "wget https://github.com/${{ github.repository }}/releases/download/v$VERSION/xiaozhi-mcphub-v$VERSION.tar.gz" >> CHANGELOG.md
-          echo "tar -xzf xiaozhi-mcphub-v$VERSION.tar.gz" >> CHANGELOG.md
-          echo "cd xiaozhi-mcphub-v$VERSION" >> CHANGELOG.md
-          echo "docker compose up -d" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          echo "# 或手动安装部署" >> CHANGELOG.md
-          echo "./install.sh" >> CHANGELOG.md
-          echo "\`\`\`" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
 
-          # 将内容保存到输出
+          # Bilingual body required by scripts/validate-release-notes.js
+          # (Summary / 摘要 / References are mandatory; Features/Fixes pairs optional).
+          {
+            echo "## Summary"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "xiaozhi-mcphub \`$VERSION\` — changes since \`$PREV_TAG\`. Docker images \`huangjunsen/xiaozhi-mcphub:$VERSION\` and \`:latest\` (linux/amd64, linux/arm64)."
+            else
+              echo "xiaozhi-mcphub \`$VERSION\` initial tagged release. Docker images \`huangjunsen/xiaozhi-mcphub:$VERSION\` and \`:latest\` (linux/amd64, linux/arm64)."
+            fi
+            echo ""
+            echo "## Features"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
+                | rg -i '^\- (feat|feature)[:(/ ]' || true
+              # Ensure section is non-empty for validators that reject blank optional sections
+              if ! git log --pretty=format:"%s" "$PREV_TAG"..HEAD | rg -qi '^(feat|feature)[:(/ ]'; then
+                echo "- See commit history in References."
+              fi
+            else
+              echo "- Initial release of xiaozhi-mcphub."
+            fi
+            echo ""
+            echo "## Fixes"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
+                | rg -i '^\- (fix)[:(/ ]' || true
+              if ! git log --pretty=format:"%s" "$PREV_TAG"..HEAD | rg -qi '^fix[:(/ ]'; then
+                echo "- See commit history in References."
+              fi
+            else
+              echo "- N/A"
+            fi
+            echo ""
+            echo "## 摘要"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "xiaozhi-mcphub \`$VERSION\`（自 \`$PREV_TAG\` 起的变更）。Docker 镜像 \`huangjunsen/xiaozhi-mcphub:$VERSION\` 与 \`:latest\`（linux/amd64、linux/arm64）。"
+            else
+              echo "xiaozhi-mcphub \`$VERSION\` 首次打 tag 发布。Docker 镜像 \`huangjunsen/xiaozhi-mcphub:$VERSION\` 与 \`:latest\`（linux/amd64、linux/arm64）。"
+            fi
+            echo ""
+            echo "## 功能"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
+                | rg -i '^\- (feat|feature)[:(/ ]' || true
+              if ! git log --pretty=format:"%s" "$PREV_TAG"..HEAD | rg -qi '^(feat|feature)[:(/ ]'; then
+                echo "- 详见 References 中的提交记录。"
+              fi
+            else
+              echo "- xiaozhi-mcphub 首次发布。"
+            fi
+            echo ""
+            echo "## 修复"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
+                | rg -i '^\- (fix)[:(/ ]' || true
+              if ! git log --pretty=format:"%s" "$PREV_TAG"..HEAD | rg -qi '^fix[:(/ ]'; then
+                echo "- 详见 References 中的提交记录。"
+              fi
+            else
+              echo "- 无"
+            fi
+            echo ""
+            echo "## References"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "- Full changelog: https://github.com/$REPO/compare/$PREV_TAG...v$VERSION"
+              echo "- Commits:"
+              git log --pretty=format:"  - %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD
+              echo ""
+            else
+              echo "- Release tag: https://github.com/$REPO/releases/tag/v$VERSION"
+            fi
+            echo ""
+            echo "## Docker Images"
+            echo ""
+            echo "- **Version**: \`huangjunsen/xiaozhi-mcphub:$VERSION\`"
+            echo "- **Latest**: \`huangjunsen/xiaozhi-mcphub:latest\`"
+            echo "- Architectures: \`linux/amd64\`, \`linux/arm64\`"
+            echo ""
+            echo "## Quick Start"
+            echo ""
+            echo "\`\`\`bash"
+            echo "docker pull huangjunsen/xiaozhi-mcphub:$VERSION"
+            echo "# or"
+            echo "docker pull huangjunsen/xiaozhi-mcphub:latest"
+            echo "\`\`\`"
+          } > CHANGELOG.md
+
+          # Validate before publishing so Release notes workflow stays green
+          node scripts/validate-release-notes.js CHANGELOG.md
+
           {
             echo 'CHANGELOG<<EOF'
             cat CHANGELOG.md
