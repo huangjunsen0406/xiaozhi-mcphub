@@ -81,6 +81,8 @@ DB_URL=postgres://xiaozhi:密码@127.0.0.1:5432/xiaozhi_mcphub
 | `XIAOZHI_RECONNECT_INTERVAL` | 快速重连间隔 ms |
 | `XIAOZHI_MAX_INFINITE_RETRIES` | 无限重连上限（0=不限制） |
 | `XIAOZHI_SLEEP_THRESHOLD` / `XIAOZHI_SLEEP_INTERVAL` | 休眠阈值与间隔 |
+| `XIAOZHI_MAX_CONCURRENT_RECONNECTS` | 同时重连上限（默认 3，背压） |
+| `XIAOZHI_RECONNECT_JITTER_RATIO` | 重连延迟抖动 0–1（默认 0.2） |
 
 端点级重连参数也可在 UI 中配置。详见 [小智接入](/configuration/xiaozhi)。
 

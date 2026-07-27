@@ -350,14 +350,14 @@ const startXiaozhiWhenServersSettle = async (): Promise<void> => {
 
   // 初始化小智客户端服务
   try {
-    const { xiaozhiClientService } = await import('./xiaozhiClientService.js');
-    if (xiaozhiClientService.isEnabled()) {
-      await xiaozhiClientService.initialize();
+    const { xiaozhiEndpointService } = await import('./xiaozhiEndpointService.js');
+    if (xiaozhiEndpointService.isEnabled()) {
+      await xiaozhiEndpointService.initializeEndpoints();
       console.log('小智客户端服务已启动');
 
       // 在所有服务器稳定后，立即通知小智工具列表可用
       try {
-        await xiaozhiClientService.notifyToolsChanged();
+        await xiaozhiEndpointService.notifyToolsChanged();
         console.log('已通知小智初始工具列表');
       } catch (error) {
         console.error('通知小智初始工具列表失败:', error);
@@ -594,24 +594,24 @@ export const notifyToolChanged = async (
 /** Reconnects the Xiaozhi client so it picks up the current tool list. Fire-and-forget. */
 const reconnectXiaozhiForToolSync = async (): Promise<void> => {
   try {
-    const { xiaozhiClientService } = await import('./xiaozhiClientService.js');
-    if (!xiaozhiClientService.isEnabled()) {
+    const { xiaozhiEndpointService } = await import('./xiaozhiEndpointService.js');
+    if (!xiaozhiEndpointService.isEnabled()) {
       return;
     }
     console.log('MCP服务器状态已稳定，重连小智客户端以同步最新工具列表...');
 
     // 先断开连接
-    await xiaozhiClientService.disconnect();
+    await xiaozhiEndpointService.disconnect();
 
     // 等待一小段时间确保断开完成
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // 重新初始化连接
-    await xiaozhiClientService.initialize();
+    await xiaozhiEndpointService.initializeEndpoints();
 
     // 连接建立后再通知工具列表已更新
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    await xiaozhiClientService.notifyToolsChanged();
+    await xiaozhiEndpointService.notifyToolsChanged();
     console.log('小智客户端已重连并同步最新工具列表');
   } catch (error) {
     console.error('重连小智客户端失败:', error);

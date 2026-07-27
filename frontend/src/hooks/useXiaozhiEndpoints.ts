@@ -24,11 +24,26 @@ export interface XiaozhiEndpoint {
   status?: 'connected' | 'disconnected' | 'connecting';
 }
 
+export interface XiaozhiEndpointRuntime {
+  reconnectAttempts: number;
+  infiniteRetryCount: number;
+  isInInfiniteReconnectMode: boolean;
+  isInSleepMode: boolean;
+  lastError?: string;
+  lastCloseCode?: number;
+  lastCloseReason?: string;
+  nextReconnectAt?: string;
+  connectedAt?: string;
+  uptimeSeconds?: number;
+}
+
 export interface XiaozhiEndpointStatus {
   endpoint: XiaozhiEndpoint;
   connected: boolean;
   connectionCount: number;
   lastConnected?: string;
+  error?: string;
+  runtime?: XiaozhiEndpointRuntime;
 }
 
 export interface XiaozhiConfig {

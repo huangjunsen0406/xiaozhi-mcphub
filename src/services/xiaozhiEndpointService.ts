@@ -1,19 +1,123 @@
 import WebSocket from 'ws';
-import { XiaozhiEndpoint, XiaozhiConfig, XiaozhiEndpointStatus } from '../types/index.js';
+import {
+  XiaozhiEndpoint,
+  XiaozhiConfig,
+  XiaozhiEndpointStatus,
+  XiaozhiEndpointRuntime,
+  XiaozhiHealthSummary,
+} from '../types/index.js';
 import { handleListToolsRequest, handleCallToolRequest } from './mcpService.js';
 import { getSmartRoutingConfig } from '../utils/smartRouting.js';
-import { getXiaozhiConfigRepository, getXiaozhiEndpointRepository } from '../db/repositories/index.js';
+import {
+  getXiaozhiConfigRepository,
+  getXiaozhiEndpointRepository,
+} from '../db/repositories/index.js';
 import { isDatabaseConnected } from '../db/connection.js';
+import type XiaozhiEndpointEntity from '../db/entities/XiaozhiEndpoint.js';
+
+const DEFAULT_RECONNECT = {
+  maxAttempts: 10,
+  infiniteReconnect: true,
+  infiniteRetryDelay: 1_800_000,
+  initialDelay: 2000,
+  maxDelay: 60_000,
+  backoffMultiplier: 2,
+} as const;
+
+/** Cap simultaneous outbound reconnect attempts across all endpoints. */
+const DEFAULT_MAX_CONCURRENT_RECONNECTS = 3;
+/** Random jitter factor applied to reconnect delay (0–jitter). */
+const DEFAULT_RECONNECT_JITTER_RATIO = 0.2;
 
 interface EndpointConnection {
   ws: WebSocket;
   endpoint: XiaozhiEndpoint;
   reconnectTimer?: NodeJS.Timeout;
   reconnectAttempts: number;
-  isInInfiniteReconnectMode?: boolean; // 是否进入无限重连模式
-  infiniteRetryCount?: number; // 无限重连的次数
-  isInSleepMode?: boolean; // 是否进入休眠模式
+  isInInfiniteReconnectMode: boolean;
+  infiniteRetryCount: number;
+  isInSleepMode: boolean;
+  /** True while a reconnect timer is armed or connect is in flight after schedule. */
+  reconnectPending: boolean;
+  lastError?: string;
+  lastCloseCode?: number;
+  lastCloseReason?: string;
+  nextReconnectAt?: number;
+  connectedAt?: number;
 }
+
+const logXiaozhi = (
+  level: 'info' | 'warn' | 'error',
+  message: string,
+  meta?: Record<string, unknown>,
+): void => {
+  const payload = meta ? { ...meta } : undefined;
+  const line = payload ? `${message} ${JSON.stringify(payload)}` : message;
+  if (level === 'error') console.error(line);
+  else if (level === 'warn') console.warn(line);
+  else console.log(line);
+};
+
+const mapEntityToEndpoint = (ep: XiaozhiEndpointEntity): XiaozhiEndpoint => {
+  const reconnect = {
+    maxAttempts: ep.reconnect?.maxAttempts ?? DEFAULT_RECONNECT.maxAttempts,
+    infiniteReconnect: ep.reconnect?.infiniteReconnect ?? DEFAULT_RECONNECT.infiniteReconnect,
+    infiniteRetryDelay: ep.reconnect?.infiniteRetryDelay ?? DEFAULT_RECONNECT.infiniteRetryDelay,
+    initialDelay: ep.reconnect?.initialDelay ?? DEFAULT_RECONNECT.initialDelay,
+    maxDelay: ep.reconnect?.maxDelay ?? DEFAULT_RECONNECT.maxDelay,
+    backoffMultiplier: ep.reconnect?.backoffMultiplier ?? DEFAULT_RECONNECT.backoffMultiplier,
+  };
+
+  const status =
+    ep.status === 'connected' || ep.status === 'connecting' || ep.status === 'disconnected'
+      ? ep.status
+      : 'disconnected';
+
+  return {
+    id: ep.id,
+    name: ep.name,
+    enabled: ep.enabled,
+    webSocketUrl: ep.webSocketUrl,
+    description: ep.description || '',
+    groupId: ep.groupId || undefined,
+    useSmartRouting: Boolean(ep.useSmartRouting),
+    owner: ep.owner || undefined,
+    reconnect,
+    createdAt: (ep.createdAt || new Date()).toISOString(),
+    lastConnected: ep.lastConnected ? new Date(ep.lastConnected).toISOString() : undefined,
+    status,
+  };
+};
+
+const toRuntime = (connection: EndpointConnection | undefined): XiaozhiEndpointRuntime => {
+  if (!connection) {
+    return {
+      reconnectAttempts: 0,
+      infiniteRetryCount: 0,
+      isInInfiniteReconnectMode: false,
+      isInSleepMode: false,
+    };
+  }
+  return {
+    reconnectAttempts: connection.reconnectAttempts,
+    infiniteRetryCount: connection.infiniteRetryCount,
+    isInInfiniteReconnectMode: connection.isInInfiniteReconnectMode,
+    isInSleepMode: connection.isInSleepMode,
+    lastError: connection.lastError,
+    lastCloseCode: connection.lastCloseCode,
+    lastCloseReason: connection.lastCloseReason,
+    nextReconnectAt: connection.nextReconnectAt
+      ? new Date(connection.nextReconnectAt).toISOString()
+      : undefined,
+    connectedAt: connection.connectedAt
+      ? new Date(connection.connectedAt).toISOString()
+      : undefined,
+    uptimeSeconds:
+      connection.connectedAt && connection.ws.readyState === WebSocket.OPEN
+        ? Math.floor((Date.now() - connection.connectedAt) / 1000)
+        : undefined,
+  };
+};
 
 export class XiaozhiEndpointService {
   private connections: Map<string, EndpointConnection> = new Map();
@@ -23,27 +127,52 @@ export class XiaozhiEndpointService {
   private maxInfiniteRetries: number;
   private sleepThreshold: number;
   private sleepInterval: number;
+  private maxConcurrentReconnects: number;
+  private reconnectJitterRatio: number;
+  /** Endpoint ids currently waiting on a reconnect timer (for backpressure). */
+  private pendingReconnectIds: Set<string> = new Set();
 
   constructor() {
-    // 延迟加载，避免在数据库初始化前访问仓储
-    // 读取环境变量配置
     this.aggressiveReconnect = process.env.XIAOZHI_AGGRESSIVE_RECONNECT === 'true';
     this.reconnectInterval = parseInt(process.env.XIAOZHI_RECONNECT_INTERVAL || '2000', 10);
-    this.maxInfiniteRetries = parseInt(process.env.XIAOZHI_MAX_INFINITE_RETRIES || '48', 10); // 默认48次（24小时）
-    this.sleepThreshold = parseInt(process.env.XIAOZHI_SLEEP_THRESHOLD || '12', 10); // 默认12次后休眠
-    this.sleepInterval = parseInt(process.env.XIAOZHI_SLEEP_INTERVAL || '7200000', 10); // 默认2小时
-    
-    if (this.aggressiveReconnect) {
-      console.log(`小智端点启用快速重连模式，重连间隔：${this.reconnectInterval}ms`);
-    }
-    console.log(`小智端点重连配置：最大无限重连次数=${this.maxInfiniteRetries}，休眠阈值=${this.sleepThreshold}，休眠间隔=${this.sleepInterval}ms`);
+    this.maxInfiniteRetries = parseInt(process.env.XIAOZHI_MAX_INFINITE_RETRIES || '48', 10);
+    this.sleepThreshold = parseInt(process.env.XIAOZHI_SLEEP_THRESHOLD || '12', 10);
+    this.sleepInterval = parseInt(process.env.XIAOZHI_SLEEP_INTERVAL || '7200000', 10);
+    this.maxConcurrentReconnects = parseInt(
+      process.env.XIAOZHI_MAX_CONCURRENT_RECONNECTS || String(DEFAULT_MAX_CONCURRENT_RECONNECTS),
+      10,
+    );
+    this.reconnectJitterRatio = Math.min(
+      1,
+      Math.max(
+        0,
+        parseFloat(
+          process.env.XIAOZHI_RECONNECT_JITTER_RATIO || String(DEFAULT_RECONNECT_JITTER_RATIO),
+        ),
+      ),
+    );
+
+    logXiaozhi('info', 'Xiaozhi endpoint reconnect config', {
+      aggressiveReconnect: this.aggressiveReconnect,
+      reconnectIntervalMs: this.reconnectInterval,
+      maxInfiniteRetries: this.maxInfiniteRetries,
+      sleepThreshold: this.sleepThreshold,
+      sleepIntervalMs: this.sleepInterval,
+      maxConcurrentReconnects: this.maxConcurrentReconnects,
+      reconnectJitterRatio: this.reconnectJitterRatio,
+    });
+  }
+
+  private applyJitter(delayMs: number): number {
+    if (this.reconnectJitterRatio <= 0 || delayMs <= 0) return delayMs;
+    const jitter = delayMs * this.reconnectJitterRatio * Math.random();
+    return Math.floor(delayMs + jitter);
   }
 
   private async loadConfig(): Promise<void> {
-    // 小智端点配置仅支持数据库存储；未启用数据库时保持禁用而非抛错
     if (!isDatabaseConnected()) {
       if (this.config === null) {
-        console.log('未启用数据库（DB_URL 未配置），小智端点功能不可用');
+        logXiaozhi('info', 'Database not enabled (DB_URL unset); Xiaozhi endpoints unavailable');
       }
       this.config = { enabled: false, endpoints: [] };
       return;
@@ -55,157 +184,189 @@ export class XiaozhiEndpointService {
     const dbConfig = await configRepo.getConfig();
     const endpoints = await endpointRepo.findAll();
 
+    const lb = dbConfig?.loadBalancing;
     this.config = {
+      // legacy field kept for admin diagnostics only — not a connection gate
       enabled: dbConfig?.enabled ?? false,
-      endpoints: endpoints.map((ep: any) => ({
-        id: ep.id,
-        name: ep.name,
-        enabled: ep.enabled,
-        webSocketUrl: ep.webSocketUrl,
-        description: ep.description || '',
-        groupId: ep.groupId || undefined,
-        useSmartRouting: (ep as any).useSmartRouting || false,
-        owner: ep.owner || undefined,
-        reconnect: ep.reconnect || {
-          maxAttempts: 10,
-          infiniteReconnect: true,
-          infiniteRetryDelay: 1800000,
-          initialDelay: 2000,
-          maxDelay: 60000,
-          backoffMultiplier: 2,
-        },
-        createdAt: (ep.createdAt || new Date()).toISOString(),
-        lastConnected: ep.lastConnected ? new Date(ep.lastConnected).toISOString() : undefined,
-        status: (ep.status as any) || 'disconnected',
-      })),
-      loadBalancing: dbConfig?.loadBalancing,
-    } as XiaozhiConfig;
+      endpoints: endpoints.map(mapEntityToEndpoint),
+      loadBalancing:
+        lb && typeof lb.enabled === 'boolean' && typeof lb.strategy === 'string'
+          ? {
+              enabled: lb.enabled,
+              strategy: lb.strategy as 'round-robin' | 'random' | 'least-connections',
+            }
+          : undefined,
+    };
   }
 
-  // 初始化所有启用的端点（按 endpoint.enabled，不再依赖全局总开关）
   public async initializeEndpoints(): Promise<void> {
-    // 始终从数据库读取最新配置
     await this.loadConfig();
 
     const enabledEndpoints = (this.config?.endpoints || []).filter((ep) => ep.enabled);
     if (enabledEndpoints.length === 0) {
-      console.log('没有已启用的小智端点，跳过连接');
+      logXiaozhi('info', 'No enabled Xiaozhi endpoints; skip connect');
       return;
     }
 
-    console.log(`正在初始化小智端点（${enabledEndpoints.length} 个已启用）...`);
+    logXiaozhi('info', 'Initializing Xiaozhi endpoints', {
+      enabledCount: enabledEndpoints.length,
+    });
 
-    for (const endpoint of enabledEndpoints) {
+    // Stagger initial connects slightly to avoid thundering herd on boot.
+    for (let i = 0; i < enabledEndpoints.length; i++) {
+      const endpoint = enabledEndpoints[i];
       try {
+        if (i > 0 && this.maxConcurrentReconnects > 0) {
+          await new Promise((r) => setTimeout(r, 50 * i));
+        }
         await this.connectEndpoint(endpoint);
       } catch (error) {
-        console.error(`初始化端点 ${endpoint.name} 失败:`, error);
+        logXiaozhi('error', 'Failed to initialize endpoint', {
+          endpointId: endpoint.id,
+          name: endpoint.name,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   }
 
-  // 连接单个端点
   private async connectEndpoint(endpoint: XiaozhiEndpoint): Promise<void> {
-    // 在断开前保留旧连接的重连状态，避免计数被重置
     const prevConnection = this.connections.get(endpoint.id);
+    await this.disconnectEndpoint(endpoint.id, { clearReconnectState: false });
 
-    // 如果已经存在连接，先断开
-    await this.disconnectEndpoint(endpoint.id);
-
-    console.log(`正在连接小智端点: ${endpoint.name} (${endpoint.webSocketUrl})`);
+    logXiaozhi('info', 'Connecting Xiaozhi endpoint', {
+      endpointId: endpoint.id,
+      name: endpoint.name,
+      owner: endpoint.owner,
+    });
 
     const ws = new WebSocket(endpoint.webSocketUrl, {
-      timeout: 30000,
-    });
+      handshakeTimeout: 30_000,
+    } as WebSocket.ClientOptions);
 
     const connection: EndpointConnection = {
       ws,
       endpoint: { ...endpoint },
-      // 继承旧连接的重连状态，确保日志中的“第N次尝试”累计正确
       reconnectAttempts: prevConnection?.reconnectAttempts ?? 0,
       isInInfiniteReconnectMode: prevConnection?.isInInfiniteReconnectMode ?? false,
       infiniteRetryCount: prevConnection?.infiniteRetryCount ?? 0,
-      isInSleepMode: prevConnection?.isInSleepMode ?? false
+      isInSleepMode: prevConnection?.isInSleepMode ?? false,
+      reconnectPending: false,
+      lastError: prevConnection?.lastError,
+      lastCloseCode: prevConnection?.lastCloseCode,
+      lastCloseReason: prevConnection?.lastCloseReason,
     };
 
     this.connections.set(endpoint.id, connection);
+    this.pendingReconnectIds.delete(endpoint.id);
+    void this.updateEndpointStatus(endpoint.id, 'connecting');
 
-    // 设置WebSocket事件处理
     ws.on('open', () => {
-      console.log(`小智端点已连接: ${endpoint.name}`);
-      this.updateEndpointStatus(endpoint.id, 'connected');
-      connection.reconnectAttempts = 0; // 重置重连次数
-      connection.isInInfiniteReconnectMode = false; // 重置无限重连模式
-      connection.infiniteRetryCount = 0; // 重置无限重连计数
-      connection.isInSleepMode = false; // 重置休眠模式
+      logXiaozhi('info', 'Xiaozhi endpoint connected', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        owner: endpoint.owner,
+      });
+      connection.reconnectAttempts = 0;
+      connection.isInInfiniteReconnectMode = false;
+      connection.infiniteRetryCount = 0;
+      connection.isInSleepMode = false;
+      connection.reconnectPending = false;
+      connection.lastError = undefined;
+      connection.lastCloseCode = undefined;
+      connection.lastCloseReason = undefined;
+      connection.nextReconnectAt = undefined;
+      connection.connectedAt = Date.now();
+      this.pendingReconnectIds.delete(endpoint.id);
+      void this.updateEndpointStatus(endpoint.id, 'connected');
 
-      // 连接建立后立即通知工具列表可能已更新，确保首次连接即可看到工具
       try {
-        const notification = {
-          jsonrpc: '2.0' as const,
-          method: 'notifications/tools/list_changed',
-        };
-        ws.send(JSON.stringify(notification));
-        console.log(`已在连接建立后通知端点 ${endpoint.name} 工具列表更新`);
+        ws.send(
+          JSON.stringify({
+            jsonrpc: '2.0' as const,
+            method: 'notifications/tools/list_changed',
+          }),
+        );
       } catch (e) {
-        console.warn(`在连接建立后通知端点 ${endpoint.name} 工具列表更新失败:`, e);
+        logXiaozhi('warn', 'Failed to notify tools/list_changed on connect', {
+          endpointId: endpoint.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     });
 
     ws.on('error', (error) => {
-      console.error(`小智端点连接错误 ${endpoint.name}:`, error);
-      this.updateEndpointStatus(endpoint.id, 'disconnected');
+      const message = error instanceof Error ? error.message : String(error);
+      connection.lastError = message;
+      logXiaozhi('error', 'Xiaozhi endpoint socket error', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        error: message,
+      });
+      void this.updateEndpointStatus(endpoint.id, 'disconnected');
       this.scheduleReconnect(connection);
     });
 
-    ws.on('close', () => {
-      console.log(`小智端点断开: ${endpoint.name}`);
-      this.updateEndpointStatus(endpoint.id, 'disconnected');
+    ws.on('close', (code, reasonBuf) => {
+      const reason = reasonBuf?.toString() || '';
+      connection.lastCloseCode = code;
+      connection.lastCloseReason = reason || undefined;
+      if (!connection.lastError) {
+        connection.lastError = reason ? `closed ${code}: ${reason}` : `closed ${code}`;
+      }
+      connection.connectedAt = undefined;
+      logXiaozhi('info', 'Xiaozhi endpoint disconnected', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        code,
+        reason: reason || undefined,
+      });
+      void this.updateEndpointStatus(endpoint.id, 'disconnected');
       this.scheduleReconnect(connection);
     });
 
     ws.on('message', (data) => {
-      this.handleMessage(endpoint, data);
+      void this.handleMessage(endpoint, data);
     });
   }
 
-  // 处理端点消息
-  private async handleMessage(endpoint: XiaozhiEndpoint, data: WebSocket.RawData): Promise<void> {
+  private async handleMessage(
+    endpoint: XiaozhiEndpoint,
+    data: WebSocket.RawData,
+  ): Promise<void> {
     try {
-      const message = JSON.parse(data.toString());
-      console.log(`收到小智端点 ${endpoint.name} 消息:`, JSON.stringify(message, null, 2));
+      const message = JSON.parse(data.toString()) as {
+        method?: string;
+        id?: unknown;
+        params?: Record<string, unknown>;
+      };
 
-      // 处理MCP协议初始化请求
       if (message.method === 'initialize') {
-        const initResponse = {
+        await this.sendResponse(endpoint.id, message.id, {
           protocolVersion: '2024-11-05',
           serverInfo: {
             name: 'mcphub-xiaozhi-bridge',
-            version: '1.0.0',
+            version: '1.1.1',
           },
           capabilities: {
             tools: {},
           },
-        };
-        await this.sendResponse(endpoint.id, message.id, initResponse);
+        });
         return;
       }
 
-      // 处理ping请求
       if (message.method === 'ping') {
         await this.sendResponse(endpoint.id, message.id, {});
         return;
       }
 
-      // 处理ListTools请求 - 根据端点分组过滤
       if (message.method === 'tools/list') {
-        // Resolve smart-routing enablement from the endpoint owner's personal config
         const smartRoutingConfig = await getSmartRoutingConfig(endpoint.owner);
-        const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
+        const extraParams: { sessionId: string; group?: string } = {
+          sessionId: `xiaozhi-${endpoint.id}`,
+        };
 
-        // 端点级：仅当该用户开启 且 端点选择使用智能路由 时，才切到 $smart
-        // 若端点配置了分组，使用 $smart/{group} 将智能路由限定在该分组内
-        if (smartRoutingConfig.enabled && (endpoint as any).useSmartRouting) {
+        if (smartRoutingConfig.enabled && endpoint.useSmartRouting) {
           extraParams.group =
             endpoint.groupId && endpoint.groupId.trim() !== ''
               ? `$smart/${endpoint.groupId}`
@@ -214,24 +375,33 @@ export class XiaozhiEndpointService {
           extraParams.group = endpoint.groupId;
         }
 
-        console.log(`小智端点 ${endpoint.name} 请求工具列表，模式: ${(smartRoutingConfig.enabled && (endpoint as any).useSmartRouting) ? '智能路由' : (endpoint.groupId && endpoint.groupId.trim() !== '' ? `分组(${endpoint.groupId})` : '全部')}`);
+        const mode =
+          smartRoutingConfig.enabled && endpoint.useSmartRouting
+            ? 'smart'
+            : endpoint.groupId
+              ? `group:${endpoint.groupId}`
+              : 'all';
+        logXiaozhi('info', 'tools/list', {
+          endpointId: endpoint.id,
+          name: endpoint.name,
+          mode,
+        });
+
         const response = await handleListToolsRequest(message.params || {}, extraParams);
         await this.sendResponse(endpoint.id, message.id, response);
         return;
       }
 
-      // 处理CallTool请求
       if (message.method === 'tools/call') {
-        // Resolve smart-routing enablement from the endpoint owner's personal config
         const smartRoutingConfig = await getSmartRoutingConfig(endpoint.owner);
-        const toolName = message.params?.name;
+        const toolName =
+          typeof message.params?.name === 'string' ? message.params.name : undefined;
         const isSmartRoutingTool = toolName === 'search_tools' || toolName === 'call_tool';
+        const extraParams: { sessionId: string; group?: string } = {
+          sessionId: `xiaozhi-${endpoint.id}`,
+        };
 
-        const extraParams: any = { sessionId: `xiaozhi-${endpoint.id}` };
-
-        // 端点级：仅当该用户开启 且 端点选择使用智能路由 且 调用的是智能路由虚拟工具 时
-        // 若端点配置了分组，使用 $smart/{group} 将向量检索限定在该分组的服务器内
-        if (smartRoutingConfig.enabled && (endpoint as any).useSmartRouting && isSmartRoutingTool) {
+        if (smartRoutingConfig.enabled && endpoint.useSmartRouting && isSmartRoutingTool) {
           extraParams.group =
             endpoint.groupId && endpoint.groupId.trim() !== ''
               ? `$smart/${endpoint.groupId}`
@@ -240,146 +410,249 @@ export class XiaozhiEndpointService {
           extraParams.group = endpoint.groupId;
         }
 
-        console.log(`小智端点 ${endpoint.name} 调用工具: ${toolName}，模式: ${(smartRoutingConfig.enabled && (endpoint as any).useSmartRouting && isSmartRoutingTool) ? '智能路由' : (endpoint.groupId && endpoint.groupId.trim() !== '' ? `分组(${endpoint.groupId})` : '全部')}`);
+        logXiaozhi('info', 'tools/call', {
+          endpointId: endpoint.id,
+          name: endpoint.name,
+          toolName,
+        });
+
         const response = await handleCallToolRequest(message, extraParams);
         await this.sendResponse(endpoint.id, message.id, response);
         return;
       }
 
-      console.warn(`端点 ${endpoint.name} 未处理的消息类型:`, message.method);
+      logXiaozhi('warn', 'Unhandled Xiaozhi message method', {
+        endpointId: endpoint.id,
+        method: message.method,
+      });
     } catch (error) {
-      console.error(`处理端点 ${endpoint.name} 消息失败:`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      const connection = this.connections.get(endpoint.id);
+      if (connection) connection.lastError = message;
+      logXiaozhi('error', 'Failed handling Xiaozhi message', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        error: message,
+      });
     }
   }
 
-
-  // 发送响应到指定端点
-  private async sendResponse(endpointId: string, messageId: any, result: any): Promise<void> {
+  private async sendResponse(
+    endpointId: string,
+    messageId: unknown,
+    result: unknown,
+  ): Promise<void> {
     const connection = this.connections.get(endpointId);
     if (!connection || connection.ws.readyState !== WebSocket.OPEN) {
-      throw new Error(`端点 ${endpointId} 未连接`);
+      throw new Error(`Endpoint ${endpointId} is not connected`);
     }
 
-    const response = {
-      jsonrpc: '2.0' as const,
-      id: messageId,
-      result,
-    };
-
-    connection.ws.send(JSON.stringify(response));
-    console.log(`已发送响应到端点 ${connection.endpoint.name}:`, JSON.stringify(response, null, 2));
+    connection.ws.send(
+      JSON.stringify({
+        jsonrpc: '2.0' as const,
+        id: messageId,
+        result,
+      }),
+    );
   }
 
-  // 调度重连
   private scheduleReconnect(connection: EndpointConnection): void {
     const { endpoint } = connection;
-    // 若已存在重连定时器，则避免因 error 与 close 双触发而重复调度与重复日志
+    if (!endpoint.enabled) {
+      return;
+    }
     if (connection.reconnectTimer) {
       return;
     }
-    
-    // 如果启用了快速重连模式，直接使用固定间隔重连
+
+    // Backpressure: if too many reconnects are already pending, defer.
+    if (
+      this.maxConcurrentReconnects > 0 &&
+      this.pendingReconnectIds.size >= this.maxConcurrentReconnects &&
+      !this.pendingReconnectIds.has(endpoint.id)
+    ) {
+      const deferMs = this.applyJitter(Math.max(this.reconnectInterval, 1000));
+      connection.nextReconnectAt = Date.now() + deferMs;
+      logXiaozhi('info', 'Deferring reconnect (concurrency cap)', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        pending: this.pendingReconnectIds.size,
+        maxConcurrentReconnects: this.maxConcurrentReconnects,
+        deferMs,
+      });
+      connection.reconnectTimer = setTimeout(() => {
+        connection.reconnectTimer = undefined;
+        this.scheduleReconnect(connection);
+      }, deferMs);
+      return;
+    }
+
     if (this.aggressiveReconnect) {
-      console.log(`端点 ${endpoint.name} 将在 ${this.reconnectInterval}ms 后重连（快速重连模式）`);
+      const delay = this.applyJitter(this.reconnectInterval);
+      connection.nextReconnectAt = Date.now() + delay;
+      connection.reconnectPending = true;
+      this.pendingReconnectIds.add(endpoint.id);
+      logXiaozhi('info', 'Scheduling aggressive reconnect', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        delayMs: delay,
+        attempt: connection.reconnectAttempts + 1,
+      });
 
       connection.reconnectTimer = setTimeout(async () => {
+        connection.reconnectTimer = undefined;
+        connection.reconnectAttempts++;
         try {
           await this.connectEndpoint(endpoint);
         } catch (error) {
-          console.error(`端点 ${endpoint.name} 重连失败:`, error);
-          // 继续调度下次重连
+          const message = error instanceof Error ? error.message : String(error);
+          connection.lastError = message;
+          this.pendingReconnectIds.delete(endpoint.id);
+          logXiaozhi('error', 'Aggressive reconnect failed', {
+            endpointId: endpoint.id,
+            error: message,
+          });
           this.scheduleReconnect(connection);
         }
-      }, this.reconnectInterval);
+      }, delay);
       return;
     }
-    
-    // 原有的重连逻辑（指数退避）
-    // 检查是否已达到快速重连上限
+
     if (connection.reconnectAttempts >= endpoint.reconnect.maxAttempts) {
-      // 如果启用了无限重连，进入无限重连模式
       if (endpoint.reconnect.infiniteReconnect) {
         if (!connection.isInInfiniteReconnectMode) {
           connection.isInInfiniteReconnectMode = true;
-          console.log(`端点 ${endpoint.name} 快速重连次数已达上限，进入无限重连模式`);
+          logXiaozhi('info', 'Entering infinite reconnect mode', {
+            endpointId: endpoint.id,
+            name: endpoint.name,
+          });
         }
         this.scheduleInfiniteReconnect(connection);
       } else {
-        console.log(`端点 ${endpoint.name} 重连次数已达上限，停止重连`);
+        logXiaozhi('info', 'Reconnect attempts exhausted', {
+          endpointId: endpoint.id,
+          name: endpoint.name,
+          maxAttempts: endpoint.reconnect.maxAttempts,
+        });
       }
       return;
     }
 
-    const delay = Math.min(
-      endpoint.reconnect.initialDelay * Math.pow(endpoint.reconnect.backoffMultiplier, connection.reconnectAttempts),
-      endpoint.reconnect.maxDelay
+    const baseDelay = Math.min(
+      endpoint.reconnect.initialDelay *
+        Math.pow(endpoint.reconnect.backoffMultiplier, connection.reconnectAttempts),
+      endpoint.reconnect.maxDelay,
     );
+    const delay = this.applyJitter(baseDelay);
+    connection.nextReconnectAt = Date.now() + delay;
+    connection.reconnectPending = true;
+    this.pendingReconnectIds.add(endpoint.id);
 
-    console.log(`端点 ${endpoint.name} 将在 ${delay}ms 后重连 (第${connection.reconnectAttempts + 1}次尝试)`);
+    logXiaozhi('info', 'Scheduling reconnect', {
+      endpointId: endpoint.id,
+      name: endpoint.name,
+      delayMs: delay,
+      attempt: connection.reconnectAttempts + 1,
+      maxAttempts: endpoint.reconnect.maxAttempts,
+    });
 
     connection.reconnectTimer = setTimeout(async () => {
+      connection.reconnectTimer = undefined;
       connection.reconnectAttempts++;
       try {
         await this.connectEndpoint(endpoint);
       } catch (error) {
-        console.error(`端点 ${endpoint.name} 重连失败:`, error);
+        const message = error instanceof Error ? error.message : String(error);
+        connection.lastError = message;
+        this.pendingReconnectIds.delete(endpoint.id);
+        logXiaozhi('error', 'Reconnect failed', {
+          endpointId: endpoint.id,
+          error: message,
+        });
       }
     }, delay);
   }
 
-  // 无限重连调度
   private scheduleInfiniteReconnect(connection: EndpointConnection): void {
     const { endpoint } = connection;
-    
-    // 增加无限重连计数
+    if (!endpoint.enabled) return;
+
     connection.infiniteRetryCount = (connection.infiniteRetryCount || 0) + 1;
-    
-    // 检查是否超过最大重连次数
+
     if (this.maxInfiniteRetries > 0 && connection.infiniteRetryCount > this.maxInfiniteRetries) {
-      console.log(`端点 ${endpoint.name} 已达到最大无限重连次数 ${this.maxInfiniteRetries}，停止重连`);
-      this.updateEndpointStatus(endpoint.id, 'disconnected');
+      logXiaozhi('info', 'Max infinite reconnects reached; stopping', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        maxInfiniteRetries: this.maxInfiniteRetries,
+      });
+      void this.updateEndpointStatus(endpoint.id, 'disconnected');
       return;
     }
-    
+
     if (connection.reconnectTimer) {
       clearTimeout(connection.reconnectTimer);
+      connection.reconnectTimer = undefined;
     }
 
-    // 确定延迟时间
-    let delay: number;
-    
-    // 检查是否应该进入休眠模式
     if (connection.infiniteRetryCount >= this.sleepThreshold && !connection.isInSleepMode) {
       connection.isInSleepMode = true;
-      console.log(`端点 ${endpoint.name} 连续失败 ${this.sleepThreshold} 次，进入休眠模式`);
-    }
-    
-    if (connection.isInSleepMode) {
-      delay = this.sleepInterval; // 休眠模式使用更长的间隔
-      console.log(`端点 ${endpoint.name} 处于休眠模式，将在 ${Math.round(delay / 60000)}分钟 后重连（第${connection.infiniteRetryCount}次）`);
-    } else {
-      delay = endpoint.reconnect.infiniteRetryDelay || 1800000; // 正常的30分钟间隔
-      console.log(`端点 ${endpoint.name} 将在 ${Math.round(delay / 60000)}分钟 后进行无限重连（第${connection.infiniteRetryCount}次）`);
+      logXiaozhi('info', 'Entering sleep reconnect mode', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        sleepThreshold: this.sleepThreshold,
+      });
     }
 
+    const baseDelay = connection.isInSleepMode
+      ? this.sleepInterval
+      : endpoint.reconnect.infiniteRetryDelay || DEFAULT_RECONNECT.infiniteRetryDelay;
+    const delay = this.applyJitter(baseDelay);
+    connection.nextReconnectAt = Date.now() + delay;
+    connection.reconnectPending = true;
+    this.pendingReconnectIds.add(endpoint.id);
+
+    logXiaozhi('info', 'Scheduling infinite reconnect', {
+      endpointId: endpoint.id,
+      name: endpoint.name,
+      delayMs: delay,
+      infiniteRetryCount: connection.infiniteRetryCount,
+      sleepMode: connection.isInSleepMode,
+    });
+
     connection.reconnectTimer = setTimeout(async () => {
-      console.log(`端点 ${endpoint.name} 进行无限重连尝试（第${connection.infiniteRetryCount}/${this.maxInfiniteRetries || '∞'}次）...`);
+      connection.reconnectTimer = undefined;
       try {
         await this.connectEndpoint(endpoint);
       } catch (error) {
-        console.error(`端点 ${endpoint.name} 无限重连失败:`, error);
-        // 继续调度下次无限重连
+        const message = error instanceof Error ? error.message : String(error);
+        connection.lastError = message;
+        this.pendingReconnectIds.delete(endpoint.id);
+        logXiaozhi('error', 'Infinite reconnect failed', {
+          endpointId: endpoint.id,
+          error: message,
+        });
         this.scheduleInfiniteReconnect(connection);
       }
     }, delay);
   }
 
-  // 更新端点状态
-  private async updateEndpointStatus(endpointId: string, status: 'connected' | 'disconnected' | 'connecting'): Promise<void> {
-    const endpointRepo = getXiaozhiEndpointRepository();
-    await endpointRepo.updateStatus(endpointId, status, new Date());
+  private async updateEndpointStatus(
+    endpointId: string,
+    status: 'connected' | 'disconnected' | 'connecting',
+  ): Promise<void> {
+    try {
+      const endpointRepo = getXiaozhiEndpointRepository();
+      await endpointRepo.updateStatus(endpointId, status, new Date());
+    } catch (error) {
+      logXiaozhi('warn', 'Failed to persist endpoint status', {
+        endpointId,
+        status,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     if (this.config) {
-      const idx = this.config.endpoints.findIndex(e => e.id === endpointId);
+      const idx = this.config.endpoints.findIndex((e) => e.id === endpointId);
       if (idx >= 0) {
         this.config.endpoints[idx].status = status;
         if (status === 'connected') {
@@ -389,51 +662,62 @@ export class XiaozhiEndpointService {
     }
   }
 
-  // 断开指定端点
-  private async disconnectEndpoint(endpointId: string): Promise<void> {
+  /**
+   * @param clearReconnectState when true (delete/disable), drop reconnect counters;
+   *        when false (reconnect path), preserve attempt counters across socket churn.
+   */
+  private async disconnectEndpoint(
+    endpointId: string,
+    options: { clearReconnectState?: boolean } = {},
+  ): Promise<void> {
+    const { clearReconnectState = true } = options;
     const connection = this.connections.get(endpointId);
     if (!connection) return;
 
     if (connection.reconnectTimer) {
       clearTimeout(connection.reconnectTimer);
+      connection.reconnectTimer = undefined;
     }
+    this.pendingReconnectIds.delete(endpointId);
 
     if (connection.ws) {
       connection.ws.removeAllListeners();
-      if (connection.ws.readyState === WebSocket.OPEN) {
-        connection.ws.close();
+      if (
+        connection.ws.readyState === WebSocket.OPEN ||
+        connection.ws.readyState === WebSocket.CONNECTING
+      ) {
+        try {
+          connection.ws.close();
+        } catch {
+          /* ignore */
+        }
       }
     }
 
     this.connections.delete(endpointId);
-    this.updateEndpointStatus(endpointId, 'disconnected');
-    console.log(`端点 ${connection.endpoint.name} 已断开`);
+    if (clearReconnectState) {
+      void this.updateEndpointStatus(endpointId, 'disconnected');
+    }
+    logXiaozhi('info', 'Endpoint socket torn down', {
+      endpointId,
+      name: connection.endpoint.name,
+      clearReconnectState,
+    });
   }
 
-  /**
-   * Whether any endpoint is currently enabled.
-   * Global xiaozhi_config.enabled is ignored — connections are gated only by
-   * each endpoint's own `enabled` flag so users don't share one master switch.
-   */
+  /** True if any endpoint row is enabled (not the legacy global flag). */
   public isEnabled(): boolean {
     return (this.config?.endpoints || []).some((ep) => ep.enabled);
   }
 
-  /** Whether the given user has at least one enabled endpoint (admin: any). */
   public isEnabledForUser(username: string, isAdmin: boolean): boolean {
     return this.getEndpointsForUser(username, isAdmin).some((ep) => ep.enabled);
   }
 
-  // 公共方法：获取所有端点
   public getAllEndpoints(): XiaozhiEndpoint[] {
     return this.config?.endpoints || [];
   }
 
-  /**
-   * Endpoints visible to a given user. Admins see everything; non-admins see
-   * only endpoints they own. Legacy endpoints without an owner are treated as
-   * admin-owned (matches canAccessEndpoint in the controller).
-   */
   public getEndpointsForUser(username: string, isAdmin: boolean): XiaozhiEndpoint[] {
     const all = this.getAllEndpoints();
     if (isAdmin) return all;
@@ -444,8 +728,9 @@ export class XiaozhiEndpointService {
     return this.getAllEndpoints().find((ep) => ep.id === endpointId);
   }
 
-  // 公共方法：创建端点
-  public async createEndpoint(endpointData: Omit<XiaozhiEndpoint, 'id' | 'createdAt' | 'status'>): Promise<XiaozhiEndpoint> {
+  public async createEndpoint(
+    endpointData: Omit<XiaozhiEndpoint, 'id' | 'createdAt' | 'status'>,
+  ): Promise<XiaozhiEndpoint> {
     if (!this.config) {
       await this.loadConfig();
     }
@@ -453,6 +738,11 @@ export class XiaozhiEndpointService {
     const id = `endpoint-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const endpoint: XiaozhiEndpoint = {
       ...endpointData,
+      useSmartRouting: Boolean(endpointData.useSmartRouting),
+      reconnect: {
+        ...DEFAULT_RECONNECT,
+        ...endpointData.reconnect,
+      },
       id,
       createdAt: new Date().toISOString(),
       status: 'disconnected',
@@ -465,16 +755,15 @@ export class XiaozhiEndpointService {
       enabled: endpoint.enabled,
       webSocketUrl: endpoint.webSocketUrl,
       description: endpoint.description || '',
-      groupId: endpoint.groupId || null as any,
+      groupId: endpoint.groupId ?? null,
       reconnect: endpoint.reconnect,
-      useSmartRouting: (endpoint as any).useSmartRouting || false,
-      owner: endpoint.owner || null as any,
-      status: endpoint.status,
-    } as any);
+      useSmartRouting: endpoint.useSmartRouting ?? false,
+      owner: endpoint.owner ?? null,
+      status: endpoint.status ?? 'disconnected',
+    } as XiaozhiEndpointEntity);
 
     this.config!.endpoints.push(endpoint);
 
-    // Connect solely based on the endpoint's own enabled flag
     if (endpoint.enabled) {
       await this.connectEndpoint(endpoint);
     }
@@ -482,41 +771,57 @@ export class XiaozhiEndpointService {
     return endpoint;
   }
 
-  // 公共方法：更新端点
-  public async updateEndpoint(endpointId: string, updateData: Partial<XiaozhiEndpoint>): Promise<XiaozhiEndpoint | null> {
+  public async updateEndpoint(
+    endpointId: string,
+    updateData: Partial<XiaozhiEndpoint>,
+  ): Promise<XiaozhiEndpoint | null> {
     if (!this.config) {
       await this.loadConfig();
     }
 
     const repo = getXiaozhiEndpointRepository();
-    const updated = await repo.updateById(endpointId, updateData as any);
+    const patch: Partial<XiaozhiEndpointEntity> = {};
+    if (updateData.name !== undefined) patch.name = updateData.name;
+    if (updateData.enabled !== undefined) patch.enabled = updateData.enabled;
+    if (updateData.webSocketUrl !== undefined) patch.webSocketUrl = updateData.webSocketUrl;
+    if (updateData.description !== undefined) patch.description = updateData.description;
+    if (updateData.groupId !== undefined) patch.groupId = updateData.groupId ?? (null as unknown as string);
+    if (updateData.useSmartRouting !== undefined) patch.useSmartRouting = updateData.useSmartRouting;
+    if (updateData.reconnect !== undefined) patch.reconnect = updateData.reconnect;
+    if (updateData.owner !== undefined) patch.owner = updateData.owner ?? (null as unknown as string);
+    if (updateData.status !== undefined) patch.status = updateData.status;
+
+    const updated = await repo.updateById(endpointId, patch);
     if (!updated) return null;
 
-    const index = this.config!.endpoints.findIndex(e => e.id === endpointId);
+    const index = this.config!.endpoints.findIndex((e) => e.id === endpointId);
     if (index >= 0) {
       this.config!.endpoints[index] = {
         ...this.config!.endpoints[index],
         ...updateData,
-      } as XiaozhiEndpoint;
+        useSmartRouting:
+          updateData.useSmartRouting !== undefined
+            ? updateData.useSmartRouting
+            : this.config!.endpoints[index].useSmartRouting,
+      };
     }
 
     if (updateData.webSocketUrl || updateData.enabled !== undefined) {
       await this.disconnectEndpoint(endpointId);
-      const ep = this.config!.endpoints.find(e => e.id === endpointId)!;
-      if (ep.enabled) {
+      const ep = this.config!.endpoints.find((e) => e.id === endpointId);
+      if (ep?.enabled) {
         await this.connectEndpoint(ep);
       }
     }
 
-    return this.config!.endpoints.find(e => e.id === endpointId) || null;
+    return this.config!.endpoints.find((e) => e.id === endpointId) || null;
   }
 
-  // 公共方法：删除端点
   public async deleteEndpoint(endpointId: string): Promise<boolean> {
     if (!this.config) {
       await this.loadConfig();
     }
-    const endpointIndex = this.config!.endpoints.findIndex(e => e.id === endpointId);
+    const endpointIndex = this.config!.endpoints.findIndex((e) => e.id === endpointId);
     if (endpointIndex === -1) return false;
 
     await this.disconnectEndpoint(endpointId);
@@ -528,14 +833,14 @@ export class XiaozhiEndpointService {
     return ok;
   }
 
-  // 公共方法：重连端点
   public async reconnectEndpoint(endpointId: string): Promise<boolean> {
     if (!this.config) return false;
 
-    const endpoint = this.config.endpoints.find(e => e.id === endpointId);
+    const endpoint = this.config.endpoints.find((e) => e.id === endpointId);
     if (!endpoint) return false;
 
-    await this.disconnectEndpoint(endpointId);
+    // Manual reconnect resets attempt counters.
+    await this.disconnectEndpoint(endpointId, { clearReconnectState: true });
 
     if (endpoint.enabled) {
       await this.connectEndpoint(endpoint);
@@ -544,11 +849,10 @@ export class XiaozhiEndpointService {
     return true;
   }
 
-  // 公共方法：获取端点状态
   public getEndpointStatus(endpointId: string): XiaozhiEndpointStatus | null {
     if (!this.config) return null;
 
-    const endpoint = this.config.endpoints.find(e => e.id === endpointId);
+    const endpoint = this.config.endpoints.find((e) => e.id === endpointId);
     if (!endpoint) return null;
 
     const connection = this.connections.get(endpointId);
@@ -559,61 +863,124 @@ export class XiaozhiEndpointService {
       connected,
       connectionCount: this.connections.size,
       lastConnected: endpoint.lastConnected,
+      error: connection?.lastError,
+      runtime: toRuntime(connection),
     };
   }
 
-  // 公共方法：获取所有端点状态
   public getAllEndpointsStatus(): XiaozhiEndpointStatus[] {
     if (!this.config) return [];
 
-    return this.config.endpoints.map(endpoint => ({
-      endpoint,
-      connected: this.connections.get(endpoint.id)?.ws?.readyState === WebSocket.OPEN || false,
-      connectionCount: this.connections.size,
-      lastConnected: endpoint.lastConnected,
-    }));
+    return this.config.endpoints.map((endpoint) => {
+      const connection = this.connections.get(endpoint.id);
+      return {
+        endpoint,
+        connected: connection?.ws?.readyState === WebSocket.OPEN || false,
+        connectionCount: this.connections.size,
+        lastConnected: endpoint.lastConnected,
+        error: connection?.lastError,
+        runtime: toRuntime(connection),
+      };
+    });
   }
 
-  // 公共方法：断开所有连接
+  /**
+   * Aggregate status previously exposed via XiaozhiClientService.getStatus().
+   */
+  public getAggregateStatus(): {
+    enabled: boolean;
+    connected: boolean;
+    endpoints: Array<{
+      id: string;
+      name: string;
+      status: string;
+      webSocketUrl: string;
+      owner?: string;
+      error?: string;
+    }>;
+  } {
+    const allStatus = this.getAllEndpointsStatus();
+    return {
+      enabled: this.isEnabled(),
+      connected: allStatus.some((s) => s.connected),
+      endpoints: allStatus.map((s) => ({
+        id: s.endpoint.id,
+        name: s.endpoint.name,
+        status: s.connected ? 'connected' : s.endpoint.status || 'disconnected',
+        webSocketUrl: s.endpoint.webSocketUrl,
+        owner: s.endpoint.owner,
+        error: s.error,
+      })),
+    };
+  }
+
+  /** Snapshot for /health — never throws. */
+  public getHealthSummary(): XiaozhiHealthSummary {
+    try {
+      const endpoints = this.config?.endpoints || [];
+      const enabled = endpoints.filter((e) => e.enabled);
+      let connected = 0;
+      for (const ep of enabled) {
+        if (this.connections.get(ep.id)?.ws.readyState === WebSocket.OPEN) {
+          connected++;
+        }
+      }
+      return {
+        available: isDatabaseConnected(),
+        enabledTotal: enabled.length,
+        connected,
+        disconnected: Math.max(0, enabled.length - connected),
+        pendingReconnects: this.pendingReconnectIds.size,
+      };
+    } catch {
+      return {
+        available: false,
+        enabledTotal: 0,
+        connected: 0,
+        disconnected: 0,
+        pendingReconnects: 0,
+      };
+    }
+  }
+
   public async disconnect(): Promise<void> {
-    console.log('正在断开所有小智端点连接...');
-    
+    logXiaozhi('info', 'Disconnecting all Xiaozhi endpoints');
     for (const [endpointId] of this.connections) {
       await this.disconnectEndpoint(endpointId);
     }
-
-    console.log('所有小智端点已断开');
   }
 
-  // 公共方法：重新加载配置并按各 endpoint.enabled 重建连接
   public async reloadConfig(): Promise<void> {
     await this.loadConfig();
-    console.log('小智端点配置已重新加载，按 endpoint.enabled 重建连接...');
+    logXiaozhi('info', 'Xiaozhi config reloaded; rebuilding connections from endpoint.enabled');
     await this.disconnect();
     await this.initializeEndpoints();
   }
 
-  // 公共方法：通知工具列表更新
   public async notifyToolsChanged(): Promise<void> {
-    console.log('通知所有小智端点工具列表更新...');
-    
+    logXiaozhi('info', 'Notifying Xiaozhi endpoints of tools/list_changed', {
+      sockets: this.connections.size,
+    });
+
     for (const connection of this.connections.values()) {
       if (connection.ws.readyState === WebSocket.OPEN) {
         try {
-          const notification = {
-            jsonrpc: '2.0' as const,
-            method: 'notifications/tools/list_changed',
-          };
-
-          connection.ws.send(JSON.stringify(notification));
-          console.log(`已通知端点 ${connection.endpoint.name} 工具列表更新`);
+          connection.ws.send(
+            JSON.stringify({
+              jsonrpc: '2.0' as const,
+              method: 'notifications/tools/list_changed',
+            }),
+          );
         } catch (error) {
-          console.error(`通知端点 ${connection.endpoint.name} 工具列表更新失败:`, error);
+          logXiaozhi('error', 'tools/list_changed notify failed', {
+            endpointId: connection.endpoint.id,
+            name: connection.endpoint.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
     }
   }
 }
 
-// 导出单例实例
 export const xiaozhiEndpointService = new XiaozhiEndpointService();
