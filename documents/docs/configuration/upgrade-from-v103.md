@@ -63,6 +63,20 @@ SELECT COUNT(*) FROM xiaozhi_endpoints;
 - `mcp_servers` 有数据、`servers` 为空或明显偏少 → 启动后会把缺失行拷进 `servers`。  
 - 小智端点表名未变；连对库后应直接可见，并会把空 `owner` 回填为 `admin`。  
 
+### 若启动报 `column "username" … contains null values`
+
+1.1.3 早期在 TypeORM `synchronize` 时，可能把 v1.0.3 的无长度 `varchar` 误重建成 `varchar(255) NOT NULL`，对已有 admin 行会失败。  
+**1.1.4+** 已去掉该 length 漂移，并在 synchronize 前做安全预对齐。
+
+若你仍卡在 1.1.3，可先手工确认（一般无需改数据——你的 `select * from users` 里 username 已有值）：
+
+```sql
+SELECT username, length(password) FROM users;
+-- username 不应为 NULL
+```
+
+然后直接拉 **≥1.1.4** 镜像重启即可；不要 `DROP` users。
+
 ### Admin 密码会不会丢？要不要迁？
 
 **不用单独迁 admin 密码。** v1.0.3 的账号就在同一 Postgres 的 **`users`** 表里（bcrypt 哈希，表名未改）。

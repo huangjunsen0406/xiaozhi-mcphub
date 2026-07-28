@@ -27,6 +27,61 @@ describe('legacySchemaMigration', () => {
     jest.clearAllMocks();
   });
 
+  it('prepareUsersTableForSync adds missing 1.1 columns without touching username', async () => {
+    const executed: string[] = [];
+    const dataSource = createDataSourceMock(async (sql: string, params?: unknown[]) => {
+      executed.push(sql.replace(/\s+/g, ' ').trim());
+      const normalized = sql.replace(/\s+/g, ' ').toLowerCase();
+      if (normalized.includes('information_schema.tables')) {
+        return [{ exists: true }];
+      }
+      if (normalized.includes('information_schema.columns')) {
+        const col = params?.[1];
+        // Core v1.0.3 columns present; 1.1 extras missing; is_admin present
+        if (col === 'username' || col === 'password' || col === 'is_admin') {
+          return [{ exists: true }];
+        }
+        return [{ exists: false }];
+      }
+      if (normalized.includes('username is null')) {
+        return [{ count: 0 }];
+      }
+      return [];
+    });
+
+    const { prepareUsersTableForSync } = await import('./legacySchemaMigration.js');
+    const changed = await prepareUsersTableForSync(dataSource as any);
+    expect(changed).toBe(true);
+
+    const joined = executed.join('\n').toLowerCase();
+    expect(joined).toContain('add column if not exists email');
+    expect(joined).toContain('add column if not exists email_verified');
+    expect(joined).toContain('add column if not exists sso_user_id');
+    // Must never drop/recreate username
+    expect(joined).not.toMatch(/drop column.*username|add column.*username/);
+  });
+
+  it('prepareUsersTableForSync throws when username has nulls', async () => {
+    const dataSource = createDataSourceMock(async (sql: string, params?: unknown[]) => {
+      const normalized = sql.replace(/\s+/g, ' ').toLowerCase();
+      if (normalized.includes('information_schema.tables')) {
+        return [{ exists: true }];
+      }
+      if (normalized.includes('information_schema.columns')) {
+        const col = params?.[1];
+        if (col === 'username' || col === 'password') return [{ exists: true }];
+        return [{ exists: false }];
+      }
+      if (normalized.includes('username is null')) {
+        return [{ count: 1 }];
+      }
+      return [];
+    });
+
+    const { prepareUsersTableForSync } = await import('./legacySchemaMigration.js');
+    await expect(prepareUsersTableForSync(dataSource as any)).rejects.toThrow(/NULL row/);
+  });
+
   it('copies mcp_servers rows into servers via repository when missing', async () => {
     const dataSource = createDataSourceMock(async (sql: string) => {
       const normalized = sql.replace(/\s+/g, ' ').toLowerCase();

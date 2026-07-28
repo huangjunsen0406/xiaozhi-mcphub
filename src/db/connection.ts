@@ -209,6 +209,16 @@ const performDatabaseInitialization = async (): Promise<DataSource> => {
     appDataSource = await updateDataSourceConfig();
 
     if (!appDataSource.isInitialized) {
+      // v1.0.3 DBs can break TypeORM synchronize (e.g. varchar length drift →
+      // DROP+ADD NOT NULL on users.username). Patch legacy shapes first.
+      const dbUrl = ((appDataSource.options as { url?: string }).url || '').trim();
+      if (dbUrl) {
+        const { prepareLegacySchemaBeforeSynchronize } = await import(
+          '../utils/legacySchemaMigration.js'
+        );
+        await prepareLegacySchemaBeforeSynchronize(dbUrl);
+      }
+
       console.log('Initializing database connection...');
       // Register the vector type with TypeORM
       await appDataSource.initialize();

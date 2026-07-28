@@ -17,13 +17,16 @@ export class Group {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  // No length on name/owner: match v1.0.3 unlimited varchar so synchronize does
+  // not DROP+ADD NOT NULL on existing group rows.
+  @Column({ type: 'varchar' })
   name: string;
 
   @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @Column({ type: 'simple-json' })
+  // nullable keeps v1.0.3 rows valid; app code still treats missing as [].
+  @Column({ type: 'simple-json', nullable: true })
   servers: Array<
     | string
     | {
@@ -35,7 +38,7 @@ export class Group {
       }
   >;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   owner?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
