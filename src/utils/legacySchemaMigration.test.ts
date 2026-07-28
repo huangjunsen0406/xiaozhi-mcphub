@@ -82,6 +82,79 @@ describe('legacySchemaMigration', () => {
     await expect(prepareUsersTableForSync(dataSource as any)).rejects.toThrow(/NULL row/);
   });
 
+  it('alignSystemConfigColumns does not drop modelscope when snake === camel', async () => {
+    const executed: string[] = [];
+    const dataSource = createDataSourceMock(async (sql: string, params?: unknown[]) => {
+      executed.push(sql.replace(/\s+/g, ' ').trim());
+      const normalized = sql.replace(/\s+/g, ' ').toLowerCase();
+      if (normalized.includes('information_schema.tables')) {
+        return [{ exists: true }];
+      }
+      if (normalized.includes('information_schema.columns')) {
+        const col = params?.[1];
+        // modelscope present; camelCase twins for smart_routing / mcp_router absent
+        if (col === 'modelscope' || col === 'smart_routing' || col === 'mcp_router') {
+          return [{ exists: true }];
+        }
+        // optional 1.1 columns already present so ensure* is a no-op
+        if (
+          typeof col === 'string' &&
+          [
+            'routing',
+            'install',
+            'toolResultCompression',
+            'email',
+            'oauth',
+            'oauthServer',
+            'auth',
+            'discovery',
+            'activityLog',
+            'nameSeparator',
+            'enableSessionRebuild',
+          ].includes(col)
+        ) {
+          return [{ exists: true }];
+        }
+        return [{ exists: false }];
+      }
+      return [];
+    });
+
+    const { alignSystemConfigColumns } = await import('./legacySchemaMigration.js');
+    await alignSystemConfigColumns(dataSource as any);
+
+    const joined = executed.join('\n').toLowerCase();
+    // Must never DROP modelscope (the self-merge bug)
+    expect(joined).not.toMatch(/drop column.*modelscope/);
+    // Should not attempt a no-op self-rename either
+    expect(joined).not.toMatch(/rename column "modelscope"/);
+  });
+
+  it('alignSystemConfigColumns recreates missing modelscope after 1.1.4 damage', async () => {
+    const executed: string[] = [];
+    const dataSource = createDataSourceMock(async (sql: string, params?: unknown[]) => {
+      executed.push(sql.replace(/\s+/g, ' ').trim());
+      const normalized = sql.replace(/\s+/g, ' ').toLowerCase();
+      if (normalized.includes('information_schema.tables')) {
+        return [{ exists: true }];
+      }
+      if (normalized.includes('information_schema.columns')) {
+        const col = params?.[1];
+        // modelscope missing (dropped by 1.1.4); other required cols present
+        if (col === 'modelscope') return [{ exists: false }];
+        return [{ exists: true }];
+      }
+      return [];
+    });
+
+    const { alignSystemConfigColumns } = await import('./legacySchemaMigration.js');
+    const changed = await alignSystemConfigColumns(dataSource as any);
+    expect(changed).toBe(true);
+    expect(
+      executed.some((s) => /add column if not exists modelscope/i.test(s)),
+    ).toBe(true);
+  });
+
   it('copies mcp_servers rows into servers via repository when missing', async () => {
     const dataSource = createDataSourceMock(async (sql: string) => {
       const normalized = sql.replace(/\s+/g, ' ').toLowerCase();
