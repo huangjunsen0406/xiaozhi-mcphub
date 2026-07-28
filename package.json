@@ -1,6 +1,6 @@
 {
   "name": "@huangjunsen0406/xiaozhi-mcphub",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "MCPHub enhanced with Xiaozhi AI platform integration - \u4e3a\u5c0f\u667aAI\u5e73\u53f0\u4f18\u5316\u7684MCP\u5de5\u5177\u6865\u63a5\u7cfb\u7edf",
   "main": "dist/index.js",
   "type": "module",

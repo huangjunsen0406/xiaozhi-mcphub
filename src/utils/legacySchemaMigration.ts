@@ -443,6 +443,11 @@ export async function prepareLegacySchemaBeforeSynchronize(
 /**
  * Ensure system_config keeps the v1.0.3 snake_case JSON columns that TypeORM
  * may have also created under camelCase when column names were omitted.
+ *
+ * IMPORTANT: only merge when snake !== camel. Calling merge with the same name
+ * (e.g. modelscope/modelscope) treats one real column as both sides, then
+ * DROP COLUMN "modelscope" deletes the only copy — which is exactly the
+ * "column SystemConfig.modelscope does not exist" failure seen on 1.1.4.
  */
 export async function alignSystemConfigColumns(dataSource: DataSource): Promise<boolean> {
   if (!(await tableExists(dataSource, 'system_config'))) {
@@ -452,6 +457,11 @@ export async function alignSystemConfigColumns(dataSource: DataSource): Promise<
   let changed = false;
 
   const mergeJsonColumn = async (snake: string, camel: string): Promise<void> => {
+    // Same physical name → nothing to rename/merge; never DROP it.
+    if (snake === camel) {
+      return;
+    }
+
     const hasSnake = await columnExists(dataSource, 'system_config', snake);
     const hasCamel = await columnExists(dataSource, 'system_config', camel);
 
@@ -482,11 +492,68 @@ export async function alignSystemConfigColumns(dataSource: DataSource): Promise<
     }
   };
 
+  // Only pairs where the DB name differs from a possible TypeORM default.
   await mergeJsonColumn('smart_routing', 'smartRouting');
   await mergeJsonColumn('mcp_router', 'mcpRouter');
-  await mergeJsonColumn('modelscope', 'modelscope');
+  // modelscope is already the entity column name (name: 'modelscope') — do not
+  // "merge" it with itself. Just ensure it exists (recovery for 1.1.4 damage).
+  if (await ensureSystemConfigColumn(dataSource, 'modelscope', 'text')) {
+    changed = true;
+  }
+
+  // Other 1.1 columns the entity selects; ADD IF NOT EXISTS so a partial
+  // upgrade / botched drop cannot leave SELECTs broken.
+  const optionalJsonColumns = [
+    'routing',
+    'install',
+    'smart_routing',
+    'toolResultCompression',
+    'mcp_router',
+    'email',
+    'oauth',
+    'oauthServer',
+    'auth',
+    'discovery',
+    'activityLog',
+  ];
+  for (const col of optionalJsonColumns) {
+    if (await ensureSystemConfigColumn(dataSource, col, 'text')) {
+      changed = true;
+    }
+  }
+  if (await ensureSystemConfigColumn(dataSource, 'nameSeparator', 'character varying(10)')) {
+    changed = true;
+  }
+  if (await ensureSystemConfigColumn(dataSource, 'enableSessionRebuild', 'boolean')) {
+    changed = true;
+  }
 
   return changed;
+}
+
+/**
+ * Add a missing system_config column (nullable). Idempotent.
+ * Used both for normal upgrades and to repair columns dropped by the
+ * modelscope self-merge bug in 1.1.4.
+ */
+export async function ensureSystemConfigColumn(
+  dataSource: DataSource,
+  columnName: string,
+  pgType: string,
+): Promise<boolean> {
+  if (!(await tableExists(dataSource, 'system_config'))) {
+    return false;
+  }
+  if (await columnExists(dataSource, 'system_config', columnName)) {
+    return false;
+  }
+  // Quote identifiers that are mixed-case so Postgres preserves them.
+  const quoted = /[A-Z]/.test(columnName) ? `"${columnName}"` : columnName;
+  await dataSource.query(
+    `ALTER TABLE system_config ADD COLUMN IF NOT EXISTS ${quoted} ${pgType}`,
+  );
+  console.log(`[legacy-schema] added system_config.${columnName} (${pgType})`);
+  return true;
 }
 
 /**

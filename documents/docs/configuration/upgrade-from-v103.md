@@ -75,7 +75,20 @@ SELECT username, length(password) FROM users;
 -- username 不应为 NULL
 ```
 
-然后直接拉 **≥1.1.4** 镜像重启即可；不要 `DROP` users。
+然后直接拉 **≥1.1.5** 镜像重启即可；不要 `DROP` users。
+
+### 若启动报 `column SystemConfig.modelscope does not exist`
+
+1.1.4 有一处 bug：把 `modelscope` 当成「驼峰/蛇形同名」做合并时，把**唯一**的 `modelscope` 列 DROP 掉了。  
+**1.1.5+** 会跳过同名合并，并在启动时 `ADD COLUMN IF NOT EXISTS modelscope` 自动补回。
+
+直接拉新镜像重启即可，一般无需手工 SQL。若要手动确认：
+
+```sql
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'system_config' ORDER BY 1;
+-- 应包含 modelscope、smart_routing、mcp_router 等
+```
 
 ### Admin 密码会不会丢？要不要迁？
 
