@@ -51,6 +51,11 @@ jest.mock('./types/postgresVectorType.js', () => ({
   registerPostgresVectorType: jest.fn(),
 }));
 
+const prepareLegacySchemaBeforeSynchronizeMock = jest.fn(async () => undefined);
+jest.mock('../utils/legacySchemaMigration.js', () => ({
+  prepareLegacySchemaBeforeSynchronize: prepareLegacySchemaBeforeSynchronizeMock,
+}));
+
 import {
   checkDatabaseHealth,
   closeDatabase,
@@ -66,11 +71,23 @@ const registerPostgresVectorTypeMock = jest.mocked(registerPostgresVectorType);
 describe('database connection recovery', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    prepareLegacySchemaBeforeSynchronizeMock.mockClear();
+    prepareLegacySchemaBeforeSynchronizeMock.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
     stopHealthCheck();
     await closeDatabase();
+  });
+
+  it('runs legacy pre-synchronize safety before first initialize', async () => {
+    await initializeDatabase();
+    expect(prepareLegacySchemaBeforeSynchronizeMock).toHaveBeenCalledWith(
+      'postgresql://mcphub:test@postgres:5432/mcphub',
+    );
+    // First DataSource is the pre-sync helper only when real code runs; here the
+    // production initialize path must still call the main DataSource.initialize.
+    expect(dataSources.some((ds) => ds.initialize.mock.calls.length > 0)).toBe(true);
   });
 
   it('reuses the existing configuration when recovering an uninitialized or disconnected driver', async () => {

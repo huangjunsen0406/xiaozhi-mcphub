@@ -308,6 +308,139 @@ export async function alignUserAdminColumn(dataSource: DataSource): Promise<bool
 }
 
 /**
+ * Make legacy `users` safe for TypeORM synchronize before it runs.
+ *
+ * 1.1.x entities added optional email / email_verified / sso_user_id. If those
+ * columns are missing, synchronize would ADD them — fine for nullable ones, but
+ * a botched length rebuild of username/password previously used DROP+ADD NOT NULL
+ * and failed with "column username contains null values" on existing admin rows.
+ *
+ * This helper:
+ * - adds missing nullable 1.1 columns with safe defaults (never rebuilds username)
+ * - never drops or recreates username/password
+ *
+ * Must run with synchronize:false (or before the first synchronize on a fresh
+ * DataSource that still has the legacy column shapes).
+ */
+export async function prepareUsersTableForSync(dataSource: DataSource): Promise<boolean> {
+  if (!(await tableExists(dataSource, 'users'))) {
+    return false;
+  }
+
+  let changed = false;
+
+  // Ensure core identity columns exist (they should on every real install).
+  // Do NOT touch length / NOT NULL — leave whatever v1.0.3 created.
+  if (!(await columnExists(dataSource, 'users', 'username'))) {
+    throw new Error(
+      '[legacy-schema] users.username is missing; cannot upgrade this database automatically',
+    );
+  }
+  if (!(await columnExists(dataSource, 'users', 'password'))) {
+    throw new Error(
+      '[legacy-schema] users.password is missing; cannot upgrade this database automatically',
+    );
+  }
+
+  // Refuse to proceed if username already has nulls (would break any NOT NULL rebuild).
+  const nullUsernames = await dataSource.query(
+    `SELECT COUNT(*)::int AS count FROM users WHERE username IS NULL`,
+  );
+  const nullCount = Number(nullUsernames?.[0]?.count ?? 0);
+  if (nullCount > 0) {
+    throw new Error(
+      `[legacy-schema] users.username has ${nullCount} NULL row(s); fix or delete them before upgrading`,
+    );
+  }
+
+  if (!(await columnExists(dataSource, 'users', 'email'))) {
+    await dataSource.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS email character varying`,
+    );
+    console.log('[legacy-schema] added users.email');
+    changed = true;
+  }
+
+  if (!(await columnExists(dataSource, 'users', 'email_verified'))) {
+    await dataSource.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false`,
+    );
+    console.log('[legacy-schema] added users.email_verified');
+    changed = true;
+  }
+
+  if (!(await columnExists(dataSource, 'users', 'sso_user_id'))) {
+    await dataSource.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_user_id character varying`,
+    );
+    console.log('[legacy-schema] added users.sso_user_id');
+    changed = true;
+  }
+
+  // is_admin alignment is shared with the post-sync path
+  if (await alignUserAdminColumn(dataSource)) {
+    changed = true;
+  }
+
+  return changed;
+}
+
+/**
+ * Pre-synchronize repairs that must run BEFORE TypeORM synchronize, because
+ * synchronize can DROP+ADD columns when metadata (e.g. varchar length) drifts
+ * from the live schema — fatal on tables that already have rows.
+ *
+ * Connects with synchronize:false, patches legacy shapes, then disconnects so
+ * the normal initialize path can open with synchronize:true safely.
+ */
+export async function prepareLegacySchemaBeforeSynchronize(
+  databaseUrl: string,
+): Promise<void> {
+  if (!databaseUrl) {
+    return;
+  }
+
+  console.log('[legacy-schema] Pre-synchronize safety pass on legacy tables…');
+
+  const preSync = new DataSource({
+    type: 'postgres',
+    url: databaseUrl,
+    synchronize: false,
+    entities: [],
+  });
+
+  try {
+    await preSync.initialize();
+
+    // uuid-ossp may be needed later; cheap and idempotent
+    try {
+      await preSync.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
+    } catch (err: any) {
+      console.warn('[legacy-schema] uuid-ossp extension note:', err?.message || err);
+    }
+
+    await prepareUsersTableForSync(preSync);
+
+    // groups.servers was nullable json in v1.0.3; ensure column exists without
+    // forcing NOT NULL so synchronize will not rebuild it over existing rows.
+    if (await tableExists(preSync, 'groups')) {
+      if (!(await columnExists(preSync, 'groups', 'owner'))) {
+        await preSync.query(
+          `ALTER TABLE groups ADD COLUMN IF NOT EXISTS owner character varying`,
+        );
+        console.log('[legacy-schema] added groups.owner before synchronize');
+      }
+    }
+
+    console.log('[legacy-schema] Pre-synchronize safety pass complete');
+  } finally {
+    if (preSync.isInitialized) {
+      await preSync.destroy();
+    }
+  }
+}
+
+/**
  * Ensure system_config keeps the v1.0.3 snake_case JSON columns that TypeORM
  * may have also created under camelCase when column names were omitted.
  */
