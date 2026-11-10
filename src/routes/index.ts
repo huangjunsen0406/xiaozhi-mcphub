@@ -173,10 +173,13 @@ import {
   importConfigTemplate,
 } from '../controllers/templateController.js';
 import { auth } from '../middlewares/auth.js';
+import { requireAdminMiddleware } from '../utils/requireAdmin.js';
 import { getBetterAuthRuntimeConfig } from '../services/betterAuthConfig.js';
 import {
   authenticatedRouteRateLimiter,
+  authAttemptRateLimiter,
   authPublicRateLimiter,
+  authRegistrationRateLimiter,
   hostedInternalEventRateLimiter,
   templateRateLimiter,
   mcpConnectionRateLimiter,
@@ -409,7 +412,18 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.post('/resources/read', readResource);
 
   // MCPB upload routes
-  authenticatedRouter.post('/mcpb/upload', uploadMiddleware, uploadMcpbFile);
+  // MCPB upload routes. Admin-only: the handler replaces the code at the
+  // deterministic `data/uploads/mcpb/server-<name>` path that existing stdio
+  // server configurations point into, so an unprivileged upload would be a
+  // second write path to the stdio execution boundary (GHSA-xf2m-3c3x-53vp).
+  // The admin gate must run before `uploadMiddleware` so multer never stages a
+  // non-admin upload body on disk.
+  authenticatedRouter.post(
+    '/mcpb/upload',
+    requireAdminMiddleware,
+    uploadMiddleware,
+    uploadMcpbFile,
+  );
 
   // Market routes
   authenticatedRouter.get('/market/servers', getAllMarketServers);
@@ -452,7 +466,7 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
 
   router.post(
     '/auth/login',
-    authPublicRateLimiter,
+    authAttemptRateLimiter,
     [
       check('username', 'Username is required').not().isEmpty(),
       check('password', 'Password is required').not().isEmpty(),
@@ -462,7 +476,7 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
 
   router.post(
     '/auth/register',
-    authPublicRateLimiter,
+    authRegistrationRateLimiter,
     [
       check('username', 'Username is required').not().isEmpty(),
       check('password', 'Password must be at least 6 characters').isLength({ min: 6 }),

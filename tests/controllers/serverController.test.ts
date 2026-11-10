@@ -659,7 +659,41 @@ describe('serverController - authorization hardening', () => {
     jest.clearAllMocks();
   });
 
-  it('allows non-admin stdio server creation and pins it to the caller as owner', async () => {
+  afterEach(() => {
+    delete process.env.MCPHUB_ALLOW_USER_STDIO_SERVERS;
+  });
+
+  it('rejects non-admin stdio server creation by default (CVE-2026-79748)', async () => {
+    const json = jest.fn();
+    const status = jest.fn().mockReturnThis();
+    const req = {
+      body: {
+        name: 'stdio-server',
+        config: {
+          type: 'stdio',
+          command: 'node',
+          args: ['server.js'],
+        },
+      },
+      user: {
+        username: 'alice',
+        isAdmin: false,
+      },
+    } as unknown as Request;
+    const res = { json, status } as unknown as Response;
+
+    await createServer(req, res);
+
+    expect(status).toHaveBeenCalledWith(403);
+    expect(json).toHaveBeenCalledWith({
+      success: false,
+      message: 'Only admins can create or modify stdio-based servers',
+    });
+    expect(mockAddServer).not.toHaveBeenCalled();
+  });
+
+  it('allows non-admin stdio server creation and pins it to the caller as owner when explicitly enabled', async () => {
+    process.env.MCPHUB_ALLOW_USER_STDIO_SERVERS = 'true';
     mockAddServer.mockResolvedValue({ success: true });
 
     const json = jest.fn();

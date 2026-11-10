@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import AdmZip from 'adm-zip';
 import { ApiResponse } from '../types/index.js';
+import { requireAdmin } from '../utils/requireAdmin.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -146,6 +147,10 @@ const cleanupOldMcpbServer = (serverName: string): void => {
 
 export const uploadMcpbFile = async (req: Request, res: Response): Promise<void> => {
   try {
+    // Defense in depth: the route already gates this behind requireAdminMiddleware
+    // before multer stages the body (GHSA-xf2m-3c3x-53vp).
+    if (!(await requireAdmin(req, res))) return;
+
     if (!req.file) {
       res.status(400).json({
         success: false,

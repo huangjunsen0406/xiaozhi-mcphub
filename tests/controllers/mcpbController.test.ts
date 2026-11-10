@@ -60,6 +60,25 @@ describe('mcpbController - uploadMcpbFile', () => {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
+  it('rejects non-admin uploads with 403 before touching the archive (GHSA-xf2m)', async () => {
+    const mcpbFilePath = createMcpbFile('safe-name');
+    const { response, json, status } = createResponse();
+    const request = {
+      file: {
+        path: mcpbFilePath,
+      },
+      user: { username: 'alice', isAdmin: false },
+    } as unknown as Request;
+
+    await uploadMcpbFile(request, response);
+
+    expect(status).toHaveBeenCalledWith(403);
+    expect(json).toHaveBeenCalledWith({
+      success: false,
+      message: 'Admin privileges required',
+    });
+  });
+
   it('rejects manifest names that attempt path traversal', async () => {
     const mcpbFilePath = createMcpbFile('../../../escaped/server');
     const { response, json, status } = createResponse();
@@ -67,7 +86,8 @@ describe('mcpbController - uploadMcpbFile', () => {
       file: {
         path: mcpbFilePath,
       },
-    } as Request;
+      user: { username: 'admin', isAdmin: true },
+    } as unknown as Request;
     const uploadDir = path.join(tempRoot, 'data/uploads/mcpb');
     const escapedDir = path.resolve(uploadDir, 'server-../../../escaped/server');
 
@@ -92,7 +112,8 @@ describe('mcpbController - uploadMcpbFile', () => {
       file: {
         path: mcpbFilePath,
       },
-    } as Request;
+      user: { username: 'admin', isAdmin: true },
+    } as unknown as Request;
     const uploadDir = path.join(tempRoot, 'data/uploads/mcpb');
     const finalExtractDir = path.join(uploadDir, 'server-weather-server');
 
@@ -149,7 +170,10 @@ z.close()
     );
 
     const { response, json, status } = createResponse();
-    await uploadMcpbFile({ file: { path: mcpbFilePath } } as Request, response);
+    await uploadMcpbFile(
+      { file: { path: mcpbFilePath }, user: { username: 'admin', isAdmin: true } } as unknown as Request,
+      response,
+    );
 
     expect(status).toHaveBeenCalledWith(500);
     expect(json).toHaveBeenCalledWith(

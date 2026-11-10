@@ -45,6 +45,10 @@ import { UserContextService } from '../services/userContextService.js';
 import { disconnectUpstreamOAuth } from '../services/upstreamOAuthDisconnectService.js';
 import type { UpstreamOAuthDisconnectScope } from '../services/upstreamOAuthDisconnectService.js';
 import { normalizeServerConfigForPersistence } from '../utils/serverConfigPersistence.js';
+import {
+  allowsUserPrivilegedServers,
+  isPrivilegedServerConfig,
+} from '../utils/serverConfigValidation.js';
 import { setCachedSystemConfig } from '../utils/systemConfigCache.js';
 import { DEFAULT_INSTALL_BASE_URL, withResolvedInstallBaseUrl } from '../utils/installBaseUrl.js';
 import {
@@ -85,6 +89,38 @@ const canAccessServer = (user: RequestUser | null, server: ServerRecord): boolea
   }
 
   return server.owner === user.username;
+};
+
+/**
+ * Reject privileged server configurations (stdio commands, passthrough headers)
+ * from non-admin callers. Without this an ordinary dashboard user could register
+ * a stdio server and execute arbitrary commands on the host
+ * (CVE-2026-79748 / GHSA-mx89-jjx9-gjr8).
+ */
+const describePrivilegedConfigRejection = (config: ServerConfig): string =>
+  config.passthroughHeaders?.length || config.openapi?.passthroughHeaders?.length
+    ? 'Only admins can create or modify servers forwarding caller headers'
+    : 'Only admins can create or modify stdio-based servers';
+
+const ensureNonAdminCanManageConfig = (
+  req: Request,
+  res: Response,
+  config: ServerConfig,
+): boolean => {
+  const currentUser = getRequestUser(req);
+  if (currentUser?.isAdmin || allowsUserPrivilegedServers()) {
+    return true;
+  }
+
+  if (isPrivilegedServerConfig(config)) {
+    res.status(403).json({
+      success: false,
+      message: describePrivilegedConfigRejection(config),
+    });
+    return false;
+  }
+
+  return true;
 };
 
 const loadAuthorizedServer = async (
@@ -541,6 +577,10 @@ export const createServer = async (req: Request, res: Response): Promise<void> =
       normalizedConfig.keepAliveInterval = 60000; // Default 60 seconds for SSE servers
     }
 
+    if (!ensureNonAdminCanManageConfig(req, res, normalizedConfig)) {
+      return;
+    }
+
     assignServerOwner(req, normalizedConfig);
 
     const result = await addServer(name, normalizedConfig);
@@ -697,6 +737,20 @@ export const batchCreateServers = async (req: Request, res: Response): Promise<v
           !normalizedConfig.keepAliveInterval
         ) {
           normalizedConfig.keepAliveInterval = 60000; // Default 60 seconds for SSE servers
+        }
+
+        if (
+          isPrivilegedServerConfig(normalizedConfig) &&
+          currentUser?.isAdmin !== true &&
+          !allowsUserPrivilegedServers()
+        ) {
+          results.push({
+            name,
+            success: false,
+            message: describePrivilegedConfigRejection(normalizedConfig),
+          });
+          failureCount++;
+          continue;
         }
 
         // Set owner property if not provided
@@ -905,6 +959,15 @@ export const updateServer = async (req: Request, res: Response): Promise<void> =
       !normalizedConfig.keepAliveInterval
     ) {
       normalizedConfig.keepAliveInterval = 60000; // Default 60 seconds for SSE servers
+    }
+
+    // Guard both the stored and the incoming configuration: a non-admin must not
+    // touch a privileged server, nor upgrade a plain one into a privileged one.
+    if (
+      !ensureNonAdminCanManageConfig(req, res, existingServer) ||
+      !ensureNonAdminCanManageConfig(req, res, normalizedConfig)
+    ) {
+      return;
     }
 
     // Set owner property if not provided - use current user's username, default to 'admin'

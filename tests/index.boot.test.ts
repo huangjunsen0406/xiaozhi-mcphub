@@ -19,6 +19,7 @@ const createFetchWithProxyMock = jest.fn();
 const getProxyConfigFromEnvMock = jest.fn(() => ({}));
 const isRetryableDbErrorMock = jest.fn(() => false);
 const hydrateSystemConfigCacheMock = jest.fn(async () => undefined);
+const getCachedSystemConfigMock = jest.fn(() => null);
 const startHostedEventSubscriberMock = jest.fn();
 const stopHostedEventSubscriberMock = jest.fn(async () => undefined);
 
@@ -43,6 +44,7 @@ jest.mock('../src/utils/dbRetry.js', () => ({
 
 jest.mock('../src/utils/systemConfigCache.js', () => ({
   hydrateSystemConfigCache: hydrateSystemConfigCacheMock,
+  getCachedSystemConfig: getCachedSystemConfigMock,
 }));
 
 jest.mock('../src/services/hostedEventSubscriber.js', () => ({

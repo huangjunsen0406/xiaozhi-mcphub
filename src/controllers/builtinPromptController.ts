@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { requireAdmin } from '../utils/requireAdmin.js';
 import { ApiResponse, BuiltinPrompt } from '../types/index.js';
 import { getBuiltinPromptDao } from '../dao/index.js';
 
@@ -48,6 +49,7 @@ export const getBuiltinPrompt = async (req: Request, res: Response): Promise<voi
  * Create a new built-in prompt
  */
 export const createBuiltinPrompt = async (req: Request, res: Response): Promise<void> => {
+  if (!(await requireAdmin(req, res))) return;
   try {
     const { name, title, description, template, arguments: args, enabled } = req.body;
     if (!name || !template) {
@@ -78,6 +80,7 @@ export const createBuiltinPrompt = async (req: Request, res: Response): Promise<
  * Update an existing built-in prompt
  */
 export const updateBuiltinPrompt = async (req: Request, res: Response): Promise<void> => {
+  if (!(await requireAdmin(req, res))) return;
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -102,6 +105,7 @@ export const updateBuiltinPrompt = async (req: Request, res: Response): Promise<
  * Delete a built-in prompt
  */
 export const deleteBuiltinPrompt = async (req: Request, res: Response): Promise<void> => {
+  if (!(await requireAdmin(req, res))) return;
   try {
     const { id } = req.params;
     const deleted = await getBuiltinPromptDao().delete(id);

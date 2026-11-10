@@ -246,6 +246,7 @@ import {
   authenticatedRouteRateLimiter,
   hostedInternalEventRateLimiter,
 } from '../../src/utils/rateLimit.js';
+import { requireAdminMiddleware } from '../../src/utils/requireAdmin.js';
 import { initRoutes } from '../../src/routes/index.js';
 
 type ExpressLayer = {
@@ -320,6 +321,31 @@ describe('initRoutes authenticated API rate limiting', () => {
     );
     expect(routerContainsRoute(protectedRouter!, 'put', '/oauth/clients/:clientId')).toBe(true);
     expect(routerContainsRoute(protectedRouter!, 'delete', '/oauth/clients/:clientId')).toBe(true);
+  });
+
+  it('gates MCPB upload behind the admin middleware before multer stages the body', async () => {
+    const app = express();
+
+    await initRoutes(app);
+
+    const apiRouter = findMountedRouter(app);
+    const protectedRouter = apiRouter.stack?.find(
+      (layer) => layer.name === 'router' && layer.handle?.stack,
+    )?.handle;
+
+    const uploadRoute = protectedRouter?.stack?.find(
+      (layer) => layer.route?.path === '/mcpb/upload',
+    );
+    const handles = uploadRoute?.route?.stack?.map((layer) => layer.handle) ?? [];
+
+    // requireAdminMiddleware must run first (rejecting non-admins with 403
+    // before `uploadMiddleware`/multer writes the request body to disk), with
+    // the handler last. This is the pre-body authorization gate for
+    // GHSA-xf2m-3c3x-53vp.
+    expect(handles[0]).toBe(requireAdminMiddleware);
+    expect(handles[1]).toBe(uploadMiddleware);
+    expect(handles[2]).toBe(routeHandler);
+    expect(handles).toHaveLength(3);
   });
 
   it('mounts the hosted internal webhook ingress behind its dedicated rate limiter', async () => {

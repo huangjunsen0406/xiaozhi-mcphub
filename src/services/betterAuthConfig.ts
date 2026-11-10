@@ -335,6 +335,41 @@ export const resolveBetterAuthRuntimeConfig = (
   };
 };
 
+// Public auth endpoints that must stay reachable without a credential. They
+// carry their own dedicated rate limiters, so both the /api auth gate and its
+// limiter must agree on exactly this set.
+const PUBLIC_API_AUTH_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/verify-email',
+  '/auth/forgot-password',
+  '/auth/verify-reset-token',
+  '/auth/reset-password',
+];
+
+/**
+ * Single source of truth for "this /api path does not require authentication".
+ * Used by the shared /api auth middleware and by the auth-gate rate limiter so a
+ * route can never be exempt from one but capped by the other.
+ */
+export const isApiAuthExemptPath = (
+  requestPath: string,
+  runtimeConfig: Pick<BetterAuthRuntimeConfig, 'basePath'>,
+): boolean => {
+  if (PUBLIC_API_AUTH_PATHS.includes(requestPath)) {
+    return true;
+  }
+
+  const betterAuthApiPath = runtimeConfig.basePath.startsWith('/api')
+    ? runtimeConfig.basePath.replace(/^\/api/, '') || '/'
+    : null;
+
+  return (
+    (betterAuthApiPath !== null && requestPath.startsWith(betterAuthApiPath)) ||
+    requestPath.startsWith('/better-auth')
+  );
+};
+
 export const getBetterAuthRuntimeConfig = async (
   systemConfigOverride?: SystemConfig | null,
 ): Promise<BetterAuthRuntimeConfig> => {
