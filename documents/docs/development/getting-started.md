@@ -4,7 +4,7 @@
 
 ## 依赖
 
-- Node.js 18+ 或 20+（CI 使用 20）  
+- Node.js 22+（CI 在 22/24 上测试）  
 - pnpm（见根目录 `packageManager`）  
 - Docker（可选，跑 PostgreSQL/pgvector）  
 - 若调试 stdio MCP：按各服务器需要准备 Python/uvx 等  

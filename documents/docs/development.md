@@ -2,7 +2,7 @@
 
 本指南将帮助您搭建 XIAOZHI-MCPHUB 的本地开发环境，了解项目结构，并掌握开发工作流。
 
-> **前提条件**：请确保已安装 Node.js 18+ 和 Git。
+> **前提条件**：请确保已安装 Node.js 22+ 和 Git。
 
 ## 环境准备
 
@@ -26,7 +26,7 @@
 
 ```bash
 # 检查 Node.js 版本
-node --version  # 应该 >= 18.0.0
+node --version  # 应该 >= 22.0.0
 
 # 检查 npm 版本
 npm --version   # 应该 >= 8.0.0
