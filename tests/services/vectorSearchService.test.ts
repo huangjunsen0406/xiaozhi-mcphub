@@ -22,6 +22,7 @@ const mockGetServerDao = jest.fn(() => ({
   findById: mockFindServerById,
 }));
 const mockEmitStreamEvent = jest.fn();
+const mockEmbeddingCreate = jest.fn();
 
 jest.mock('../../src/db/index.js', () => ({
   getRepositoryFactory: mockGetRepositoryFactory,
@@ -54,7 +55,7 @@ jest.mock('openai', () => ({
   default: class MockOpenAI {
     apiKey?: string;
     embeddings = {
-      create: jest.fn(),
+      create: mockEmbeddingCreate,
     };
 
     constructor(config: { apiKey?: string }) {
@@ -316,5 +317,177 @@ describe('vectorSearchService', () => {
     await removeServerToolEmbeddings('redis');
 
     expect(mockVectorRepository.deleteByServerName).toHaveBeenCalledWith('redis');
+  });
+
+  describe('embedding mutation races (#703)', () => {
+    const tool = { name: 'redis-get', description: 'Get a value', inputSchema: {} };
+    const embeddingResponse = { data: [{ embedding: Array(100).fill(0.1) }] };
+    const raceConfig = {
+      enabled: true,
+      dbUrl: 'postgres://localhost/test',
+      embeddingProvider: 'openai',
+      embeddingEncodingFormat: 'float',
+      openaiApiEmbeddingModel: 'text-embedding-3-small',
+      openaiApiBaseUrl: 'https://api.openai.com/v1',
+      openaiApiKey: 'sk-race-test',
+      basePacingDelayMs: 0,
+    };
+
+    beforeEach(() => {
+      mockEmbeddingCreate.mockReset();
+      mockEmbeddingCreate.mockResolvedValue(embeddingResponse);
+      mockVectorRepository.saveEmbedding.mockResolvedValue({});
+      mockVectorRepository.deleteStaleToolEmbeddings.mockResolvedValue(0);
+    });
+
+    afterEach(() => {
+      mockVectorRepository.saveEmbedding.mockReset();
+      mockVectorRepository.deleteByServerName.mockReset();
+    });
+
+    const pauseGeneration = () => {
+      let resume!: () => void;
+      let signalStarted!: () => void;
+      const started = new Promise<void>((resolve) => (signalStarted = resolve));
+      const paused = new Promise<void>((resolve) => (resume = resolve));
+      mockGetSmartRoutingConfig.mockResolvedValue(raceConfig);
+      mockVectorRepository.countByServerNameAndModel.mockResolvedValue(0);
+      mockEmbeddingCreate
+        .mockImplementationOnce(async () => {
+          signalStarted();
+          await paused;
+          return embeddingResponse;
+        })
+        .mockResolvedValue(embeddingResponse);
+      return { started, resume, config: raceConfig };
+    };
+
+    it('does not recreate rows when cleanup completes during generation', async () => {
+      const { started, resume } = pauseGeneration();
+      const sync = saveToolsAsVectorEmbeddings('redis', [tool]);
+      await started;
+      try {
+        await removeServerToolEmbeddings('redis');
+        expect(mockVectorRepository.deleteByServerName).toHaveBeenCalledWith('redis');
+      } finally {
+        resume();
+        await sync;
+      }
+      expect(mockVectorRepository.saveEmbedding).not.toHaveBeenCalled();
+    });
+
+    it.each([null, { name: 'redis', enabled: false }])(
+      'does not write an old server snapshot after deletion or disable (%j)',
+      async (server) => {
+        mockFindServerById.mockResolvedValue(server);
+        await saveToolsAsVectorEmbeddings('redis', [tool]);
+        expect(mockVectorRepository.saveEmbedding).not.toHaveBeenCalled();
+      },
+    );
+
+    it('orders cleanup after persistence that has already started', async () => {
+      const rows = new Set<string>();
+      let resume!: () => void;
+      let signalStarted!: () => void;
+      const started = new Promise<void>((resolve) => (signalStarted = resolve));
+      const paused = new Promise<void>((resolve) => (resume = resolve));
+      mockVectorRepository.countByServerNameAndModel.mockResolvedValue(0);
+      mockVectorRepository.saveEmbedding
+        .mockImplementationOnce(async () => {
+          signalStarted();
+          await paused;
+          rows.add('tool');
+        })
+        .mockImplementation(async () => rows.add('server'));
+      mockVectorRepository.deleteByServerName.mockImplementation(async () => rows.clear());
+      const sync = saveToolsAsVectorEmbeddings('redis', [tool]);
+      await started;
+      const cleanup = removeServerToolEmbeddings('redis');
+      resume();
+      await Promise.all([sync, cleanup]);
+      expect(rows.size).toBe(0);
+    });
+
+    it('checks live server state again after generation', async () => {
+      const { started, resume } = pauseGeneration();
+      const sync = saveToolsAsVectorEmbeddings('redis', [tool]);
+      await started;
+      mockFindServerById.mockResolvedValue({ name: 'redis', enabled: false });
+      resume();
+      await sync;
+      expect(mockVectorRepository.saveEmbedding).not.toHaveBeenCalled();
+    });
+
+    it('allows a fresh sync after cleanup invalidates an older batch', async () => {
+      const { started, resume } = pauseGeneration();
+      const oldSync = saveToolsAsVectorEmbeddings('redis', [tool]);
+      await started;
+      await removeServerToolEmbeddings('redis');
+      resume();
+      await oldSync;
+      await saveToolsAsVectorEmbeddings('redis', [tool]);
+      expect(mockVectorRepository.saveEmbedding).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not invalidate another server while cleaning up', async () => {
+      const { started, resume } = pauseGeneration();
+      const oldSync = saveToolsAsVectorEmbeddings('redis', [tool]);
+      await started;
+      mockFindServerById.mockImplementation(async (name: string) => ({ name }));
+      const otherSync = saveToolsAsVectorEmbeddings('fetch', [tool]);
+      await removeServerToolEmbeddings('redis');
+      resume();
+      await Promise.all([oldSync, otherSync]);
+      expect(mockVectorRepository.saveEmbedding).toHaveBeenCalledTimes(2);
+      expect(
+        mockVectorRepository.saveEmbedding.mock.calls.every(
+          (call) => call[4].serverName === 'fetch',
+        ),
+      ).toBe(true);
+    });
+
+    it('continues processing after a persistence failure', async () => {
+      mockVectorRepository.countByServerNameAndModel.mockResolvedValue(0);
+      mockVectorRepository.saveEmbedding.mockRejectedValueOnce(new Error('write failed'));
+      await expect(saveToolsAsVectorEmbeddings('redis', [tool])).rejects.toThrow('write failed');
+      await removeServerToolEmbeddings('redis');
+      mockVectorRepository.saveEmbedding.mockResolvedValue({});
+      await saveToolsAsVectorEmbeddings('redis', [tool]);
+      expect(mockVectorRepository.deleteByServerName).toHaveBeenCalledWith('redis');
+      expect(mockVectorRepository.saveEmbedding).toHaveBeenCalledTimes(3);
+    });
+
+    it('keeps document batches valid when unrelated settings change', async () => {
+      const { started, resume, config } = pauseGeneration();
+      const sync = saveToolsAsVectorEmbeddings('redis', [tool]);
+      await started;
+      mockGetSmartRoutingConfig.mockResolvedValue({ ...config, serverDescriptionMode: 'full' });
+      resume();
+      await sync;
+      expect(mockVectorRepository.saveEmbedding).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      { openaiApiEmbeddingModel: 'new-model' },
+      { embeddingProvider: 'azure_openai' },
+      { openaiApiKey: 'sk-rotated' },
+      { openaiApiBaseUrl: 'https://changed.example/v1' },
+      { enabled: false },
+    ])('discards a batch when embedding settings change during generation (%j)', async (change) => {
+      const { started, resume, config } = pauseGeneration();
+      const sync = saveToolsAsVectorEmbeddings('redis', [tool]);
+      // Attach before resuming to avoid an unhandled rejection.
+      const result = expect(sync).rejects.toThrow('Embedding configuration changed');
+      await started;
+      mockGetSmartRoutingConfig.mockResolvedValue({ ...config, ...change });
+      resume();
+      await result;
+      expect(mockVectorRepository.saveEmbedding).not.toHaveBeenCalled();
+      expect(
+        mockEmbeddingCreate.mock.calls.every(
+          ([payload]) => payload.model === config.openaiApiEmbeddingModel,
+        ),
+      ).toBe(true);
+    });
   });
 });
