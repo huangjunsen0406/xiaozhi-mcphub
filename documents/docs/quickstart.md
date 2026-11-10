@@ -4,7 +4,7 @@
 
 ## 前提
 
-- Docker（推荐）或 Node.js **22+** 与 **pnpm**
+- Docker（推荐）或 Node.js **24+** 与 **pnpm**
 - 小智端点、智能路由等能力需要 **PostgreSQL**（推荐 **pgvector**）；纯 JSON 文件模式可跑基础控制台，但小智/部分功能不可用
 
 ## 方式一：Docker 镜像（推荐）

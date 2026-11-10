@@ -100,7 +100,7 @@ Details: [documents/docs/configuration/upgrade-from-v103.md](documents/docs/conf
 
 ### Method 3: Local development
 
-Requirements: Node.js 22+, pnpm, PostgreSQL 16+ (recommended to use the `db` service from the repo's compose).
+Requirements: Node.js 24+, pnpm, PostgreSQL 16+ (recommended to use the `db` service from the repo's compose).
 
 ```bash
 git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git

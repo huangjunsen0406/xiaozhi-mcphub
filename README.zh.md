@@ -99,7 +99,7 @@ DB_URL=postgres://xiaozhi:…@db:5432/xiaozhi_mcphub
 
 ### 方式三：本地开发
 
-依赖：Node.js 22+、pnpm、PostgreSQL 16+（推荐使用 compose 中的 `db` 服务）。
+依赖：Node.js 24+、pnpm、PostgreSQL 16+（推荐使用 compose 中的 `db` 服务）。
 
 ```bash
 git clone https://github.com/huangjunsen0406/xiaozhi-mcphub.git

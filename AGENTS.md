@@ -54,7 +54,7 @@ Backend listens on `:3000` (or `$PORT`). Frontend dev server `:5173` proxies API
 pnpm lint && pnpm test:ci && pnpm build
 ```
 
-The runtime requirement is `>=22.0.0` (see `package.json`); CI runs on Node 22.x and 24.x, and the published Docker image is built on Node 22 (see `Dockerfile`). If a hook fails, fix the root cause — do **not** bypass with `--no-verify`.
+The runtime requirement is `>=24.0.0` (see `package.json`); CI runs on Node 24.x, and the published Docker image is built on Node 24 (see `Dockerfile`). If a hook fails, fix the root cause — do **not** bypass with `--no-verify`.
 
 ### Post-change manual checks (when relevant)
 

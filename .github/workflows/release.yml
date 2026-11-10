@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.x'
+          node-version: '24.x'
 
       - name: Enable Corepack
         run: corepack enable
@@ -63,7 +63,7 @@ jobs:
           cat > "$PACKAGE_DIR/install.sh" << 'EOF'
           #!/bin/bash
           echo "小智 MCP Hub v$VERSION 安装脚本"
-          echo "请确保已安装 Node.js 22+ 和 pnpm"
+          echo "请确保已安装 Node.js 24+ 和 pnpm"
           echo ""
           echo "1. 安装依赖: pnpm install --prod"
           echo "2. 启动服务: pnpm start"
