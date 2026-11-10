@@ -196,7 +196,9 @@ const isBearerKeyAllowedForRequest = async (req: Request, key: BearerKey): Promi
       }
 
       if (key.accessType === 'servers') {
-        // For server-scoped keys, check if any server in the group is allowed
+        // For server-scoped keys the group is only accessible when every server
+        // in it is allowed (full containment). A key scoped to a single group
+        // member must not gain access to the whole group (GHSA-454m-4vm6-842f).
         const allowedServers = key.allowedServers || [];
         if (allowedServers.length === 0) {
           return false;
@@ -209,7 +211,10 @@ const isBearerKeyAllowedForRequest = async (req: Request, key: BearerKey): Promi
         const groupServerNames = matchedGroup.servers.map((server) =>
           typeof server === 'string' ? server : server.name,
         );
-        return groupServerNames.some((name) => allowedServers.includes(name));
+        if (groupServerNames.length === 0) {
+          return false;
+        }
+        return groupServerNames.every((name) => allowedServers.includes(name));
       }
 
       if (key.accessType === 'custom') {
@@ -224,12 +229,17 @@ const isBearerKeyAllowedForRequest = async (req: Request, key: BearerKey): Promi
           return true;
         }
 
-        // Check if any server in the group is allowed
+        // Check if the servers in the group are all allowed. Require full
+        // containment so a key scoped to one group member cannot reach the
+        // whole group (GHSA-454m-4vm6-842f).
         if (allowedServers.length > 0 && Array.isArray(matchedGroup.servers)) {
           const groupServerNames = matchedGroup.servers.map((server) =>
             typeof server === 'string' ? server : server.name,
           );
-          return groupServerNames.some((name) => allowedServers.includes(name));
+          if (groupServerNames.length === 0) {
+            return false;
+          }
+          return groupServerNames.every((name) => allowedServers.includes(name));
         }
 
         return false;
