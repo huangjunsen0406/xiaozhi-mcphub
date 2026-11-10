@@ -2,7 +2,8 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { OpenAPIV3 } from 'openapi-types';
 import { ServerConfig, OpenAPISecurityConfig } from '../types/index.js';
-import { assertSafeUrl } from '../utils/ssrf.js';
+import { readFile } from 'node:fs/promises';
+import { assertSafeUrl, UnsafeUrlError, createRedirectValidatingFetch } from '../utils/ssrf.js';
 import { getUserDao } from '../dao/index.js';
 import { sanitizeStringForLogging, createSafeJSON } from '../utils/serialization.js';
 
@@ -35,6 +36,10 @@ export class OpenAPIClient {
   // Resolved in initialize(): admin-owned servers may target internal services
   // and skip the SSRF internal-IP blocklist.
   private allowInternalNetworks = false;
+  // Records the SSRF rejection raised while resolving an external $ref.
+  // SwaggerParser wraps resolver failures in its own ResolverError and drops
+  // the cause, so initialize() re-throws the real UnsafeUrlError from here.
+  private refGuardRejection?: UnsafeUrlError;
 
   constructor(
     private config: ServerConfig,
@@ -263,16 +268,33 @@ export class OpenAPIClient {
 
   async initialize(): Promise<void> {
     try {
+      // Resolve whether this server's owner is an admin BEFORE touching the
+      // network: admin-owned servers may legitimately target internal services
+      // and both the document download and $ref resolution must agree on that.
+      const ownerUser = this.config.owner
+        ? await getUserDao().findByUsername(this.config.owner)
+        : null;
+      this.allowInternalNetworks = !!ownerUser?.isAdmin;
+
+      // Reset the external-$ref guard marker so a rejection from THIS
+      // dereference pass is never confused with a stale one.
+      this.refGuardRejection = undefined;
+
       // Parse and dereference the OpenAPI specification
       if (this.config.openapi?.url) {
+        await assertSafeUrl(this.config.openapi.url, {
+          allowInternal: this.allowInternalNetworks,
+        });
         this.spec = (await SwaggerParser.dereference(
           this.config.openapi.url,
-        )) as OpenAPIV3.Document;
+          this.guardedRefResolveOptions() as any,
+        )) as unknown as OpenAPIV3.Document;
       } else if (this.config.openapi?.schema) {
         // For schema object, we need to pass it as a cloned object
         this.spec = (await SwaggerParser.dereference(
           JSON.parse(JSON.stringify(this.config.openapi.schema)),
-        )) as OpenAPIV3.Document;
+          this.guardedRefResolveOptions() as any,
+        )) as unknown as OpenAPIV3.Document;
       } else {
         throw new Error('Either OpenAPI URL or schema must be provided');
       }
@@ -280,19 +302,75 @@ export class OpenAPIClient {
       // Update baseUrl from OpenAPI servers field
       this.updateBaseUrlFromServers();
 
-      // Resolve whether this server's owner is an admin; admin-owned servers
-      // may legitimately target internal services and skip the SSRF blocklist.
-      const ownerUser = this.config.owner
-        ? await getUserDao().findByUsername(this.config.owner)
-        : null;
-      this.allowInternalNetworks = !!ownerUser?.isAdmin;
-
       this.extractTools();
       await this.ensureOAuth2AccessToken();
     } catch (error) {
+      if (error instanceof UnsafeUrlError) {
+        throw error;
+      }
+      // SwaggerParser wraps resolver failures (including our guard rejections)
+      // in its own ResolverError and drops the cause: surface the real reason.
+      if (this.refGuardRejection) {
+        throw this.refGuardRejection;
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(`Failed to load OpenAPI specification: ${errorMessage}`);
     }
+  }
+
+  /**
+   * SwaggerParser options that replace its built-in resolvers so EVERY external
+   * $ref target passes the SSRF guard before a request leaves the process.
+   * Without this, a spec supplied by a non-admin could point $refs at internal
+   * addresses (IMDS, RFC1918, loopback) or local files and have their contents
+   * embedded in the dereferenced schema handed back to clients.
+   * Admin-owned servers keep the same allowInternal escape hatch as the
+   * document download.
+   */
+  private guardedRefResolveOptions(): Record<string, unknown> {
+    const rejectUnsafe = (err: UnsafeUrlError): never => {
+      this.refGuardRejection = err;
+      throw err;
+    };
+    return {
+      resolve: {
+        http: {
+          order: 1,
+          canRead: (file: { url: string }) => /^https?:\/\//i.test(file.url),
+          read: async (file: { url: string }): Promise<string> => {
+            try {
+              await assertSafeUrl(file.url, { allowInternal: this.allowInternalNetworks });
+            } catch (error) {
+              rejectUnsafe(error as UnsafeUrlError);
+            }
+            // Plain fetch, NOT this.httpClient: default auth headers and
+            // interceptors must never be forwarded cross-origin to $ref
+            // targets. Redirects are re-validated hop by hop.
+            const safeFetch = createRedirectValidatingFetch(
+              (url, init) => fetch(url, init),
+              this.allowInternalNetworks,
+            );
+            const response = await safeFetch(file.url, { method: 'GET', headers: {} });
+            const buf = await response.arrayBuffer();
+            return new TextDecoder().decode(buf);
+          },
+        },
+        file: {
+          order: 1,
+          canRead: true,
+          read: async (file: { url: string }): Promise<string> => {
+            if (!this.allowInternalNetworks) {
+              rejectUnsafe(
+                new UnsafeUrlError(
+                  `Blocked local file reference in specification: ${sanitizeStringForLogging(file.url)}`,
+                ),
+              );
+            }
+            return readFile(new URL(file.url), 'utf8');
+          },
+        },
+      },
+    };
   }
 
   private generateOperationName(method: string, path: string): string {
