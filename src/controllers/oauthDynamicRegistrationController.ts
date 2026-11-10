@@ -9,6 +9,7 @@ import {
 import { IOAuthClient } from '../types/index.js';
 import { getSystemConfigDao } from '../dao/DaoFactory.js';
 import { resolveInstallBaseUrl } from '../utils/installBaseUrl.js';
+import { auth } from '../middlewares/auth.js';
 
 // Store registration access tokens (in production, use database)
 const registrationTokens = new Map<string, { clientId: string; createdAt: Date }>();
@@ -61,6 +62,22 @@ export const registerClient = async (req: Request, res: Response): Promise<void>
         error_description: 'Dynamic client registration is not enabled',
       });
       return;
+    }
+
+    // RFC 7591 §3.1 + GHSA-wwgw/3m7m follow-up: when the operator marks
+    // dynamic registration as requiring authentication, only requests carrying
+    // a recognized credential (dashboard JWT, bearer key, OAuth token or
+    // Better Auth session) may register clients. auth() always settles after
+    // either attaching req.user or sending an error response itself.
+    if (oauthConfig.dynamicRegistration.requiresAuthentication) {
+      try {
+        await auth(req, res, () => {});
+      } catch {
+        // Treated as unauthenticated below.
+      }
+      if (!(req as any).user || res.headersSent) {
+        return;
+      }
     }
 
     // Validate required fields
