@@ -15,7 +15,14 @@ const compat = new FlatCompat({
 
 export default [
   {
-    ignores: ['coverage/**', 'dist/**', 'frontend/dist/**', 'data/**'],
+    ignores: [
+      'coverage/**',
+      'dist/**',
+      'frontend/dist/**',
+      'data/**',
+      'documents/docs/.vitepress/dist/**',
+      'documents/docs/.vitepress/cache/**',
+    ],
   },
   ...compat.extends('eslint:recommended', 'plugin:@typescript-eslint/recommended'),
   {
