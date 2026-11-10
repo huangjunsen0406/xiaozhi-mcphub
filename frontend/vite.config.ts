@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import tailwindcss from '@tailwindcss/vite';
@@ -11,6 +11,12 @@ const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '../package.
 // For runtime configuration, we'll always use relative paths
 // BASE_PATH will be determined at runtime
 const basePath = '';
+
+// Dev only: where the vite dev server forwards API calls. MCPHUB_API_TARGET can
+// come from the shell or from the repo-root .env (this config runs in frontend/).
+const rootEnv = loadEnv('development', path.resolve(__dirname, '..'), '');
+const apiTarget =
+  process.env.MCPHUB_API_TARGET || rootEnv.MCPHUB_API_TARGET || 'http://localhost:3000';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -66,19 +72,19 @@ export default defineConfig({
   server: {
     proxy: {
       [`${basePath}/api`]: {
-        target: 'http://localhost:3000',
+        target: apiTarget,
         changeOrigin: true,
       },
       [`${basePath}/auth`]: {
-        target: 'http://localhost:3000',
+        target: apiTarget,
         changeOrigin: true,
       },
       [`${basePath}/config`]: {
-        target: 'http://localhost:3000',
+        target: apiTarget,
         changeOrigin: true,
       },
       [`${basePath}/public-config`]: {
-        target: 'http://localhost:3000',
+        target: apiTarget,
         changeOrigin: true,
       },
     },
