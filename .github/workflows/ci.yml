@@ -38,13 +38,6 @@ jobs:
       - name: Run tests
         run: pnpm test:ci
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          files: ./coverage/lcov.info
-          flags: unittests
-          name: codecov-umbrella
-
   # build:
   #   runs-on: ubuntu-latest
   #   needs: test
