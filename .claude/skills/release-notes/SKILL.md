@@ -59,8 +59,8 @@ Rules enforced by `scripts/validate-release-notes.js` (CI runs it on publish/edi
      ```
    - `## References` — one bullet per merged PR in the exact format, followed by the Full changelog line:
      ```
-     - <PR title> by @<author login> in https://github.com/samanhappy/mcphub/pull/<number>
-     - Full changelog: https://github.com/samanhappy/mcphub/compare/<prev>...<tag>
+     - <PR title> by @<author login> in https://github.com/huangjunsen0406/xiaozhi-mcphub/pull/<number>
+     - Full changelog: https://github.com/huangjunsen0406/xiaozhi-mcphub/compare/<prev>...<tag>
      ```
 
 6. **Present the draft in the conversation.** Show the full markdown and ask the user to confirm or request edits. Iterate until the user says to push. Do not write the draft to a file in the working tree.
