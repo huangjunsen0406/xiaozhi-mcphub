@@ -56,7 +56,6 @@ docker compose up -d db
 - `src/` 后端（Express、MCP、DAO、小智）  
 - `frontend/` 控制台  
 - `documents/` 用户文档（VitePress）  
-- `docs/agents`、`docs/adr` 内部说明  
 - `tests/` 与 `src/**/*.test.ts`  
 
 架构约束（双数据源、owner 隔离、ESM `.js` 导入等）见仓库根 [AGENTS.md](https://github.com/huangjunsen0406/xiaozhi-mcphub/blob/main/AGENTS.md)。

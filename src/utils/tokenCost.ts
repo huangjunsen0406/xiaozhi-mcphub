@@ -4,7 +4,7 @@
  * Estimates a Definition Cost — the tokens a tool/prompt/resource definition
  * adds to a model's context window — using cl100k_base via gpt-tokenizer.
  * This is an ESTIMATE for relative comparison, not a per-client-model exact
- * count. See docs/adr/0001-cl100k-tokenizer-for-definition-cost.md.
+ * count.
  */
 import type { Tool, Prompt, Resource, ItemCost } from '../types/index.js';
 

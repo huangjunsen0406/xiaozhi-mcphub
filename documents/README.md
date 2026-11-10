@@ -20,7 +20,7 @@ pnpm docs:build
 
 ```
 documents/
-├── docs/                 # 文档源码
+├── docs/                 # 文档源码（VitePress content root）
 │   ├── .vitepress/       # 站点配置
 │   ├── configuration/    # Docker / 环境变量 / MCP / 小智
 │   ├── development/
@@ -32,7 +32,7 @@ documents/
 └── pnpm-lock.yaml
 ```
 
-## 与根目录 `docs/` 的关系
+## 文档范围
 
 - **公开文档**：只维护本目录（VitePress）
-- **`docs/agents/`、`docs/adr/`**：给 Agent / 架构决策用的内部说明（已去掉上游 Mintlify 用户文档）
+- 上游 Mintlify 用户文档与内部 ADR / agents 笔记均已移除，仓库内不再保留 `docs/` 目录

@@ -15,7 +15,7 @@ This guide is intentionally short. It points to where the details live rather th
 | Backend  | [src/index.ts](src/index.ts) → [src/server.ts](src/server.ts) | Express + TypeORM (optional) + MCP SDK       |
 | Frontend | [frontend/src/](frontend/src/)          | Vite + React + Tailwind, i18n via react-i18next |
 | Config   | [mcp_settings.json](mcp_settings.json)  | MCP server defs, users, groups, OAuth state  |
-| Docs     | [documents/](documents/) (VitePress)    | Public user docs. Agent/ADR notes in [docs/](docs/) |
+| Docs     | [documents/](documents/) (VitePress)    | Public user docs                                |
 
 Layout map (read the directory when you need specifics, don't expand it here):
 
@@ -111,7 +111,7 @@ Bearer keys have two explicit kinds: legacy and operator-created keys are `kind:
 - `/:user/mcp/{group|server}`, `/:user/sse/{group}` — user-scoped variants; the `:user` prefix selects which owner's servers/groups are visible. See `AppServer.initialize()` in [src/server.ts](src/server.ts).
 - Auth: JWT (HS256) + bcrypt for the dashboard, layered with bearer keys (`/api/auth/keys`), MCPHub's own OAuth authorization server (`@node-oauth/oauth2-server`), and optional Better Auth (GitHub/Google). Default admin password is randomized unless `ADMIN_PASSWORD` is set on first launch.
 
-For deeper product/architecture context, start with [documents/docs/development/getting-started.md](documents/docs/development/getting-started.md) and ADRs under [docs/adr/](docs/adr/).
+For deeper product/architecture context, start with [documents/docs/development/getting-started.md](documents/docs/development/getting-started.md).
 
 ---
 
@@ -190,12 +190,12 @@ This file is a living contract. Keep it accurate; resist the urge to grow it.
 
 ### Issue tracker
 
-GitHub Issues for `huangjunsen0406/xiaozhi-mcphub`, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+GitHub Issues for `huangjunsen0406/xiaozhi-mcphub`, accessed via the `gh` CLI. 注意 `gh` 的默认仓库可能是指向上游 `samanhappy/mcphub`，读写本仓 issue/PR 时必须显式带 `--repo huangjunsen0406/xiaozhi-mcphub`。
 
 ### Triage labels
 
-Five canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+Five canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
 
 ### Domain docs
 
-Single-context layout: `CONTEXT.md` at repo root + `docs/adr/` for architectural decision records. See `docs/agents/domain.md`.
+Single-context layout: `CONTEXT.md` at repo root.
