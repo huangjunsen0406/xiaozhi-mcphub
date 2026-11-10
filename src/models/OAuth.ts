@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getOAuthClientDao, getOAuthTokenDao } from '../dao/index.js';
+import { isRetryableDbError } from '../utils/dbRetry.js';
 import { IOAuthClient, IOAuthAuthorizationCode, IOAuthToken } from '../types/index.js';
 
 // In-memory storage for authorization codes (short-lived, no persistence needed)
@@ -10,6 +11,9 @@ const tokensCache = new Map<string, IOAuthToken>();
 
 // Flag to track if we've initialized from DAO
 let initialized = false;
+
+// Only warn once per outage instead of on every cleanup tick
+let dbUnavailableWarned = false;
 
 /**
  * Initialize token cache from DAO (async)
@@ -285,7 +289,17 @@ export const cleanupExpired = async (): Promise<void> => {
   try {
     const tokenDao = getOAuthTokenDao();
     await tokenDao.cleanupExpired();
+    dbUnavailableWarned = false;
   } catch (error) {
+    if (isRetryableDbError(error)) {
+      // The pool is already reconnecting and logs its own retries, so a stack trace per
+      // tick only buries the recovery messages.
+      if (!dbUnavailableWarned) {
+        dbUnavailableWarned = true;
+        console.warn('[OAuth] Skipping persisted token cleanup: database unavailable');
+      }
+      return;
+    }
     console.error('Failed to cleanup persisted OAuth tokens:', error);
   }
 };

@@ -6,6 +6,7 @@ import {
 } from './utils/migration.js';
 import { createFetchWithProxy, getProxyConfigFromEnv } from './services/proxy.js';
 import { isRetryableDbError } from './utils/dbRetry.js';
+import { createIdempotentShutdown } from './utils/gracefulShutdown.js';
 import { getCachedSystemConfig, hydrateSystemConfigCache } from './utils/systemConfigCache.js';
 import {
   startHostedEventSubscriber,
@@ -94,20 +95,19 @@ const handleUnhandledRejection = (reason: unknown, promise: Promise<unknown>): v
 process.on('uncaughtException', handleUncaughtException);
 process.on('unhandledRejection', handleUnhandledRejection);
 
-// Handle graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('[SHUTDOWN] Received SIGTERM, shutting down gracefully...');
+// Handle graceful shutdown. The same signal can arrive several times (pnpm, tsx and a
+// supervisor all forward it), so the teardown must stay idempotent.
+const shutdown = createIdempotentShutdown(async (signal) => {
+  console.log(`[SHUTDOWN] Received ${signal}, shutting down gracefully...`);
+
   await stopHostedEventSubscriber();
   await appServer.shutdown();
+
   process.exit(0);
 });
 
-process.on('SIGINT', async () => {
-  console.log('[SHUTDOWN] Received SIGINT, shutting down gracefully...');
-  await stopHostedEventSubscriber();
-  await appServer.shutdown();
-  process.exit(0);
-});
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 const maskProxyUrl = (value?: string): string | undefined => {
   if (!value) {
