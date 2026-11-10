@@ -23,7 +23,7 @@ Layout map (read the directory when you need specifics, don't expand it here):
 - `src/services/mcpService.ts` — **core** MCP connection/lifecycle logic
 - `src/dao/` + `src/db/` — dual datasource (JSON file by default, PostgreSQL when `USE_DB=true`)
 - `tests/` mirrors `src/`; colocated `*.test.ts` also picked up
-- `locales/{en,fr,tr,zh}.json` — i18n strings
+- `locales/{en,fr,tr,vi,zh}.json` — i18n strings
 - `dist/`, `frontend/dist/`, `coverage/` — generated; never hand-edit
 
 ---
@@ -133,7 +133,7 @@ For deeper product/architecture context, start with [documents/docs/development/
 | Add an HTTP API       | `src/routes/` → `src/controllers/` → types in `src/types/` → tests   |
 | Add a frontend page   | `frontend/src/pages/` (+ `frontend/src/components/`), wire in router |
 | Add a CLI subcommand  | `src/cli/commands/<name>.ts` + register in `src/cli/main.ts` dispatcher + `src/cli/help.ts` + tests in `tests/cli/commands/` |
-| Add a translation key | Add to all four `locales/*.json` files                                |
+| Add a translation key | Add to all five `locales/*.json` files (en, zh, fr, tr, vi)           |
 | Update public docs    | `documents/docs/` (VitePress); `cd documents && pnpm docs:dev`; reflect major changes in README variants |
 
 ---
