@@ -85,6 +85,20 @@ jobs:
 
           # Bilingual body required by scripts/validate-release-notes.js
           # (Summary / 摘要 / References are mandatory; Features/Fixes pairs optional).
+          # Collect once and reuse for the English and Chinese sections. Plain grep is used
+          # on purpose: the runner images do not ship ripgrep.
+          FEATURES=""
+          FIXES=""
+          if [ -n "$PREV_TAG" ]; then
+            FEATURES=$(git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
+              | grep -iE '^- (feat|feature)[:(/ ]' || true)
+            FIXES=$(git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
+              | grep -iE '^- (fix)[:(/ ]' || true)
+          fi
+          # Optional sections must never be blank, so fall back to a pointer.
+          [ -n "$FEATURES" ] || FEATURES="- See commit history in References."
+          [ -n "$FIXES" ] || FIXES="- See commit history in References."
+
           {
             echo "## Summary"
             echo ""
@@ -96,28 +110,11 @@ jobs:
             echo ""
             echo "## Features"
             echo ""
-            if [ -n "$PREV_TAG" ]; then
-              git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
-                | rg -i '^\- (feat|feature)[:(/ ]' || true
-              # Ensure section is non-empty for validators that reject blank optional sections
-              if ! git log --pretty=format:"%s" "$PREV_TAG"..HEAD | rg -qi '^(feat|feature)[:(/ ]'; then
-                echo "- See commit history in References."
-              fi
-            else
-              echo "- Initial release of xiaozhi-mcphub."
-            fi
+            printf '%s\n' "$FEATURES"
             echo ""
             echo "## Fixes"
             echo ""
-            if [ -n "$PREV_TAG" ]; then
-              git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
-                | rg -i '^\- (fix)[:(/ ]' || true
-              if ! git log --pretty=format:"%s" "$PREV_TAG"..HEAD | rg -qi '^fix[:(/ ]'; then
-                echo "- See commit history in References."
-              fi
-            else
-              echo "- N/A"
-            fi
+            printf '%s\n' "$FIXES"
             echo ""
             echo "## 摘要"
             echo ""
@@ -129,27 +126,12 @@ jobs:
             echo ""
             echo "## 功能"
             echo ""
-            if [ -n "$PREV_TAG" ]; then
-              git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
-                | rg -i '^\- (feat|feature)[:(/ ]' || true
-              if ! git log --pretty=format:"%s" "$PREV_TAG"..HEAD | rg -qi '^(feat|feature)[:(/ ]'; then
-                echo "- 详见 References 中的提交记录。"
-              fi
-            else
-              echo "- xiaozhi-mcphub 首次发布。"
-            fi
+            printf '%s\n' "$FEATURES"
             echo ""
             echo "## 修复"
             echo ""
-            if [ -n "$PREV_TAG" ]; then
-              git log --pretty=format:"- %s ([%h](https://github.com/$REPO/commit/%H))" "$PREV_TAG"..HEAD \
-                | rg -i '^\- (fix)[:(/ ]' || true
-              if ! git log --pretty=format:"%s" "$PREV_TAG"..HEAD | rg -qi '^fix[:(/ ]'; then
-                echo "- 详见 References 中的提交记录。"
-              fi
-            else
-              echo "- 无"
-            fi
+            printf '%s\n' "$FIXES"
+            echo ""
             echo ""
             echo "## References"
             echo ""
