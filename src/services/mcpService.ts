@@ -3360,7 +3360,18 @@ export const handleGetPromptRequest = async (request: any, extra: any) => {
     let promptNameForServer = name;
     const lookupGroup = getGroupLookupName(group);
     if (extra && extra.server) {
-      server = getServerByName(extra.server);
+      // The caller pinned a server (REST /mcp/:serverName/prompts/:promptName):
+      // resolve strictly against it so a prompt that only exists elsewhere is
+      // never served, and honour the per-prompt enabled flag.
+      const candidate = getServerByName(extra.server);
+      if (
+        candidate &&
+        candidate.status === 'connected' &&
+        candidate.enabled !== false &&
+        candidate.prompts.some((prompt) => prompt.name === name)
+      ) {
+        server = candidate;
+      }
     } else if (lookupGroup) {
       const groupPrompt = await resolvePromptInGroup(lookupGroup, name);
       if (groupPrompt) {

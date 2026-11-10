@@ -18,10 +18,19 @@ export const getPrompt = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Bind the prompt name to the URL: the request body only contributes the
+    // arguments, so a caller cannot retarget the lookup by sending another
+    // `name` in the body. `extra` is an object (not the bare server name) so the
+    // service resolves the prompt on THIS server instead of falling through to
+    // the group/global search.
+    const body = (req.body ?? {}) as { arguments?: Record<string, unknown> };
     const promptArgs = {
-      params: req.body as { [key: string]: any },
+      params: {
+        name: promptName,
+        arguments: body.arguments,
+      },
     };
-    const result = await handleGetPromptRequest(promptArgs, serverName);
+    const result = await handleGetPromptRequest(promptArgs, { server: serverName });
     if (result.isError) {
       res.status(500).json({
         success: false,
