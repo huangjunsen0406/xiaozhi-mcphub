@@ -16,11 +16,15 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
  * Repository for BearerKey entity with automatic retry logic
  */
 export class BearerKeyRepository {
-  private repository: Repository<BearerKey>;
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<BearerKey> {
+    return getAppDataSource().getRepository(BearerKey);
+  }
   private retryOptions: RetryOptions;
 
   constructor(retryOptions?: RetryOptions) {
-    this.repository = getAppDataSource().getRepository(BearerKey);
     this.retryOptions = { ...DEFAULT_RETRY_OPTIONS, ...retryOptions };
   }
 

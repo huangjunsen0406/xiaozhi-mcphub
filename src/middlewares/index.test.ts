@@ -29,10 +29,17 @@ jest.mock('../config/index.js', () => ({
   },
 }));
 
+const mockGetSystemConfig = jest.fn();
+const mockGetCachedSystemConfig = jest.fn();
+
 jest.mock('../dao/index.js', () => ({
   getSystemConfigDao: jest.fn(() => ({
-    get: jest.fn().mockImplementation(async () => currentSettings.systemConfig),
+    get: () => mockGetSystemConfig(),
   })),
+}));
+
+jest.mock('../utils/systemConfigCache.js', () => ({
+  getCachedSystemConfig: () => mockGetCachedSystemConfig(),
 }));
 
 jest.mock('./auth.js', () => ({
@@ -58,6 +65,8 @@ import { initMiddlewares } from './index.js';
 describe('initMiddlewares', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetSystemConfig.mockImplementation(async () => currentSettings.systemConfig);
+    mockGetCachedSystemConfig.mockReturnValue(null);
     currentSettings = {
       systemConfig: {
         routing: {
@@ -117,5 +126,54 @@ describe('initMiddlewares', () => {
 
     expect(mockExpressJson).toHaveBeenCalledWith({ limit: '1mb' });
     expect(mockJsonMiddleware).toHaveBeenCalled();
+  });
+
+  it('uses the cached system config on the hot path without reading the database', async () => {
+    mockGetCachedSystemConfig.mockReturnValue({
+      routing: { jsonBodyLimit: '4mb' },
+    });
+
+    const app = {
+      use: jest.fn(),
+    } as any;
+
+    initMiddlewares(app);
+
+    const jsonWrapper = app.use.mock.calls[1][0];
+    const next = jest.fn();
+
+    await jsonWrapper(
+      {
+        path: '/test/api/servers',
+      },
+      {},
+      next,
+    );
+
+    expect(mockExpressJson).toHaveBeenCalledWith({ limit: '4mb' });
+    expect(mockJsonMiddleware).toHaveBeenCalled();
+    expect(mockGetSystemConfig).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the database when the cache is empty', async () => {
+    const app = {
+      use: jest.fn(),
+    } as any;
+
+    initMiddlewares(app);
+
+    const jsonWrapper = app.use.mock.calls[1][0];
+    const next = jest.fn();
+
+    await jsonWrapper(
+      {
+        path: '/test/api/servers',
+      },
+      {},
+      next,
+    );
+
+    expect(mockGetSystemConfig).toHaveBeenCalledTimes(1);
+    expect(mockExpressJson).toHaveBeenCalledWith({ limit: '1mb' });
   });
 });

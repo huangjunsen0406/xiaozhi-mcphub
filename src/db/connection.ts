@@ -6,6 +6,7 @@ import { VectorEmbeddingSubscriber } from './subscribers/VectorEmbeddingSubscrib
 import { getSmartRoutingConfig } from '../utils/smartRouting.js';
 import { createVectorIndex } from '../services/vectorSearchService.js';
 import { isRetryableDbError } from '../utils/dbRetry.js';
+import { withTimeout } from '../utils/withTimeout.js';
 
 // Connection pool and retry configuration
 const CONNECTION_CONFIG = {
@@ -17,9 +18,20 @@ const CONNECTION_CONFIG = {
   // Automatic reconnection settings
   maxConnectionRetries: parseInt(process.env.DB_MAX_CONNECTION_RETRIES || '5', 10),
   connectionRetryDelayMs: parseInt(process.env.DB_CONNECTION_RETRY_DELAY || '3000', 10),
+  // Bounds pool teardown during reconnection. pg-pool's end() only completes
+  // once every client is returned, so a client stuck in an open transaction
+  // (idle in transaction) would otherwise wedge reconnection forever.
+  destroyTimeout: parseInt(process.env.DB_DESTROY_TIMEOUT || '15000', 10), // 15 seconds
+
+  // Postgres-side safety valves (0 = use PostgreSQL defaults / disabled). Set
+  // per-connection via the startup packet so a hung query or a session left in
+  // `idle in transaction` cannot hold a pooled connection indefinitely.
+  statementTimeout: parseInt(process.env.DB_STATEMENT_TIMEOUT || '0', 10),
+  idleInTransactionSessionTimeout: parseInt(process.env.DB_IDLE_IN_TRANSACTION_TIMEOUT || '0', 10),
 
   // Health check settings
   healthCheckIntervalMs: parseInt(process.env.DB_HEALTH_CHECK_INTERVAL || '30000', 10), // 30 seconds
+  healthCheckQueryTimeout: parseInt(process.env.DB_HEALTH_CHECK_QUERY_TIMEOUT || '5000', 10), // 5 seconds
   enableHealthCheck: process.env.DB_ENABLE_HEALTH_CHECK !== 'false',
 };
 
@@ -118,6 +130,11 @@ const getDefaultConfig = async (): Promise<DataSourceOptions> => {
       // Keep-alive settings to detect dead connections faster
       keepAlive: true,
       keepAliveInitialDelayMillis: 10000,
+      // Postgres-side safety valves (0 = PostgreSQL default / disabled): a hung
+      // query or a session stuck in `idle in transaction` must not be able to
+      // hold a pooled connection indefinitely.
+      statement_timeout: CONNECTION_CONFIG.statementTimeout,
+      idle_in_transaction_session_timeout: CONNECTION_CONFIG.idleInTransactionSessionTimeout,
     },
   };
 };
@@ -462,8 +479,15 @@ export const checkDatabaseHealth = async (): Promise<boolean> => {
   }
 
   try {
-    // Simple query to check connection
-    await appDataSource.query('SELECT 1');
+    // Simple query to check connection. Bounded by a short timeout so a DB that
+    // stops accepting queries cannot stall the health probe for the full pool
+    // connection timeout; the retryable-error branch below then drives
+    // reconnection instead of the probe hanging forever.
+    await withTimeout(
+      appDataSource.query('SELECT 1'),
+      CONNECTION_CONFIG.healthCheckQueryTimeout,
+      `DB health check failed: connection timeout after ${CONNECTION_CONFIG.healthCheckQueryTimeout}ms`,
+    );
     isHealthy = true;
     lastHealthCheckError = null;
     return true;
@@ -516,6 +540,29 @@ export const stopHealthCheck = (): void => {
   }
 };
 
+// Initialize a DataSource for a *reconnection*, where the schema has already
+// been synchronized at startup. Re-running schema DDL here would execute inside
+// a transaction that can block on locks held by live traffic, leaving the client
+// stuck in `idle in transaction` and blocking pool teardown.
+const initializeWithoutSynchronize = async (dataSource: DataSource): Promise<DataSource> => {
+  // DataSourceOptions marks synchronize readonly, but TypeORM reads it at
+  // initialize() time, so a transient toggle is safe here.
+  const options = dataSource.options as { synchronize?: boolean };
+  if (!options.synchronize) {
+    return await dataSource.initialize();
+  }
+
+  // Mutate the option in place for the duration of initialize(): synchronize()
+  // only runs during initialize(), and restoring afterwards keeps the rest of
+  // the process seeing the configured value.
+  options.synchronize = false;
+  try {
+    return await dataSource.initialize();
+  } finally {
+    options.synchronize = true;
+  }
+};
+
 // Attempt to reconnect to the database with retries
 const attemptReconnection = (): Promise<DataSource> => {
   if (reconnectionPromise) {
@@ -532,18 +579,26 @@ const attemptReconnection = (): Promise<DataSource> => {
         return await initializeDatabase();
       }
 
-      const dataSource = appDataSource;
+      let dataSource = appDataSource;
 
       if (dataSource.isInitialized) {
         try {
           console.log('[DB Reconnect] Closing existing connection...');
-          await dataSource.destroy();
+          // pg-pool end() waits for every checked-out client. A client stuck in
+          // an open transaction would make destroy() hang forever, wedging the
+          // whole reconnection machinery - bound it and fall back to a fresh
+          // pool instead.
+          await withTimeout(
+            dataSource.destroy(),
+            CONNECTION_CONFIG.destroyTimeout,
+            `[DB Reconnect] destroy() timed out after ${CONNECTION_CONFIG.destroyTimeout}ms`,
+          );
         } catch (closeError: any) {
           console.warn('[DB Reconnect] Error closing connection:', closeError.message);
-          // TypeORM only clears this flag after driver.disconnect() succeeds.
-          // If the driver pool is already gone, destroy() throws first and leaves
-          // the DataSource incorrectly marked as initialized.
-          Object.assign(dataSource, { isInitialized: false });
+          // The old destroy may still finish later and mutate its driver and
+          // isInitialized flag. Never initialize that same instance again.
+          dataSource = new DataSource({ ...dataSource.options });
+          appDataSource = dataSource;
         }
       }
 
@@ -554,7 +609,11 @@ const attemptReconnection = (): Promise<DataSource> => {
             `[DB Reconnect] Connection attempt ${attempt}/${CONNECTION_CONFIG.maxConnectionRetries}...`,
           );
 
-          await dataSource.initialize();
+          // Reconnect with schema DDL disabled: synchronize() runs in a
+          // transaction that can block on locks held by live traffic, leaving a
+          // connection stuck in `idle in transaction` and blocking pool
+          // teardown. The schema was already synchronized at startup.
+          await initializeWithoutSynchronize(dataSource);
           registerPostgresVectorType(dataSource);
           appDataSource = dataSource;
 
@@ -568,13 +627,18 @@ const attemptReconnection = (): Promise<DataSource> => {
 
           if (dataSource.isInitialized) {
             try {
-              await dataSource.destroy();
+              await withTimeout(
+                dataSource.destroy(),
+                CONNECTION_CONFIG.destroyTimeout,
+                `[DB Reconnect] Cleanup destroy() timed out after ${CONNECTION_CONFIG.destroyTimeout}ms`,
+              );
             } catch (destroyError: any) {
               console.warn(
                 '[DB Reconnect] Error cleaning up partially initialized connection:',
                 destroyError.message,
               );
-              Object.assign(dataSource, { isInitialized: false });
+              dataSource = new DataSource({ ...dataSource.options });
+              appDataSource = dataSource;
             }
           }
 

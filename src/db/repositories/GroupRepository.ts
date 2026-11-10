@@ -6,10 +6,11 @@ import { getAppDataSource } from '../connection.js';
  * Repository for Group entity
  */
 export class GroupRepository {
-  private repository: Repository<Group>;
-
-  constructor() {
-    this.repository = getAppDataSource().getRepository(Group);
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<Group> {
+    return getAppDataSource().getRepository(Group);
   }
 
   /**

@@ -6,10 +6,11 @@ import { getAppDataSource } from '../connection.js';
  * Repository for BuiltinResource entity
  */
 export class BuiltinResourceRepository {
-  private repository: Repository<BuiltinResource>;
-
-  constructor() {
-    this.repository = getAppDataSource().getRepository(BuiltinResource);
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<BuiltinResource> {
+    return getAppDataSource().getRepository(BuiltinResource);
   }
 
   async findAll(): Promise<BuiltinResource[]> {

@@ -6,10 +6,11 @@ import { getAppDataSource } from '../connection.js';
  * Repository for BuiltinPrompt entity
  */
 export class BuiltinPromptRepository {
-  private repository: Repository<BuiltinPrompt>;
-
-  constructor() {
-    this.repository = getAppDataSource().getRepository(BuiltinPrompt);
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<BuiltinPrompt> {
+    return getAppDataSource().getRepository(BuiltinPrompt);
   }
 
   async findAll(): Promise<BuiltinPrompt[]> {

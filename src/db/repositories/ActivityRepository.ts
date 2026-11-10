@@ -7,10 +7,11 @@ import { IActivityFilter, IActivityStats } from '../../types/index.js';
  * Repository for Activity entity
  */
 export class ActivityRepository {
-  private repository: Repository<Activity>;
-
-  constructor() {
-    this.repository = getAppDataSource().getRepository(Activity);
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<Activity> {
+    return getAppDataSource().getRepository(Activity);
   }
 
   /**

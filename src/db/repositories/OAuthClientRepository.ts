@@ -6,10 +6,11 @@ import { getAppDataSource } from '../connection.js';
  * Repository for OAuthClient entity
  */
 export class OAuthClientRepository {
-  private repository: Repository<OAuthClient>;
-
-  constructor() {
-    this.repository = getAppDataSource().getRepository(OAuthClient);
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<OAuthClient> {
+    return getAppDataSource().getRepository(OAuthClient);
   }
 
   /**

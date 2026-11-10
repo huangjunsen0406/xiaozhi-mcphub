@@ -6,10 +6,11 @@ import { getAppDataSource } from '../connection.js';
  * Repository for UserConfig entity
  */
 export class UserConfigRepository {
-  private repository: Repository<UserConfig>;
-
-  constructor() {
-    this.repository = getAppDataSource().getRepository(UserConfig);
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<UserConfig> {
+    return getAppDataSource().getRepository(UserConfig);
   }
 
   /**

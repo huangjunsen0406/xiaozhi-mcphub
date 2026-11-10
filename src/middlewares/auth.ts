@@ -105,7 +105,9 @@ export const auth = async (req: Request, res: Response, next: NextFunction): Pro
     return;
   }
 
-  // Check if authentication is disabled globally
+  // Check if authentication is disabled globally. Read the policy straight from
+  // the DAO rather than the in-memory cache: it must reflect updates made by
+  // other DB instances, and an auth bypass is worse than one extra query.
   const systemConfig = await getSystemConfigDao().get();
   const routingConfig = systemConfig?.routing || {
     enableGlobalRoute: true,

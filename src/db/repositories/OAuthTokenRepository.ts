@@ -16,11 +16,15 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
  * Repository for OAuthToken entity with automatic retry logic
  */
 export class OAuthTokenRepository {
-  private repository: Repository<OAuthToken>;
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<OAuthToken> {
+    return getAppDataSource().getRepository(OAuthToken);
+  }
   private retryOptions: RetryOptions;
 
   constructor(retryOptions?: RetryOptions) {
-    this.repository = getAppDataSource().getRepository(OAuthToken);
     this.retryOptions = { ...DEFAULT_RETRY_OPTIONS, ...retryOptions };
   }
 

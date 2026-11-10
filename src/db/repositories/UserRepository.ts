@@ -16,11 +16,15 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
  * Repository for User entity with automatic retry logic
  */
 export class UserRepository {
-  private repository: Repository<User>;
+  // Resolved per operation, never cached: reconnection replaces the
+  // DataSource, so a repository captured at construction time would keep
+  // targeting the destroyed pool forever.
+  private get repository(): Repository<User> {
+    return getAppDataSource().getRepository(User);
+  }
   private retryOptions: RetryOptions;
 
   constructor(retryOptions?: RetryOptions) {
-    this.repository = getAppDataSource().getRepository(User);
     this.retryOptions = { ...DEFAULT_RETRY_OPTIONS, ...retryOptions };
   }
 
