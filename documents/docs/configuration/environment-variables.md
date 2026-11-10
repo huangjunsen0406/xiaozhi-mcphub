@@ -14,6 +14,7 @@ xiaozhi-mcphub **1.1.0** 通过环境变量与（可选）`mcp_settings.json` / 
 | `READONLY` | `false` | `true` 时禁止修改类操作 |
 | `INIT_TIMEOUT` | `300000` | 初始化超时（ms） |
 | `DEFAULT_REQUEST_TIMEOUT` | `60000` | 上游 MCP 默认超时（ms） |
+| `STARTUP_CONNECT_CONCURRENCY` | `0` | 启动时最多同时连接多少个上游服务器；`0` = 不限制。服务器很多且多为 stdio 时建议设成 5–10，避免进程/文件描述符风暴 |
 | `MCPHUB_SETTING_PATH` | 自动检测 | 设置文件路径 |
 | `INSTALL_BASE_URL` | - | 公网安装/回调基址；Dashboard 里保存的 baseUrl 优先 |
 
@@ -24,6 +25,10 @@ xiaozhi-mcphub **1.1.0** 通过环境变量与（可选）`mcp_settings.json` / 
 | `DB_URL` | PostgreSQL 连接串。配置后通常启用数据库模式；**小智端点等依赖 DB** |
 | `DATABASE_URL` | **兼容旧版**：与 `DB_URL` 同义；仅当 `DB_URL` 未设时生效 |
 | `USE_DB` | 可选，显式开关 DB 模式（一般随 `DB_URL` / `DATABASE_URL` 自动判断） |
+| `DB_DESTROY_TIMEOUT` | 重连时等待旧连接池关闭的上限（ms，默认 `15000`）；超时即改用全新连接池，避免卡在 `idle in transaction` 的客户端把重连一直拖住 |
+| `DB_HEALTH_CHECK_QUERY_TIMEOUT` | 健康探针 `SELECT 1` 的超时（ms，默认 `5000`） |
+| `DB_STATEMENT_TIMEOUT` | 服务端语句超时（ms，默认 `0` = 用 PostgreSQL 默认值） |
+| `DB_IDLE_IN_TRANSACTION_TIMEOUT` | `idle in transaction` 会话超时（ms，默认 `0` = 用 PostgreSQL 默认值） |
 
 ```bash
 DB_URL=postgres://xiaozhi:密码@127.0.0.1:5432/xiaozhi_mcphub
