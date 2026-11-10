@@ -24,6 +24,7 @@ export const exportConfigTemplate = async (req: Request, res: Response): Promise
       description,
       groupIds,
       includeDisabledServers: includeDisabledServers ?? false,
+      requestingUser: (req as any).user,
     });
 
     res.json({
@@ -52,7 +53,11 @@ export const exportGroupAsTemplate = async (req: Request, res: Response): Promis
       return;
     }
 
-    const template = await exportGroupTemplate(id, name as string | undefined);
+    const template = await exportGroupTemplate(
+      id,
+      name as string | undefined,
+      (req as any).user,
+    );
 
     if (!template) {
       res.status(404).json({

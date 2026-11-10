@@ -850,6 +850,9 @@ export interface TemplateExportOptions {
   description?: string; // Template description
   groupIds?: string[]; // Specific group IDs to export (empty = all)
   includeDisabledServers?: boolean; // Include disabled servers (default: false)
+  // Caller used to apply ownership/visibility filtering on export. Omit for
+  // trusted system callers (GHSA-p589-v5cm-35qg).
+  requestingUser?: IUser;
 }
 
 // Result of importing a template

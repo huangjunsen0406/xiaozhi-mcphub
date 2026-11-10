@@ -5,10 +5,14 @@ import {
   TemplateExportOptions,
   TemplateImportResult,
   TemplateImportDetail,
+  IGroup,
   IGroupServerConfig,
   ServerConfig,
+  IUser,
 } from '../types/index.js';
 import { getServerDao, getGroupDao } from '../dao/index.js';
+import type { ServerConfigWithName } from '../dao/ServerDao.js';
+import { getDataService } from './services.js';
 import { createGroup } from './groupService.js';
 import { addServer } from './mcpService.js';
 
@@ -387,10 +391,22 @@ export async function exportTemplate(options: TemplateExportOptions): Promise<Co
   const allServers = await serverDao.findAll();
   const allGroups = await groupDao.findAll();
 
-  // Determine which groups to include
+  // Apply visibility filtering for non-admin callers so a user can only export
+  // what they can already read (GHSA-p589-v5cm-35qg). No requestingUser means a
+  // trusted system caller - keep the legacy unfiltered behavior.
+  const visibleServers: ServerConfigWithName[] =
+    options.requestingUser && !options.requestingUser.isAdmin
+      ? getDataService().filterData(allServers, options.requestingUser)
+      : allServers;
+  const visibleGroups: IGroup[] =
+    options.requestingUser && !options.requestingUser.isAdmin
+      ? getDataService().filterData(allGroups, options.requestingUser)
+      : allGroups;
+
+  // Determine which groups to include (only among groups the caller can see)
   const selectedGroups = options.groupIds?.length
-    ? allGroups.filter((g) => options.groupIds!.includes(g.id))
-    : allGroups;
+    ? visibleGroups.filter((g) => options.groupIds!.includes(g.id))
+    : visibleGroups;
 
   // Collect server names referenced by selected groups
   const referencedServerNames = new Set<string>();
@@ -420,7 +436,7 @@ export async function exportTemplate(options: TemplateExportOptions): Promise<Co
   const allEnvVars: string[] = [];
   const includedServerNames = new Set<string>();
 
-  for (const server of allServers) {
+  for (const server of visibleServers) {
     if (!referencedServerNames.has(server.name)) continue;
     if (!options.includeDisabledServers && server.enabled === false) continue;
 
@@ -455,16 +471,25 @@ export async function exportTemplate(options: TemplateExportOptions): Promise<Co
 export async function exportGroupTemplate(
   groupId: string,
   name?: string,
+  requestingUser?: IUser,
 ): Promise<ConfigTemplate | null> {
   const groupDao = getGroupDao();
   const group = await groupDao.findById(groupId);
   if (!group) return null;
+
+  // Non-admins can only export groups they are allowed to see; anything else
+  // surfaces as 404 so the response does not leak existence.
+  if (requestingUser && !requestingUser.isAdmin) {
+    const visible = getDataService().filterData([group], requestingUser);
+    if (visible.length === 0) return null;
+  }
 
   return exportTemplate({
     name: name || `${group.name} Template`,
     description: `Template exported from group "${group.name}"`,
     groupIds: [groupId],
     includeDisabledServers: false,
+    requestingUser,
   });
 }
 
