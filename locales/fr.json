@@ -42,8 +42,8 @@
     "label": "Sponsor",
     "title": "Soutenir le projet",
     "rewardAlt": "QR Code de récompense",
-    "supportMessage": "Soutenez le développement de MCPHub en m'offrant un café !",
-    "supportButton": "Soutenir sur Ko-fi"
+    "supportMessage": "Si ce projet vous est utile, une étoile sur GitHub est un beau soutien !",
+    "supportButton": "Mettre une étoile sur GitHub"
   },
   "wechat": {
     "label": "WeChat",

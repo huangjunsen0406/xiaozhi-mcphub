@@ -42,8 +42,8 @@
     "label": "赞助",
     "title": "支持项目",
     "rewardAlt": "赞赏码",
-    "supportMessage": "通过捐赠支持 MCPHub 的开发！",
-    "supportButton": "在 Ko-fi 上支持"
+    "supportMessage": "如果这个项目对你有用，欢迎在 GitHub 上点个 Star 支持一下！",
+    "supportButton": "在 GitHub 上 Star"
   },
   "wechat": {
     "label": "微信",

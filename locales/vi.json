@@ -42,8 +42,8 @@
     "label": "Tài trợ",
     "title": "Hỗ trợ Dự án",
     "rewardAlt": "Mã QR thưởng",
-    "supportMessage": "Hỗ trợ sự phát triển của MCPHub bằng cách mời tôi một ly cà phê!",
-    "supportButton": "Hỗ trợ trên Ko-fi"
+    "supportMessage": "Nếu bạn thấy dự án này hữu ích, hãy tặng một ngôi sao trên GitHub nhé!",
+    "supportButton": "Gắn sao trên GitHub"
   },
   "wechat": {
     "label": "WeChat",

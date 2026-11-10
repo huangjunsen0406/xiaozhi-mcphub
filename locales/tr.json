@@ -42,8 +42,8 @@
     "label": "Sponsor",
     "title": "Projeyi Destekle",
     "rewardAlt": "Ödül QR Kodu",
-    "supportMessage": "Bana bir kahve ısmarlayarak MCPHub'ın geliştirilmesini destekleyin!",
-    "supportButton": "Ko-fi'de Destek Ol"
+    "supportMessage": "Bu proje işinize yarıyorsa, GitHub'da bir yıldız vermek büyük destek olur!",
+    "supportButton": "GitHub'da yıldızla"
   },
   "wechat": {
     "label": "WeChat",
