@@ -22,7 +22,7 @@ export interface AssertSafeUrlOptions {
 const IPV4_BLOCKED_RANGES: Array<[number, number]> = [
   [0x00000000, 0x00ffffff], // 0.0.0.0/8 unspecified
   [0x0a000000, 0x0affffff], // 10.0.0.0/8 RFC1918
-  [0x64000000, 0x657fffff], // 100.64.0.0/10 CGNAT
+  [0x64400000, 0x647fffff], // 100.64.0.0/10 CGNAT (100.64.0.0 - 100.127.255.255)
   [0x7f000000, 0x7fffffff], // 127.0.0.0/8 loopback
   [0xa9fe0000, 0xa9feffff], // 169.254.0.0/16 link-local (IMDS)
   [0xac100000, 0xac1fffff], // 172.16.0.0/12 RFC1918
@@ -75,7 +75,16 @@ function ipv6ToBigInt(addr: string): bigint {
 
 function isBlockedIpv6(big: bigint): boolean {
   if (big === 0n || big === 1n) return true; // ::, ::1
-  if ((big >> 118n) === 0x3fan) return true; // fe80::/10 link-local
+  const top10 = big >> 118n;
+  if (top10 === 0x3fan) return true; // fe80::/10 link-local
+  if (top10 === 0x3fbn) return true; // fec0::/10 site-local (deprecated)
+  if (big >> 120n === 0xffn) return true; // ff00::/8 multicast — never a valid dial target
+  const top16 = big >> 112n;
+  if (top16 === 0x2002n) return true; // 2002::/16 6to4 transition (deprecated, RFC 7526)
+  const top32 = big >> 96n;
+  if (top32 === 0x20010000n) return true; // 2001:0::/32 Teredo transition
+  if (top32 === 0x64ff9bn) return true; // 64:ff9b::/96 NAT64 well-known prefix
+  if (big >> 80n === 0x64ff9b1n) return true; // 64:ff9b:1::/48 local-use NAT64
   if ((big >> 121n) === 0x7en) return true; // fc00::/7 unique-local
   if ((big >> 32n) === 0xffffn) return isBlockedIpv4Number(Number(big & 0xffffffffn)); // ::ffff:a.b.c.d
   if (big < 0x100000000n) return isBlockedIpv4Number(Number(big)); // ::a.b.c.d (deprecated, compatible)
@@ -94,10 +103,11 @@ const defaultLookup: SsrfLookup = async (host) => {
   return records.map((r) => r.address);
 };
 
+// Returns the normalized URL so callers can use exactly the value that was validated.
 export async function assertSafeUrl(
   rawUrl: string,
   opts: AssertSafeUrlOptions = {},
-): Promise<void> {
+): Promise<string> {
   const { allowInternal = false, lookup = defaultLookup } = opts;
 
   let parsed: URL;
@@ -112,15 +122,15 @@ export async function assertSafeUrl(
   }
 
   if (allowInternal) {
-    return;
+    return parsed.href;
   }
 
-  const host = parsed.hostname;
+  const host = parsed.hostname.replace(/^\[|\]$/g, '');
   if (isIP(host) !== 0) {
     if (isBlockedIp(host)) {
       throw new UnsafeUrlError(`Blocked target IP: ${host}`);
     }
-    return;
+    return parsed.href;
   }
 
   let addresses: string[];
@@ -137,6 +147,8 @@ export async function assertSafeUrl(
       throw new UnsafeUrlError(`Host ${host} resolves to blocked address: ${addr}`);
     }
   }
+
+  return parsed.href;
 }
 
 export type FetchLike = (url: string | URL, init?: RequestInit) => Promise<Response>;
@@ -145,14 +157,19 @@ export type FetchLike = (url: string | URL, init?: RequestInit) => Promise<Respo
 // validated against the SSRF blocklist, instead of letting the underlying
 // fetch auto-follow to an attacker-chosen internal address. Validates the
 // resolved Location (absolute or relative) on every hop and caps the chain
-// at maxHops to avoid redirect loops.
+// at maxHops to avoid redirect loops. The initial URL is validated too: callers
+// may hand over an unvalidated target (e.g. a user-supplied server URL).
 export function createRedirectValidatingFetch(
   baseFetch: FetchLike,
   allowInternal: boolean,
+  lookup: SsrfLookup = defaultLookup,
 ): FetchLike {
   const maxHops = 5;
   return async (url, init) => {
-    let currentUrl = typeof url === 'string' ? url : url.toString();
+    let currentUrl = await assertSafeUrl(typeof url === 'string' ? url : url.toString(), {
+      allowInternal,
+      lookup,
+    });
     let hops = 0;
     let response = await baseFetch(currentUrl, { ...init, redirect: 'manual' });
     while (
@@ -166,8 +183,7 @@ export function createRedirectValidatingFetch(
         return response;
       }
       const resolvedUrl = new URL(location, currentUrl).toString();
-      await assertSafeUrl(resolvedUrl, { allowInternal });
-      currentUrl = resolvedUrl;
+      currentUrl = await assertSafeUrl(resolvedUrl, { allowInternal, lookup });
       hops++;
       response = await baseFetch(currentUrl, { ...init, redirect: 'manual' });
     }

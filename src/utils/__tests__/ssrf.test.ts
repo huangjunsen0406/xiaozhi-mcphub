@@ -40,6 +40,60 @@ describe('isBlockedIp', () => {
   });
 });
 
+// 100.64.0.0/10 (RFC 6598 CGNAT) spans exactly 100.64.0.0 - 100.127.255.255.
+// The rest of 100/8 and the adjacent 101/8 are ordinary public space.
+describe('isBlockedIp CGNAT 100.64.0.0/10 boundaries', () => {
+  it.each([
+    ['100.64.0.0', 'CGNAT lower bound'],
+    ['100.64.0.1', 'CGNAT just above lower bound'],
+    ['100.100.100.100', 'CGNAT middle'],
+    ['100.127.255.254', 'CGNAT just below upper bound'],
+    ['100.127.255.255', 'CGNAT upper bound'],
+    ['::ffff:100.64.0.1', 'IPv4-mapped CGNAT'],
+  ])('blocks %s (%s)', (ip) => {
+    expect(isBlockedIp(ip)).toBe(true);
+  });
+
+  it.each([
+    ['99.255.255.255', 'just below 100/8'],
+    ['100.0.0.1', 'public 100.0.0.0/10'],
+    ['100.20.30.40', 'public (AWS)'],
+    ['100.63.255.255', 'just below CGNAT'],
+    ['100.128.0.0', 'just above CGNAT'],
+    ['100.255.255.255', 'top of 100/8'],
+    ['101.0.0.1', 'public 101/8'],
+    ['101.127.255.255', 'public 101/8'],
+    ['::ffff:100.20.30.40', 'IPv4-mapped public 100.x'],
+  ])('allows %s (%s)', (ip) => {
+    expect(isBlockedIp(ip)).toBe(false);
+  });
+});
+
+// IPv6 transition / multicast / deprecated ranges must not become an IPv4 or
+// internal-network tunnel for an attacker-chosen URL.
+describe('isBlockedIp IPv6 transition ranges', () => {
+  it.each([
+    ['fec0::1', 'fec0::/10 site-local (deprecated)'],
+    ['ff02::1', 'ff00::/8 multicast'],
+    ['ff00::', 'multicast lower bound'],
+    ['2002:7f00:1::', '2002::/16 6to4 wrapping 127.0.0.1'],
+    ['2002:a00:1::', '2002::/16 6to4 wrapping 10.0.0.1'],
+    ['2001:0:0:0:0:0:0:1', '2001:0::/32 Teredo'],
+    ['64:ff9b::7f00:1', '64:ff9b::/96 NAT64 wrapping 127.0.0.1'],
+    ['64:ff9b:1::1', '64:ff9b:1::/48 local-use NAT64'],
+  ])('blocks %s (%s)', (ip) => {
+    expect(isBlockedIp(ip)).toBe(true);
+  });
+
+  it.each([
+    ['2001:db8:1::1', 'public documentation space'],
+    ['2400:cb00::1', 'public Cloudflare IPv6'],
+    ['2001:4860:4860::8888', 'public Google IPv6'],
+  ])('allows %s (%s)', (ip) => {
+    expect(isBlockedIp(ip)).toBe(false);
+  });
+});
+
 const lookup = (map: Record<string, string[]>) => (host: string) =>
   Promise.resolve(map[host] ?? []);
 
@@ -119,7 +173,7 @@ describe('assertSafeUrl', () => {
       assertSafeUrl('https://public.example/api', {
         lookup: lookup({ 'public.example': ['93.184.216.34'] }),
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe('https://public.example/api');
   });
 });
 
@@ -127,7 +181,7 @@ describe('assertSafeUrl with allowInternal', () => {
   it('allows loopback when allowInternal is true', async () => {
     await expect(
       assertSafeUrl('http://127.0.0.1:8181/secret', { allowInternal: true }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe('http://127.0.0.1:8181/secret');
   });
 
   it('allows the metadata endpoint when allowInternal is true', async () => {
@@ -135,7 +189,7 @@ describe('assertSafeUrl with allowInternal', () => {
       assertSafeUrl('http://169.254.169.254/latest/meta-data/', {
         allowInternal: true,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe('http://169.254.169.254/latest/meta-data/');
   });
 
   it('allows a hostname resolving to private IP when allowInternal is true', async () => {
@@ -144,7 +198,7 @@ describe('assertSafeUrl with allowInternal', () => {
         allowInternal: true,
         lookup: lookup({ 'internal.example': ['10.0.0.5'] }),
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe('http://internal.example/admin');
   });
 
   it('still rejects non-http schemes even with allowInternal', async () => {
@@ -283,6 +337,28 @@ describe('createRedirectValidatingFetch', () => {
       'http://8.8.8.8/next',
       expect.anything(),
     );
+  });
+
+  it('validates the initial URL before the first request', async () => {
+    const baseFetch = jest.fn<typeof fetch>();
+    const safeFetch = createRedirectValidatingFetch(baseFetch, false);
+    await expect(safeFetch('http://127.0.0.1:8181/secret')).rejects.toThrow(
+      UnsafeUrlError,
+    );
+    expect(baseFetch).not.toHaveBeenCalled();
+  });
+
+  it('validates the initial hostname through the injected resolver', async () => {
+    const baseFetch = jest.fn<typeof fetch>();
+    const safeFetch = createRedirectValidatingFetch(
+      baseFetch,
+      false,
+      lookup({ 'internal.example': ['10.0.0.5'] }),
+    );
+    await expect(safeFetch('http://internal.example/admin')).rejects.toThrow(
+      UnsafeUrlError,
+    );
+    expect(baseFetch).not.toHaveBeenCalled();
   });
 
   it('does not treat 304 Not Modified as a redirect', async () => {
