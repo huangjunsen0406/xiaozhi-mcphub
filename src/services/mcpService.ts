@@ -1629,6 +1629,99 @@ const setupServerKeepAlive = (serverInfo: ServerInfo, serverConfig: ServerConfig
   );
 };
 
+/**
+ * How many upstream connections an initialization pass may open at once.
+ * Unset, empty or `0` keeps the previous behaviour of connecting every enabled
+ * server in parallel. Read per pass so a restart is enough to change it.
+ */
+const resolveStartupConcurrency = (): number => {
+  const raw = process.env.STARTUP_CONNECT_CONCURRENCY?.trim();
+  if (!raw) {
+    return 0;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    console.warn(
+      `Ignoring invalid STARTUP_CONNECT_CONCURRENCY="${raw}"; expected a non-negative integer. Connecting without a limit.`,
+    );
+    return 0;
+  }
+
+  return parsed;
+};
+
+type ConnectGate = {
+  run: <T>(start: () => Promise<T>, isStillWanted?: () => boolean) => Promise<T>;
+};
+
+/**
+ * Rejection reason for a queued connection that was dropped before it started,
+ * because the server it belonged to was disabled, removed or superseded while
+ * it waited for a slot. Not a connection failure: nothing was spawned and there
+ * is nothing wrong with the server, so callers report it as a cancellation
+ * rather than marking the server as failed.
+ */
+class QueuedConnectCancelledError extends Error {
+  constructor() {
+    super('Queued connection was cancelled before it started');
+    this.name = 'QueuedConnectCancelledError';
+  }
+}
+
+/**
+ * Defers the *invocation* of a connect rather than wrapping its promise, so a
+ * server waiting for a slot has not started its request yet and its timeout
+ * budget is not spent queueing. A limit of 0 runs everything immediately.
+ *
+ * Because work waits here, what the operator wants can change while it waits -
+ * a queued server may be disabled, removed or replaced by a later pass. The
+ * `isStillWanted` guard is therefore evaluated when the slot is granted, not
+ * when the work is queued; a queued entry that is no longer wanted is cancelled
+ * and its slot handed straight to the next in line.
+ */
+const createConnectGate = (limit: number): ConnectGate => {
+  if (limit <= 0) {
+    // Nothing queues, so nothing can go stale while it waits.
+    return { run: (start) => start() };
+  }
+
+  let active = 0;
+  const waiting: Array<() => void> = [];
+
+  const startNextWaiting = () => {
+    waiting.shift()?.();
+  };
+
+  const release = () => {
+    active -= 1;
+    startNextWaiting();
+  };
+
+  return {
+    run: <T>(start: () => Promise<T>, isStillWanted?: () => boolean): Promise<T> =>
+      new Promise<T>((resolve, reject) => {
+        const begin = () => {
+          if (isStillWanted && !isStillWanted()) {
+            // The slot was never taken, so pass it on rather than release it.
+            reject(new QueuedConnectCancelledError());
+            startNextWaiting();
+            return;
+          }
+
+          active += 1;
+          start().then(resolve, reject).finally(release);
+        };
+
+        if (active < limit) {
+          begin();
+        } else {
+          waiting.push(begin);
+        }
+      }),
+  };
+};
+
 // Initialize MCP server clients
 export const initializeClientsFromSettings = async (
   isInit: boolean,
@@ -1638,6 +1731,15 @@ export const initializeClientsFromSettings = async (
   const allServers: ServerConfigWithName[] = await getServerDao().findAll();
   const existingServerInfos = serverInfos;
   const nextServerInfos: ServerInfo[] = [];
+  const concurrency = resolveStartupConcurrency();
+  const connectGate = createConnectGate(concurrency);
+  // Set once this pass swaps its entries into `serverInfos`. Until then a
+  // queued server cannot have been retired by anyone, because the entry that
+  // `closeServer` / `toggleServerStatus` would act on is not published yet.
+  let entriesPublished = false;
+  if (isInit && concurrency > 0) {
+    console.log(`Connecting upstream servers with a concurrency limit of ${concurrency}`);
+  }
 
   try {
     for (const conf of allServers) {
@@ -1869,8 +1971,40 @@ export const initializeClientsFromSettings = async (
       }
       nextServerInfos.push(serverInfo);
 
-      client
-        .connect(transport, initRequestOptions || requestOptions)
+      // A queued connection has not spawned anything yet, so cancelling it is
+      // free - and necessary: `closeServerRuntime` clears the client/transport
+      // references that would later own the child process, so connecting after
+      // a disable strands a process nothing can clean up.
+      const connectStillWanted = (): boolean => {
+        // Until this pass publishes its entries, nothing else can have retired
+        // this server: the entry a disable would act on does not exist yet.
+        if (!entriesPublished) return true;
+
+        const current = serverInfos.find(
+          (si) =>
+            si.name === name &&
+            (si.owner || 'admin') === (expandedConf.owner || 'admin'),
+        );
+        // Gone from the configuration while it waited.
+        if (!current) return false;
+        // Client identity, not the pass, decides whether anyone is still
+        // waiting on this connect - the same rule liveServerInfo() applies to
+        // the result. A later pass that *preserved* this server spreads our
+        // client into its entry and relies on this very connect to complete it
+        // (a scoped reload preserves every other server whatever its status,
+        // see #921), so cancelling on the pass alone would strand it on
+        // 'connecting' for good - the failure #1150 was about. A later pass
+        // that rebuilt the server carries a client of its own, and disabling
+        // closes the runtime before replacing the entry, so in both of those
+        // cases the published entry no longer carries our client.
+        return current.client === client && current.enabled !== false;
+      };
+
+      connectGate
+        .run(
+          () => client.connect(transport, initRequestOptions || requestOptions),
+          connectStillWanted,
+        )
         .then(() => {
           console.log(`Successfully connected client for server: ${name}`);
           const serverVersion = client.getServerVersion?.();
@@ -1954,6 +2088,14 @@ export const initializeClientsFromSettings = async (
           }
         })
         .catch(async (error) => {
+          if (error instanceof QueuedConnectCancelledError) {
+            console.log(
+              `Cancelled queued connection for server: ${name} (disabled, removed or superseded while queued)`,
+            );
+            closeServerRuntime(serverInfo);
+            return;
+          }
+
           // Check if this is an OAuth authorization error
           const isOAuthError =
             error?.message?.includes('OAuth authorization required') ||
@@ -1990,6 +2132,7 @@ export const initializeClientsFromSettings = async (
   }
 
   serverInfos = nextServerInfos;
+  entriesPublished = true;
   return serverInfos;
 };
 
