@@ -159,4 +159,52 @@ describe('buildServerPayload', () => {
     expect(payload.config).not.toHaveProperty('passthroughHeaders');
     expect(payload.config).not.toHaveProperty('oauth');
   });
+
+  describe.each(['sse', 'streamable-http'] as const)('%s OAuth scopes', (serverType) => {
+    const buildOAuthPayload = (scopes: string) =>
+      buildServerPayload({
+        formData: {
+          name: 'oauth-server',
+          url: 'https://example.com/mcp',
+          command: '',
+          arguments: '',
+          env: [],
+          headers: [],
+          oauth: {
+            clientId: 'existing-client',
+            accessToken: 'existing-access-token',
+            refreshToken: 'existing-refresh-token',
+            scopes,
+          },
+        },
+        serverType,
+        envVars: [],
+        headerVars: [],
+      });
+
+    it.each([' openid offline_access ', 'openid, offline_access'])(
+      'saves explicitly entered scopes without losing credentials: %s',
+      (scopes) => {
+        const payload = buildOAuthPayload(scopes);
+
+        expect(payload.config.oauth).toEqual({
+          clientId: 'existing-client',
+          accessToken: 'existing-access-token',
+          refreshToken: 'existing-refresh-token',
+          scopes: ['openid', 'offline_access'],
+        });
+      },
+    );
+
+    it('leaves blank scopes unset instead of requesting offline access implicitly', () => {
+      const payload = buildOAuthPayload('   ');
+
+      expect(payload.config.oauth).not.toHaveProperty('scopes');
+      expect(payload.config.oauth).toMatchObject({
+        clientId: 'existing-client',
+        accessToken: 'existing-access-token',
+        refreshToken: 'existing-refresh-token',
+      });
+    });
+  });
 });
