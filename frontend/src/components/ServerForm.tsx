@@ -1069,6 +1069,23 @@ const ServerForm = ({
                         autoComplete="off"
                       />
                     </div>
+                    <div className="md:col-span-2">
+                      <label
+                        htmlFor="oauth-scopes"
+                        className="block text-xs text-gray-600 mb-1"
+                      >
+                        {t('server.oauth.scopes')}
+                      </label>
+                      <input
+                        id="oauth-scopes"
+                        type="text"
+                        value={formData.oauth?.scopes || ''}
+                        onChange={(e) => handleOAuthChange('scopes', e.target.value)}
+                        className="w-full py-2 px-3 form-input"
+                        placeholder={t('server.oauth.scopesPlaceholder')}
+                        autoComplete="off"
+                      />
+                    </div>
                     {/* 
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">
@@ -1092,19 +1109,6 @@ const ServerForm = ({
                         onChange={(e) => handleOAuthChange('tokenEndpoint', e.target.value)}
                         className="w-full py-2 px-3 form-input"
                         placeholder="https://auth.example.com/token"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">
-                        {t('server.oauth.scopes')}
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.oauth?.scopes || ''}
-                        onChange={(e) => handleOAuthChange('scopes', e.target.value)}
-                        className="w-full py-2 px-3 form-input"
-                        placeholder={t('server.oauth.scopesPlaceholder')}
-                        autoComplete="off"
                       />
                     </div>
                     <div>
