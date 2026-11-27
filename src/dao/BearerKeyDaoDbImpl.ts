@@ -1,6 +1,7 @@
 import { BearerKeyDao } from './BearerKeyDao.js';
 import { BearerKey as BearerKeyModel } from '../types/index.js';
 import { BearerKeyRepository } from '../db/repositories/BearerKeyRepository.js';
+import { SystemConfigRepository } from '../db/repositories/SystemConfigRepository.js';
 
 /**
  * Database-backed implementation of BearerKeyDao
@@ -16,13 +17,17 @@ export class BearerKeyDaoDbImpl implements BearerKeyDao {
     return {
       id: entity.id,
       name: entity.name,
-      token: entity.token,
+      token: entity.token ?? undefined,
+      tokenHash: entity.tokenHash ?? undefined,
+      tokenPrefix: entity.tokenPrefix ?? undefined,
       enabled: entity.enabled,
       kind: entity.kind ?? 'system',
       owner: entity.owner,
       accessType: entity.accessType,
       allowedGroups: entity.allowedGroups ?? [],
       allowedServers: entity.allowedServers ?? [],
+      excludedGroups: entity.excludedGroups ?? [],
+      excludedServers: entity.excludedServers ?? [],
     };
   }
 
@@ -54,15 +59,30 @@ export class BearerKeyDaoDbImpl implements BearerKeyDao {
   async create(data: Omit<BearerKeyModel, 'id'>): Promise<BearerKeyModel> {
     const entity = await this.repository.create({
       name: data.name,
-      token: data.token,
+      token: data.token as string,
+      tokenHash: data.tokenHash,
+      tokenPrefix: data.tokenPrefix,
       enabled: data.enabled,
       kind: data.kind ?? 'system',
       owner: data.owner,
       accessType: data.accessType,
       allowedGroups: data.allowedGroups ?? [],
       allowedServers: data.allowedServers ?? [],
+      excludedGroups: data.excludedGroups ?? [],
+      excludedServers: data.excludedServers ?? [],
     } as any);
-    return this.toModel(entity as any);
+    // Return raw token once on creation so the caller can show it to the user.
+    return data.token ? { ...this.toModel(entity as any), token: data.token } : this.toModel(entity as any);
+  }
+
+  async hashLegacyTokens(): Promise<number> {
+    const count = await this.repository.hashLegacyTokens();
+    const systemConfigRepo = new SystemConfigRepository();
+    const routing = ((await systemConfigRepo.get()) as any)?.routing || {};
+    if (routing.bearerAuthKey) {
+      await systemConfigRepo.updateSection('routing', { ...routing, bearerAuthKey: '' });
+    }
+    return count;
   }
 
   async update(
@@ -71,13 +91,17 @@ export class BearerKeyDaoDbImpl implements BearerKeyDao {
   ): Promise<BearerKeyModel | null> {
     const entity = await this.repository.update(id, {
       name: data.name,
-      token: data.token,
+      ...(data.tokenHash !== undefined
+        ? { token: null, tokenHash: data.tokenHash, tokenPrefix: data.tokenPrefix }
+        : {}),
       enabled: data.enabled,
       kind: data.kind,
       owner: data.owner,
       accessType: data.accessType,
       allowedGroups: data.allowedGroups,
       allowedServers: data.allowedServers,
+      excludedGroups: data.excludedGroups,
+      excludedServers: data.excludedServers,
     } as any);
     return entity ? this.toModel(entity as any) : null;
   }
@@ -96,6 +120,7 @@ export class BearerKeyDaoDbImpl implements BearerKeyDao {
 
     for (const key of allKeys) {
       let updated = false;
+      const patch: Partial<import('../db/entities/BearerKey.js').BearerKey> = {};
 
       if (key.allowedServers && key.allowedServers.length > 0) {
         const newServers = key.allowedServers.map((server) => {
@@ -107,9 +132,29 @@ export class BearerKeyDaoDbImpl implements BearerKeyDao {
         });
 
         if (updated) {
-          await this.repository.update(key.id, { allowedServers: newServers });
-          updatedCount++;
+          patch.allowedServers = newServers;
         }
+      }
+
+      if (key.excludedServers && key.excludedServers.length > 0) {
+        let excludedUpdated = false;
+        const newExcluded = key.excludedServers.map((server) => {
+          if (server === oldName) {
+            excludedUpdated = true;
+            return newName;
+          }
+          return server;
+        });
+
+        if (excludedUpdated) {
+          patch.excludedServers = newExcluded;
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        await this.repository.update(key.id, patch);
+        updatedCount++;
       }
     }
 

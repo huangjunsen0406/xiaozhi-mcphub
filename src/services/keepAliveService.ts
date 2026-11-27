@@ -1,5 +1,4 @@
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { SSEClientTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { ServerInfo, ServerConfig } from '../types/index.js';
 import { formatErrorForLogging } from '../utils/serialization.js';
 
@@ -25,19 +24,64 @@ export const setupClientKeepAlive = async (
     return;
   }
 
-  const enabled = serverConfig.enableKeepAlive === true;
-  if (!enabled) {
-    // Ensure any previous timer is cleared
-    if (serverInfo.keepAliveIntervalId) {
-      clearInterval(serverInfo.keepAliveIntervalId as NodeJS.Timeout);
-      serverInfo.keepAliveIntervalId = undefined;
-    }
+  // Repeated failed calls must not postpone an already scheduled recovery (#1385).
+  if (
+    serverInfo.enabled !== false &&
+    serverInfo.status === 'disconnected' &&
+    serverInfo.recovery?.nextAttemptAt !== undefined &&
+    serverInfo.keepAliveIntervalId
+  ) {
     return;
   }
 
-  // Clear any existing interval first
+  // Clear any existing timer/interval first
   if (serverInfo.keepAliveIntervalId) {
     clearInterval(serverInfo.keepAliveIntervalId as NodeJS.Timeout);
+    serverInfo.keepAliveIntervalId = undefined;
+  }
+
+  const canRetry = (): boolean =>
+    serverInfo.enabled !== false && serverInfo.status === 'disconnected';
+
+  if (serverInfo.enabled === false || serverInfo.status === 'oauth_required') {
+    serverInfo.recovery = undefined;
+    return;
+  }
+
+  // Schedule background exponential backoff recovery when disconnected (#1385).
+  if (serverInfo.status === 'disconnected' && options.reconnectServer) {
+    const recovery = serverInfo.recovery ?? { attempts: 0 };
+    serverInfo.recovery = recovery;
+    const ceiling = Math.min(300_000, 10_000 * 2 ** Math.min(recovery.attempts, 5));
+    const delay = Math.round(ceiling * (0.5 + Math.random() * 0.5));
+    recovery.nextAttemptAt = Date.now() + delay;
+    const timer = setTimeout(async () => {
+      serverInfo.keepAliveIntervalId = undefined;
+      recovery.nextAttemptAt = undefined;
+      if (!canRetry()) return;
+      recovery.attempts += 1;
+      recovery.lastAttemptAt = Date.now();
+      try {
+        await options.reconnectServer!(serverInfo.name);
+      } catch (error) {
+        if (canRetry() && serverInfo.recovery === recovery) {
+          serverInfo.error = `Reconnect failed: ${formatErrorForLogging(error)}`;
+          await setupClientKeepAlive(serverInfo, serverConfig, options);
+        }
+      }
+    }, delay);
+    timer.unref?.();
+    serverInfo.keepAliveIntervalId = timer;
+    return;
+  }
+
+  if (serverInfo.status === 'connected') {
+    serverInfo.recovery = undefined;
+  }
+
+  const enabled = serverConfig.enableKeepAlive === true;
+  if (!enabled) {
+    return;
   }
 
   // Default interval: 60 seconds
@@ -94,11 +138,21 @@ export const setupClientKeepAlive = async (
     isChecking = true;
 
     try {
-      // Use client.ping() if available, otherwise fallback to listTools.
-      if (typeof (activeClient as any).ping === 'function') {
-        await (activeClient as any).ping({ ...(serverInfo.options || {}), timeout: 5000 });
+      const protocolVersion = (
+        activeClient as { getNegotiatedProtocolVersion?: () => string | undefined }
+      ).getNegotiatedProtocolVersion?.();
+      const timeoutOpts = { ...(serverInfo.options || {}), timeout: 5000 };
+
+      // Modern 2026-07-28 upstreams use network server/discover instead of ping (#1382).
+      if (
+        protocolVersion === '2026-07-28' &&
+        typeof (activeClient as any).discover === 'function'
+      ) {
+        await (activeClient as any).discover(timeoutOpts);
+      } else if (typeof (activeClient as any).ping === 'function') {
+        await (activeClient as any).ping(timeoutOpts);
       } else {
-        await activeClient.listTools({}, { ...(serverInfo.options || {}), timeout: 5000 });
+        await activeClient.listTools({}, timeoutOpts);
       }
 
       if (!isHealthCheckCurrent(activeClient)) {

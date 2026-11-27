@@ -159,6 +159,8 @@
     "passwordTooShort": "Şifre en az 6 karakter olmalıdır"
   },
   "server": {
+    "protocolVersion": "MCP protokol sürümü",
+    "protocolVersionUnknown": "—",
     "addServer": "Sunucu Ekle",
     "add": "Ekle",
     "edit": "Düzenle",

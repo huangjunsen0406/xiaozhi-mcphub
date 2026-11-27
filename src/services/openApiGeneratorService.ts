@@ -5,6 +5,8 @@ import config, { getNameSeparator } from '../config/index.js';
 import { getSystemConfigDao } from '../dao/index.js';
 import { resolveInstallBaseUrl } from '../utils/installBaseUrl.js';
 import { filterModelVisibleTools } from '../utils/mcpApps.js';
+import { applyHiddenParams } from '../utils/toolConfig.js';
+import { collectDefinitions, toOpenApiSchema } from '../utils/openApiSchema.js';
 
 /**
  * Service for generating OpenAPI 3.x specifications from MCP tools
@@ -44,7 +46,9 @@ function convertToolSchemaToOpenAPI(tool: Tool): {
       (prop: any) =>
         prop.type === 'object' ||
         prop.type === 'array' ||
-        prop.type === 'string',
+        prop.type === 'string' ||
+        Array.isArray(prop.type) ||
+        ['anyOf', 'oneOf', 'allOf', '$ref'].some((keyword) => prop[keyword] !== undefined),
     );
 
     if (!hasComplexTypes && Object.keys(properties).length <= 10) {
@@ -66,14 +70,15 @@ function convertToolSchemaToOpenAPI(tool: Tool): {
 
       return { parameters };
     } else {
-      // Use request body for complex tools
+      // Use request body for complex tools. Convert JSON Schema property definitions to OpenAPI 3.0.
+      const definitions = collectDefinitions(schema);
       const requestBody: OpenAPIV3.RequestBodyObject = {
         required: required.length > 0,
         content: {
           'application/json': {
             schema: {
               type: 'object',
-              properties,
+              properties: toOpenApiSchema({ type: 'object', properties }, definitions).properties,
               ...(required.length > 0 && { required }),
             },
           },
@@ -91,7 +96,7 @@ function convertToolSchemaToOpenAPI(tool: Tool): {
  * Generate OpenAPI operation from MCP tool
  */
 function generateOperationFromTool(tool: Tool, serverName: string): OpenAPIV3.OperationObject {
-  const { parameters, requestBody } = convertToolSchemaToOpenAPI(tool);
+  const { parameters, requestBody } = convertToolSchemaToOpenAPI(applyHiddenParams(tool, tool));
   const operation: OpenAPIV3.OperationObject = {
     summary: tool.description || `Execute ${tool.name} tool`,
     description: tool.description || `Execute the ${tool.name} tool from ${serverName} server`,

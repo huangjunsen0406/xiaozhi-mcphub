@@ -1,9 +1,38 @@
 import { randomBytes } from 'node:crypto';
 import { Request, Response } from 'express';
 import { ApiResponse, BearerKey, BearerKeyAccessType, BearerKeyKind } from '../types/index.js';
-import { getBearerKeyDao, getUserDao } from '../dao/index.js';
+import { getBearerKeyDao, getGroupDao, getUserDao } from '../dao/index.js';
+import { maskBearerKey, toStoredToken } from '../utils/bearerKeyToken.js';
 
-const VALID_ACCESS_TYPES: BearerKeyAccessType[] = ['all', 'groups', 'servers', 'custom'];
+const VALID_ACCESS_TYPES: BearerKeyAccessType[] = [
+  'all',
+  'groups',
+  'servers',
+  'custom',
+  'exclude',
+];
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const normalizeStringList = (value: unknown): string[] | undefined =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : undefined;
+
+const validateExcludedScope = (
+  accessType: BearerKeyAccessType,
+  excludedGroups: string[],
+  excludedServers: string[],
+  res: Response,
+): boolean => {
+  if (accessType !== 'exclude') return true;
+  if (excludedGroups.length > 0 || excludedServers.length > 0) return true;
+  res.status(400).json({
+    success: false,
+    message: 'Exclude scope requires at least one excluded group or server',
+  });
+  return false;
+};
 
 type AuthenticatedUser = {
   username?: string;
@@ -13,13 +42,10 @@ type AuthenticatedUser = {
 const getAuthenticatedUser = (req: Request): AuthenticatedUser | undefined =>
   (req as any).user as AuthenticatedUser | undefined;
 
-const maskToken = (token: string): string =>
-  token.length > 12 ? `${token.slice(0, 8)}...${token.slice(-4)}` : '********';
-
-const sanitizeKey = (key: BearerKey): BearerKey => ({
+const sanitizeKey = ({ tokenHash: _hash, tokenPrefix, ...key }: BearerKey): BearerKey => ({
   ...key,
   kind: key.kind ?? 'system',
-  token: maskToken(key.token),
+  token: maskBearerKey({ token: key.token, tokenPrefix }),
 });
 
 const canManageKey = (user: AuthenticatedUser | undefined, key: BearerKey): boolean =>
@@ -34,6 +60,52 @@ const validateSystemScope = (
     return false;
   }
   return true;
+};
+
+const resolvePersonalScope = async (
+  accessType: BearerKeyAccessType | undefined,
+  allowedGroups: unknown,
+  ownerUsername: string | undefined,
+  ownerIsAdmin: boolean,
+  res: Response,
+): Promise<Partial<BearerKey> | undefined> => {
+  if (accessType !== 'all' && accessType !== 'groups') {
+    res
+      .status(400)
+      .json({ success: false, message: 'Personal keys support only all or groups scope' });
+    return;
+  }
+  const groupIds = new Set<string>();
+  if (accessType === 'groups') {
+    if (
+      !Array.isArray(allowedGroups) ||
+      allowedGroups.length === 0 ||
+      !allowedGroups.every((value) => typeof value === 'string' && value.trim().length > 0)
+    ) {
+      res.status(400).json({ success: false, message: 'Select at least one allowed group' });
+      return;
+    }
+    const dao = getGroupDao();
+    for (const reference of allowedGroups as string[]) {
+      const group =
+        (UUID_REGEX.test(reference) ? await dao.findById(reference) : null) ||
+        (ownerUsername ? await dao.findByOwnerAndName(ownerUsername, reference) : null) ||
+        (ownerIsAdmin ? await dao.findByName(reference) : null);
+      if (!group || (!ownerIsAdmin && group.owner !== ownerUsername)) {
+        res.status(400).json({ success: false, message: 'Allowed group not found' });
+        return;
+      }
+      // Persist canonical group IDs so renaming or recreating a group cannot redirect the grant.
+      groupIds.add(group.id);
+    }
+  }
+  return {
+    accessType,
+    allowedGroups: [...groupIds],
+    allowedServers: [],
+    excludedGroups: [],
+    excludedServers: [],
+  };
 };
 
 export const getBearerKeys = async (req: Request, res: Response): Promise<void> => {
@@ -65,8 +137,17 @@ export const createBearerKey = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const { name, enabled, kind: requestedKind, owner, accessType, allowedGroups, allowedServers } =
-      req.body as Partial<BearerKey>;
+    const {
+      name,
+      enabled,
+      kind: requestedKind,
+      owner,
+      accessType,
+      allowedGroups,
+      allowedServers,
+      excludedGroups,
+      excludedServers,
+    } = req.body as Partial<BearerKey>;
 
     if (!name || typeof name !== 'string') {
       res.status(400).json({ success: false, message: 'Key name is required' });
@@ -80,19 +161,49 @@ export const createBearerKey = async (req: Request, res: Response): Promise<void
     }
 
     const resolvedOwner = kind === 'user' ? (user.isAdmin ? owner : user.username) : undefined;
+    let ownerRecord: Awaited<ReturnType<ReturnType<typeof getUserDao>['findByUsername']>> | null =
+      null;
     if (kind === 'user') {
       if (!resolvedOwner || typeof resolvedOwner !== 'string') {
         res.status(400).json({ success: false, message: 'User-level keys require an owner' });
         return;
       }
-      if (!(await getUserDao().findByUsername(resolvedOwner))) {
+      ownerRecord = await getUserDao().findByUsername(resolvedOwner);
+      if (!ownerRecord) {
         res.status(400).json({ success: false, message: 'Bearer key owner not found' });
         return;
       }
     }
 
-    const resolvedAccessType = kind === 'user' ? 'all' : accessType;
+    const resolvedAccessType = kind === 'user' && accessType === undefined ? 'all' : accessType;
+    const personalScope =
+      kind === 'user'
+        ? await resolvePersonalScope(
+            resolvedAccessType,
+            allowedGroups,
+            resolvedOwner,
+            Boolean(ownerRecord?.isAdmin),
+            res,
+          )
+        : undefined;
+    if (kind === 'user' && !personalScope) return;
     if (kind === 'system' && !validateSystemScope(resolvedAccessType, res)) {
+      return;
+    }
+
+    const resolvedExcludedGroups =
+      kind === 'system' ? (normalizeStringList(excludedGroups) ?? []) : [];
+    const resolvedExcludedServers =
+      kind === 'system' ? (normalizeStringList(excludedServers) ?? []) : [];
+    if (
+      kind === 'system' &&
+      !validateExcludedScope(
+        resolvedAccessType ?? 'all',
+        resolvedExcludedGroups,
+        resolvedExcludedServers,
+        res,
+      )
+    ) {
       return;
     }
 
@@ -107,11 +218,16 @@ export const createBearerKey = async (req: Request, res: Response): Promise<void
         kind === 'system' && Array.isArray(allowedGroups) ? allowedGroups : [],
       allowedServers:
         kind === 'system' && Array.isArray(allowedServers) ? allowedServers : [],
+      excludedGroups: resolvedExcludedGroups,
+      excludedServers: resolvedExcludedServers,
+      ...personalScope,
     });
 
+    const { tokenHash: _hash, ...created } = key;
+    res.setHeader('Cache-Control', 'no-store');
     res.status(201).json({
       success: true,
-      data: key,
+      data: created,
       message: 'Bearer key created. The token is only shown once.',
     } satisfies ApiResponse);
   } catch (error) {
@@ -141,11 +257,33 @@ export const updateBearerKey = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const { name, enabled, accessType, allowedGroups, allowedServers } =
-      req.body as Partial<BearerKey>;
+    const {
+      name,
+      enabled,
+      accessType,
+      allowedGroups,
+      allowedServers,
+      excludedGroups,
+      excludedServers,
+    } = req.body as Partial<BearerKey>;
     const updates: Partial<BearerKey> = {};
     if (name !== undefined) updates.name = name;
     if (enabled !== undefined) updates.enabled = enabled;
+
+    if (existing.kind === 'user' && (accessType !== undefined || allowedGroups !== undefined)) {
+      const ownerRecord = existing.owner
+        ? await getUserDao().findByUsername(existing.owner)
+        : null;
+      const scope = await resolvePersonalScope(
+        accessType === undefined ? existing.accessType : accessType,
+        allowedGroups === undefined ? existing.allowedGroups : allowedGroups,
+        existing.owner,
+        Boolean(ownerRecord?.isAdmin),
+        res,
+      );
+      if (!scope) return;
+      Object.assign(updates, scope);
+    }
 
     if (existing.kind !== 'user' && user?.isAdmin) {
       if (accessType !== undefined) {
@@ -158,6 +296,31 @@ export const updateBearerKey = async (req: Request, res: Response): Promise<void
       if (allowedServers !== undefined) {
         updates.allowedServers = Array.isArray(allowedServers) ? allowedServers : [];
       }
+      if (excludedGroups !== undefined) {
+        updates.excludedGroups = normalizeStringList(excludedGroups) ?? [];
+      }
+      if (excludedServers !== undefined) {
+        updates.excludedServers = normalizeStringList(excludedServers) ?? [];
+      }
+
+      const resultingAccessType = updates.accessType ?? existing.accessType;
+      if (resultingAccessType !== 'exclude') {
+        updates.excludedGroups = [];
+        updates.excludedServers = [];
+      } else {
+        const resultingExcludedGroups = updates.excludedGroups ?? existing.excludedGroups ?? [];
+        const resultingExcludedServers = updates.excludedServers ?? existing.excludedServers ?? [];
+        if (
+          !validateExcludedScope(
+            resultingAccessType,
+            resultingExcludedGroups,
+            resultingExcludedServers,
+            res,
+          )
+        ) {
+          return;
+        }
+      }
     }
 
     const updated = await dao.update(id, updates);
@@ -165,6 +328,38 @@ export const updateBearerKey = async (req: Request, res: Response): Promise<void
   } catch (error) {
     console.error('Failed to update bearer key:', error);
     res.status(500).json({ success: false, message: 'Failed to update bearer key' });
+  }
+};
+
+// Rotate only the secret; keep ownership, enabled state and resource scope intact (#1396).
+export const resetBearerKey = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ success: false, message: 'Key id is required' });
+      return;
+    }
+    const dao = getBearerKeyDao();
+    const existing = await dao.findById(id);
+    if (!existing) {
+      res.status(404).json({ success: false, message: 'Bearer key not found' });
+      return;
+    }
+    if (!canManageKey(getAuthenticatedUser(req), existing)) {
+      res.status(403).json({ success: false, message: 'Forbidden' });
+      return;
+    }
+    const token = `mcphub_${randomBytes(32).toString('hex')}`;
+    const updated = await dao.update(id, { ...toStoredToken(token), token: undefined });
+    if (!updated) {
+      res.status(404).json({ success: false, message: 'Bearer key not found' });
+      return;
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ success: true, data: { ...sanitizeKey(updated), token } } satisfies ApiResponse);
+  } catch (error) {
+    console.error('Failed to reset bearer key:', error);
+    res.status(500).json({ success: false, message: 'Failed to reset bearer key' });
   }
 };
 

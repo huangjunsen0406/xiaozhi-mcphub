@@ -16,9 +16,13 @@ import { Server } from 'http';
 import { AppServer } from '../../src/server.js';
 import { TestServerHelper } from '../utils/testServerHelper.js';
 import * as mockSettings from '../utils/mockSettings.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { Client } from '@modelcontextprotocol/sdk-v1/client/index.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk-v1/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk-v1/client/streamableHttp.js';
+import {
+  Client as ModernClient,
+  StreamableHTTPClientTransport as ModernStreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
 import { cleanupAllServers, deleteMcpServer } from '../../src/services/mcpService.js';
 import { transports } from '../../src/services/sseService.js';
 
@@ -692,6 +696,41 @@ describe('Real Client Transport Integration Tests', () => {
 
       expect(error).toBeNull();
       expect(isConnected).toBe(true);
+    }, 60000);
+  });
+
+  describe('Modern 2026-07-28 Stateless HTTP Client Tests', () => {
+    it('discovers and lists tools over 2026-07-28 without creating downstream sessions', async () => {
+      const mcpUrl = new URL(`${baseURL}/mcp`);
+      const transport = new ModernStreamableHTTPClientTransport(mcpUrl, {
+        requestInit: {
+          headers: {
+            Authorization: 'Bearer test-auth-token-123',
+          },
+        },
+      });
+      const client = new ModernClient(
+        {
+          name: 'real-modern-2026-test-client',
+          version: '1.0.0',
+        },
+        {
+          versionNegotiation: { mode: 'auto' },
+        },
+      );
+
+      const sessionCountBefore = Object.keys(transports).length;
+      await client.connect(transport);
+      try {
+        expect(client.getProtocolEra()).toBe('modern');
+        expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28');
+        const tools = await client.listTools();
+        expect(Array.isArray(tools.tools)).toBe(true);
+        // Stateless 2026-07-28 requests must not allocate legacy transport sessions.
+        expect(Object.keys(transports).length).toBe(sessionCountBefore);
+      } finally {
+        await client.close();
+      }
     }, 60000);
   });
 });

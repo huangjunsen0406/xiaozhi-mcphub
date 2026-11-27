@@ -18,8 +18,15 @@ export class BearerKey {
   @Column({ type: 'varchar', length: 100 })
   name: string;
 
-  @Column({ type: 'varchar', length: 512 })
-  token: string;
+  // Legacy plaintext column: cleared once the key has been hashed (#1387).
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  token?: string | null;
+
+  @Column({ name: 'token_hash', type: 'varchar', length: 64, nullable: true })
+  tokenHash?: string | null;
+
+  @Column({ name: 'token_prefix', type: 'varchar', length: 16, nullable: true })
+  tokenPrefix?: string | null;
 
   @Column({ type: 'boolean', default: true })
   enabled: boolean;
@@ -31,13 +38,19 @@ export class BearerKey {
   owner?: string;
 
   @Column({ type: 'varchar', length: 20, default: 'all' })
-  accessType: 'all' | 'groups' | 'servers' | 'custom';
+  accessType: 'all' | 'groups' | 'servers' | 'custom' | 'exclude';
 
   @Column({ type: 'simple-json', nullable: true })
   allowedGroups?: string[];
 
   @Column({ type: 'simple-json', nullable: true })
   allowedServers?: string[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  excludedGroups?: string[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  excludedServers?: string[];
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

@@ -1,5 +1,6 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { getCachedSystemConfig } from './systemConfigCache.js';
 
 export class UnsafeUrlError extends Error {
   constructor(message: string) {
@@ -10,12 +11,19 @@ export class UnsafeUrlError extends Error {
 
 export type SsrfLookup = (host: string) => Promise<string[]>;
 
+export interface FakeIpExceptionRule {
+  serverId: string;
+  hostname: string;
+}
+
 export interface AssertSafeUrlOptions {
   // When true, skip the internal-IP blocklist (loopback / RFC1918 / link-local).
   // Use only for trusted callers (e.g. admin-owned servers) that legitimately
   // need to reach internal services.
   allowInternal?: boolean;
   lookup?: SsrfLookup;
+  /** Optional server identifier for scoped Fake-IP exceptions (#1446). */
+  serverId?: string;
 }
 
 // IPv4 blocked ranges as [start, end] inclusive 32-bit integers.
@@ -91,6 +99,43 @@ function isBlockedIpv6(big: bigint): boolean {
   return false;
 }
 
+export function validateFakeIpExceptions(rules: unknown): rules is FakeIpExceptionRule[] {
+  if (!Array.isArray(rules)) return false;
+  return rules.every((rule) => {
+    if (
+      !rule ||
+      typeof rule !== 'object' ||
+      typeof (rule as FakeIpExceptionRule).serverId !== 'string' ||
+      !(rule as FakeIpExceptionRule).serverId.trim() ||
+      typeof (rule as FakeIpExceptionRule).hostname !== 'string'
+    ) {
+      return false;
+    }
+    const host = (rule as FakeIpExceptionRule).hostname;
+    return (
+      host.length <= 253 &&
+      host === host.toLowerCase() &&
+      isIP(host) === 0 &&
+      host.includes('.') &&
+      host
+        .split('.')
+        .every((label: string) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
+    );
+  });
+}
+
+function allowsFakeIp(ip: string, hostname?: string, serverId?: string): boolean {
+  if (!hostname || !serverId || isIP(hostname) !== 0 || isIP(ip) !== 4) return false;
+  const n = ipv4ToInt(ip);
+  // 198.18.0.0/15 (RFC 2544, commonly used by transparent proxies as Fake-IP)
+  if (n < 0xc6120000 || n > 0xc613ffff) return false;
+  const rules = getCachedSystemConfig()?.network?.fakeIpExceptions;
+  return (
+    validateFakeIpExceptions(rules) &&
+    rules.some((rule) => rule.serverId === serverId && rule.hostname === hostname.toLowerCase())
+  );
+}
+
 export function isBlockedIp(ip: string): boolean {
   const family = isIP(ip);
   if (family === 4) return isBlockedIpv4Number(ipv4ToInt(ip));
@@ -108,7 +153,7 @@ export async function assertSafeUrl(
   rawUrl: string,
   opts: AssertSafeUrlOptions = {},
 ): Promise<string> {
-  const { allowInternal = false, lookup = defaultLookup } = opts;
+  const { allowInternal = false, lookup = defaultLookup, serverId } = opts;
 
   let parsed: URL;
   try {
@@ -143,7 +188,7 @@ export async function assertSafeUrl(
     throw new UnsafeUrlError(`No addresses resolved for host: ${host}`);
   }
   for (const addr of addresses) {
-    if (isBlockedIp(addr)) {
+    if (isBlockedIp(addr) && !allowsFakeIp(addr, host, serverId)) {
       throw new UnsafeUrlError(`Host ${host} resolves to blocked address: ${addr}`);
     }
   }
@@ -163,12 +208,14 @@ export function createRedirectValidatingFetch(
   baseFetch: FetchLike,
   allowInternal: boolean,
   lookup: SsrfLookup = defaultLookup,
+  serverId?: string,
 ): FetchLike {
   const maxHops = 5;
   return async (url, init) => {
     let currentUrl = await assertSafeUrl(typeof url === 'string' ? url : url.toString(), {
       allowInternal,
       lookup,
+      serverId,
     });
     let hops = 0;
     let response = await baseFetch(currentUrl, { ...init, redirect: 'manual' });
@@ -183,7 +230,7 @@ export function createRedirectValidatingFetch(
         return response;
       }
       const resolvedUrl = new URL(location, currentUrl).toString();
-      currentUrl = await assertSafeUrl(resolvedUrl, { allowInternal, lookup });
+      currentUrl = await assertSafeUrl(resolvedUrl, { allowInternal, lookup, serverId });
       hops++;
       response = await baseFetch(currentUrl, { ...init, redirect: 'manual' });
     }

@@ -85,27 +85,24 @@ jest.mock('../../src/config/index.js', () => ({
   },
 }));
 
-jest.mock('@modelcontextprotocol/sdk/client/sse.js', () => ({
+jest.mock('@modelcontextprotocol/client', () => ({
+  ...jest.requireActual('@modelcontextprotocol/client'),
   SSEClientTransport: jest.fn().mockImplementation((url: URL, options: any) => ({
     url,
     options,
   })),
-}));
-
-jest.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
   StreamableHTTPClientTransport: jest.fn().mockImplementation((url: URL, options: any) => ({
     url,
     options,
   })),
 }));
 
-jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+jest.mock('@modelcontextprotocol/client/stdio', () => ({
   StdioClientTransport: jest.fn(),
 }));
 
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { SSEClientTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { RequestContextService } from '../../src/services/requestContextService.js';
 import { createTransportFromConfig } from '../../src/services/mcpService.js';
 

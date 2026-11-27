@@ -12,6 +12,7 @@ import {
   handleSseMessage,
   handleMcpPostRequest,
   handleMcpOtherRequest,
+  closeModernMcpHandler,
 } from './services/sseService.js';
 import { initializeDefaultUser } from './models/User.js';
 import { sseUserContextMiddleware } from './middlewares/userContext.js';
@@ -72,6 +73,17 @@ export class AppServer {
 
       // Initialize default admin user if no users exist
       await initializeDefaultUser();
+
+      // Hash any legacy plaintext bearer tokens on startup (#1387)
+      try {
+        const { getBearerKeyDao } = await import('./dao/index.js');
+        const hashedCount = await getBearerKeyDao().hashLegacyTokens();
+        if (hashedCount > 0) {
+          console.log(`Hashed ${hashedCount} legacy bearer key token(s)`);
+        }
+      } catch (error) {
+        console.warn('Failed to hash legacy bearer key tokens:', error);
+      }
 
       // Initialize OAuth provider if configured (for proxying upstream MCP OAuth)
       await initOAuthProvider();
@@ -247,6 +259,7 @@ export class AppServer {
 
     // Close all MCP clients
     try {
+      await closeModernMcpHandler();
       cleanupAllServers();
       console.log('[SHUTDOWN] MCP clients closed');
     } catch (error) {

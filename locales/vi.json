@@ -159,6 +159,8 @@
     "user": "Người dùng"
   },
   "server": {
+    "protocolVersion": "Phiên bản giao thức MCP",
+    "protocolVersionUnknown": "—",
     "addServer": "Thêm Máy chủ",
     "add": "Thêm",
     "edit": "Chỉnh sửa",

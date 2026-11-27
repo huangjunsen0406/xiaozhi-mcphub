@@ -32,7 +32,9 @@ export class Group {
     | {
         name: string;
         alias?: string;
+        preserveToolNames?: boolean;
         tools?: string[] | 'all';
+        pinnedTools?: string[];
         prompts?: string[] | 'all';
         resources?: string[] | 'all';
       }

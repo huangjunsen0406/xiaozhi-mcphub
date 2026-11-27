@@ -67,9 +67,20 @@ const isValidCapabilitySelection = (value: unknown): boolean => {
   );
 };
 
+const isValidPreserveToolNames = (value: unknown): boolean =>
+  value === undefined || typeof value === 'boolean';
+
 const isValidServerAlias = (value: unknown): boolean => {
   return value === undefined || typeof value === 'string';
 };
+
+const isValidPinnedTools = (value: unknown): boolean => {
+  return (
+    value === undefined || (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+  );
+};
+
+const PINNED_TOOLS_MESSAGE = 'Server pinnedTools must be an array of tool names';
 
 const validateGroupServersConfig = (servers: unknown): string | null => {
   if (servers === undefined) {
@@ -95,8 +106,16 @@ const validateGroupServersConfig = (servers: unknown): string | null => {
       return 'Server configuration must have a name property';
     }
 
+    if (!isValidPreserveToolNames(serverConfig.preserveToolNames)) {
+      return 'Server preserveToolNames must be a boolean when provided';
+    }
+
     if (!isValidServerAlias(serverConfig.alias)) {
       return 'Server alias must be a string when provided';
+    }
+
+    if (!isValidPinnedTools(serverConfig.pinnedTools)) {
+      return PINNED_TOOLS_MESSAGE;
     }
 
     if (
@@ -260,10 +279,24 @@ export const batchCreateGroups = async (req: Request, res: Response): Promise<vo
               };
             }
 
+            if (!isValidPreserveToolNames(server.preserveToolNames)) {
+              return {
+                valid: false,
+                message: 'Server preserveToolNames must be a boolean when provided',
+              };
+            }
+
             if (!isValidServerAlias(server.alias)) {
               return {
                 valid: false,
                 message: 'Server alias must be a string when provided',
+              };
+            }
+
+            if (!isValidPinnedTools(server.pinnedTools)) {
+              return {
+                valid: false,
+                message: PINNED_TOOLS_MESSAGE,
               };
             }
 
@@ -450,10 +483,24 @@ export const updateGroupServersBatch = async (req: Request, res: Response): Prom
           });
           return;
         }
+        if (!isValidPreserveToolNames(server.preserveToolNames)) {
+          res.status(400).json({
+            success: false,
+            message: 'Server preserveToolNames must be a boolean when provided',
+          });
+          return;
+        }
         if (!isValidServerAlias(server.alias)) {
           res.status(400).json({
             success: false,
             message: 'Server alias must be a string when provided',
+          });
+          return;
+        }
+        if (!isValidPinnedTools(server.pinnedTools)) {
+          res.status(400).json({
+            success: false,
+            message: PINNED_TOOLS_MESSAGE,
           });
           return;
         }

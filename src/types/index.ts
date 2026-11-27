@@ -1,8 +1,10 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { RequestOptions } from '@modelcontextprotocol/sdk/shared/protocol.js';
+import type {
+  Client,
+  SSEClientTransport,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
+import type { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import type { RequestOptions } from '@modelcontextprotocol/server';
 import { SmartRoutingConfig } from '../utils/smartRouting.js';
 
 // User interface
@@ -28,7 +30,9 @@ export interface IGroup {
 export interface IGroupServerConfig {
   name: string; // Server name
   alias?: string; // Optional exposed name for this server within the group
+  preserveToolNames?: boolean; // Expose upstream tool names without a server prefix (#1391)
   tools?: string[] | 'all'; // Array of specific tool names to include, or 'all' for all tools (default: 'all')
+  pinnedTools?: string[]; // Tool names pinned next to meta-tools on $smart/{group} (#1238)
   prompts?: string[] | 'all'; // Array of specific prompt names to include, or 'all' for all prompts (default: 'all')
   resources?: string[] | 'all'; // Array of specific resource URIs to include, or 'all' for all resources (default: 'all')
 }
@@ -317,6 +321,10 @@ export interface EmailConfig {
 }
 
 export interface SystemConfig {
+  network?: {
+    fakeIpExceptions?: Array<{ serverId: string; hostname: string }>;
+  };
+  normalizeToolNames?: boolean; // Opt-in OpenAI-compatible downstream tool names (#1498)
   routing?: {
     enableGlobalRoute?: boolean; // Controls whether the /sse endpoint without group is enabled
     enableGroupNameRoute?: boolean; // Controls whether group routing by name is allowed
@@ -455,19 +463,26 @@ export interface OAuthServerConfig {
 }
 
 // Bearer authentication key configuration
-export type BearerKeyAccessType = 'all' | 'groups' | 'servers' | 'custom';
+export type BearerKeyAccessType = 'all' | 'groups' | 'servers' | 'custom' | 'exclude';
 export type BearerKeyKind = 'system' | 'user';
 
 export interface BearerKey {
   id: string; // Unique identifier for the key
   name: string; // Human readable key name
-  token: string; // Bearer token value
+  /** Raw token: returned once on create/reset, or temporarily present on unmigrated legacy records. */
+  token?: string;
+  /** SHA-256 hex digest of the bearer token (#1387). */
+  tokenHash?: string;
+  /** Safe display prefix of the bearer token (#1387). */
+  tokenPrefix?: string;
   enabled: boolean; // Whether this key is enabled
   kind?: BearerKeyKind; // Defaults to 'system' for keys created before user-level keys existed
   owner?: string; // Required for user-level keys
   accessType: BearerKeyAccessType; // Access scope type
-  allowedGroups?: string[]; // Allowed group names when accessType === 'groups' or 'custom'
+  allowedGroups?: string[]; // Allowed group names or IDs when accessType === 'groups' or 'custom'
   allowedServers?: string[]; // Allowed server names when accessType === 'servers' or 'custom'
+  excludedGroups?: string[]; // Excluded group names or IDs when accessType === 'exclude' (system keys only)
+  excludedServers?: string[]; // Excluded server names when accessType === 'exclude' (system keys only)
 }
 
 // Represents the settings for MCP servers
@@ -521,7 +536,8 @@ export interface ServerConfig {
   visibility?: ServerVisibility;
   enableKeepAlive?: boolean; // Enable remote health checks and automatic reconnect attempts
   keepAliveInterval?: number; // Health check and reconnect interval in milliseconds (default: 60000ms for SSE servers)
-  tools?: Record<string, { enabled: boolean; description?: string }>; // Tool-specific configurations with enable/disable state and custom descriptions
+  protocolNegotiation?: 'auto' | 'legacy'; // Upstream Streamable HTTP protocol negotiation mode (#1382)
+  tools?: Record<string, { enabled: boolean; description?: string; hiddenParams?: string[] }>; // Tool-specific configurations with enable/disable state, custom descriptions, and hidden input params
   prompts?: Record<string, { enabled: boolean; description?: string }>; // Prompt-specific configurations with enable/disable state and custom descriptions
   resources?: Record<string, { enabled: boolean; description?: string }>; // Resource-specific configurations with enable/disable state and custom descriptions
   options?: Partial<Pick<RequestOptions, 'timeout' | 'resetTimeoutOnProgress' | 'maxTotalTimeout'>>; // MCP request options configuration
@@ -580,6 +596,9 @@ export interface ServerConfig {
     };
   };
   perSessionClient?: boolean; // When true, creates a dedicated upstream client per downstream session (session isolation for stateful servers like Playwright)
+  // On-demand spawning for stdio servers (#1012)
+  startOnDemand?: boolean;
+  idleTimeoutMs?: number;
   // OpenAPI specific configuration
   openapi?: {
     url?: string; // OpenAPI specification URL
@@ -626,6 +645,7 @@ export interface OpenAPISecurityConfig {
 // Information about a server's status and tools
 export interface ServerInfo {
   name: string; // Unique name of the server
+  protocolVersion?: string; // Negotiated MCP protocol version for the current connection (#1379)
   version?: string; // Upstream server version reported during MCP initialization
   instructions?: string; // Upstream server instructions reported during MCP initialization
   owner?: string; // Owner of the server, defaults to 'admin' user
@@ -642,6 +662,14 @@ export interface ServerInfo {
   createTime: number; // Timestamp of when the server was created
   enabled?: boolean; // Flag to indicate if the server is enabled
   keepAliveIntervalId?: NodeJS.Timeout; // Timer ID for keep-alive ping interval
+  recovery?: {
+    attempts: number;
+    lastAttemptAt?: number;
+    nextAttemptAt?: number;
+  }; // Background backoff recovery state for remote transports (#1385)
+  spawningPromise?: Promise<void>; // Singleton cold-start promise for on-demand stdio servers (#1012)
+  idleTimeoutId?: NodeJS.Timeout; // Idle shutdown timer for on-demand stdio servers (#1012)
+  lastUsedAt?: number; // Last tool invocation timestamp (#1012)
   config?: ServerConfig; // Reference to the original server configuration for OpenAPI passthrough headers
   oauth?: {
     // OAuth authorization state
@@ -665,6 +693,7 @@ export interface Tool {
   execution?: Record<string, unknown>; // Standard MCP execution metadata
   icons?: Array<Record<string, unknown>>; // Standard MCP icons
   _meta?: Record<string, unknown>; // Extension metadata, including MCP Apps metadata
+  hiddenParams?: string[]; // Top-level input schema parameters hidden from models (#1343)
   enabled?: boolean; // Whether the tool is enabled (optional, defaults to true)
 }
 
@@ -902,4 +931,15 @@ export interface GroupCost {
   totalCount: number;
   direct: { exposed: number; gross: number };
   smartRouting: SmartRoutingCost | null;
+}
+
+/** One-shot updates to currently discovered tools; patterns are not persisted (#1372). */
+export interface BatchToggleToolsRequest {
+  enabled: boolean;
+  tools: string[];
+}
+
+export interface BatchToggleToolsResponse {
+  matchedTools: string[];
+  enabled: boolean;
 }

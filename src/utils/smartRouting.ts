@@ -6,6 +6,13 @@ import {
   resolveConfigUsername,
 } from './effectiveConfig.js';
 import { getSystemConfigDao } from '../dao/DaoFactory.js';
+import {
+  DEFAULT_TOOL_DEFINITION_FIELDS,
+  TOOL_DEFINITION_FIELDS,
+  type ToolDefinitionField,
+} from '../constants/smartRoutingDefaults.js';
+
+export const DEFAULT_SIMILARITY_THRESHOLD = 0.25;
 
 /**
  * Smart routing configuration interface
@@ -57,6 +64,21 @@ export interface SmartRoutingConfig {
    * Useful for local inference servers with a batch_size lower than the model's official limit.
    */
   embeddingMaxTokens?: number;
+  /**
+   * Minimum cosine similarity score (0..1) a tool needs to appear in search_tools results (#1234).
+   * Default: 0.25.
+   */
+  similarityThreshold?: number;
+  /**
+   * In standard mode, cap full inputSchema inclusion to the top N search_tools hits (#1234).
+   * Unset means every hit includes its full inputSchema.
+   */
+  fullSchemaTopN?: number;
+  /**
+   * Optional MCP tool fields included in search_tools and describe_tool results (#1286).
+   * Default: ['title', 'annotations'].
+   */
+  toolDefinitionFields?: readonly ToolDefinitionField[];
 }
 
 /**
@@ -231,7 +253,89 @@ export async function getSmartRoutingConfig(
         return Number.isNaN(parsed) || parsed <= 0 ? undefined : parsed;
       },
     ),
+
+    similarityThreshold: getConfigValue<number | undefined>(
+      [process.env.SMART_ROUTING_SIMILARITY_THRESHOLD],
+      smartRoutingSettings.similarityThreshold,
+      undefined,
+      (value: unknown) => {
+        if (value === '' || value === null || value === undefined) return undefined;
+        const parsed = parseSimilarityThreshold(value);
+        if (parsed === undefined) {
+          throw new Error('similarityThreshold must be a finite number between 0 and 1');
+        }
+        return parsed;
+      },
+    ),
+
+    fullSchemaTopN: getConfigValue<number | undefined>(
+      [process.env.SMART_ROUTING_FULL_SCHEMA_TOP_N],
+      smartRoutingSettings.fullSchemaTopN,
+      undefined,
+      (value: unknown) => {
+        if (value === '' || value === null || value === undefined) return undefined;
+        const parsed = parseFullSchemaTopN(value);
+        if (parsed === undefined) {
+          throw new Error('fullSchemaTopN must be a non-negative integer');
+        }
+        return parsed;
+      },
+    ),
+
+    toolDefinitionFields: getConfigValue<readonly ToolDefinitionField[]>(
+      [process.env.SMART_ROUTING_TOOL_DEFINITION_FIELDS],
+      smartRoutingSettings.toolDefinitionFields,
+      DEFAULT_TOOL_DEFINITION_FIELDS,
+      (value: unknown) => {
+        const fields = parseToolDefinitionFields(value);
+        if (!fields) {
+          throw new Error(
+            `toolDefinitionFields must list only ${TOOL_DEFINITION_FIELDS.join(', ')} (or be "none")`,
+          );
+        }
+        return fields;
+      },
+    ),
   };
+}
+
+export function parseSimilarityThreshold(value: unknown): number | undefined {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : undefined;
+  return parsed !== undefined && Number.isFinite(parsed) && parsed >= 0 && parsed <= 1
+    ? parsed
+    : undefined;
+}
+
+export function parseFullSchemaTopN(value: unknown): number | undefined {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : undefined;
+  return parsed !== undefined && Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+export function parseToolDefinitionFields(value: unknown): ToolDefinitionField[] | undefined {
+  let names: unknown[];
+  if (Array.isArray(value)) {
+    names = value;
+  } else if (typeof value === 'string') {
+    names = value.trim().toLowerCase() === 'none' ? [] : value.split(',').map((n) => n.trim());
+    names = names.filter((name) => name !== '');
+  } else {
+    return undefined;
+  }
+  const known: readonly string[] = TOOL_DEFINITION_FIELDS;
+  if (!names.every((name) => typeof name === 'string' && known.includes(name))) {
+    return undefined;
+  }
+  return TOOL_DEFINITION_FIELDS.filter((field) => names.includes(field));
 }
 
 /**

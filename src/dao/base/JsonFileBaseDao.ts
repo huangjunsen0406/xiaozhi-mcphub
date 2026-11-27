@@ -33,7 +33,7 @@ export abstract class JsonFileBaseDao {
         return this.settingsCache;
       }
 
-      const settingsData = fs.readFileSync(settingsPath, 'utf8');
+      const settingsData = fs.readFileSync(settingsPath, 'utf8').replace(/^\uFEFF/, '');
       const settings = JSON.parse(settingsData) as McpSettings;
 
       // Update cache

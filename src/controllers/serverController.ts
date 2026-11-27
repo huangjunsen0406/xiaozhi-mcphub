@@ -4,6 +4,8 @@ import { getDatabaseUrlFromEnv } from '../config/dbEnv.js';
 import {
   ApiResponse,
   AddServerRequest,
+  BatchToggleToolsRequest,
+  BatchToggleToolsResponse,
   McpSettings,
   BatchCreateServersRequest,
   BatchCreateServersResponse,
@@ -61,8 +63,25 @@ import {
   mergeToolResultCompression,
   sanitizeUserSmartRouting,
 } from '../utils/effectiveConfig.js';
+import { getNameSeparator } from '../config/index.js';
+import { matchesNamePattern } from '../utils/namePattern.js';
+import { findToolConfigKey, resolveRuntimeToolName } from '../utils/toolConfig.js';
+import { validateFakeIpExceptions } from '../utils/ssrf.js';
+import {
+  parseFullSchemaTopN,
+  parseSimilarityThreshold,
+  parseToolDefinitionFields,
+} from '../utils/smartRouting.js';
+import { TOOL_DEFINITION_FIELDS } from '../constants/smartRoutingDefaults.js';
+import { maskBearerKey } from '../utils/bearerKeyToken.js';
 
-type DescribableConfig = Record<string, { enabled: boolean; description?: string }>;
+const liveToolNames = (serverName: string, owner?: string): string[] =>
+  (getServerByName(serverName, owner)?.tools ?? []).map((tool) => tool.name);
+
+type DescribableConfig = Record<
+  string,
+  { enabled: boolean; description?: string; hiddenParams?: string[] }
+>;
 type ServerRecord = ServerConfig & { name: string };
 
 type RequestUser = {
@@ -191,8 +210,11 @@ const clearDescriptionOverride = (
 
   const { description: _description, ...remainingConfig } = itemConfig;
 
-  if (remainingConfig.enabled === false) {
-    nextItems[itemName] = { enabled: false };
+  if (
+    remainingConfig.enabled === false ||
+    Object.keys(remainingConfig).some((key) => key !== 'enabled')
+  ) {
+    nextItems[itemName] = remainingConfig;
   } else {
     delete nextItems[itemName];
   }
@@ -401,10 +423,10 @@ export const getAllSettings = async (req: Request, res: Response): Promise<void>
       userConfigs,
       oauthClients,
       oauthTokens,
-      bearerKeys: bearerKeys.map((key) => ({
+      bearerKeys: bearerKeys.map(({ tokenHash: _hash, tokenPrefix, ...key }) => ({
         ...key,
         kind: key.kind ?? 'system',
-        token: key.token.length > 12 ? `${key.token.slice(0, 8)}...${key.token.slice(-4)}` : '********',
+        token: maskBearerKey({ token: key.token, tokenPrefix }),
       })),
     };
 
@@ -1308,6 +1330,78 @@ export const clearCache = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
+// Set the status of currently discovered tools in one update (#1372).
+export const batchToggleTools = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const serverName = decodeURIComponent(req.params.serverName);
+    const { enabled, tools: patterns } = (req.body ?? {}) as Partial<BatchToggleToolsRequest>;
+    if (
+      typeof enabled !== 'boolean' ||
+      !Array.isArray(patterns) ||
+      patterns.length === 0 ||
+      patterns.length > 100 ||
+      patterns.some(
+        (pattern) => typeof pattern !== 'string' || !pattern.trim() || pattern.length > 256,
+      )
+    ) {
+      res.status(400).json({
+        success: false,
+        message:
+          'Provide enabled (boolean) and 1-100 non-empty tool names or patterns (up to 256 characters each)',
+      });
+      return;
+    }
+
+    const server = await loadAuthorizedServer(req, res, serverName);
+    if (!server) {
+      return;
+    }
+
+    const liveServer = getServerByName(serverName, server.owner);
+    const inventory = liveServer?.tools;
+    if (!inventory) {
+      res.status(409).json({
+        success: false,
+        message: 'Server tool inventory is unavailable; connect the server first',
+      });
+      return;
+    }
+
+    const runtimeNames = inventory.map((tool) => tool.name);
+    const prefix = `${serverName}${getNameSeparator()}`;
+    const matchedTools = runtimeNames.filter((name) =>
+      patterns.some((pattern) => {
+        if (!pattern.includes('*') && !pattern.includes('?')) {
+          return resolveRuntimeToolName(serverName, pattern, runtimeNames) === name;
+        }
+        const bareName = name.startsWith(prefix) ? name.slice(prefix.length) : name;
+        return matchesNamePattern(name, pattern) || matchesNamePattern(bareName, pattern);
+      }),
+    );
+
+    if (matchedTools.length > 0) {
+      const tools = { ...(server.tools || {}) };
+      for (const name of matchedTools) {
+        const key = findToolConfigKey(tools, serverName, name, runtimeNames);
+        tools[key] = { ...tools[key], enabled };
+      }
+      if (!(await getServerDao().updateTools(serverName, tools))) {
+        res.status(500).json({ success: false, message: 'Failed to save settings' });
+        return;
+      }
+      if (liveServer?.config) {
+        liveServer.config = { ...liveServer.config, tools };
+      }
+      broadcastToolListChanged();
+    }
+
+    const data: BatchToggleToolsResponse = { matchedTools, enabled };
+    res.json({ success: true, data });
+  } catch {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 // Toggle tool status for a specific server
 export const toggleTool = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -1342,8 +1436,14 @@ export const toggleTool = async (req: Request, res: Response): Promise<void> => 
     // Initialize tools config if it doesn't exist
     const tools = server.tools || {};
 
-    // Set the tool's enabled state (preserve existing description if any)
-    tools[toolName] = { ...tools[toolName], enabled };
+    // Set the tool's enabled state in its existing entry (preserves description & hiddenParams)
+    const configKey = findToolConfigKey(
+      tools,
+      serverName,
+      toolName,
+      liveToolNames(serverName, server.owner),
+    );
+    tools[configKey] = { ...tools[configKey], enabled };
 
     // Update via DAO (supports both file and database modes)
     const result = await serverDao.updateTools(serverName, tools);
@@ -1356,8 +1456,15 @@ export const toggleTool = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // Notify that tools have changed
-    notifyToolChanged();
+    // Patch the live serverInfo config in place so execution-time disabled-tool
+    // checks take effect immediately without waiting for a reconnect (#1178).
+    const liveServer = getServerByName(serverName, server.owner);
+    if (liveServer?.config) {
+      liveServer.config = { ...liveServer.config, tools };
+    }
+
+    // Broadcast without reconnecting upstream servers (#1449).
+    broadcastToolListChanged();
 
     res.json({
       success: true,
@@ -1406,10 +1513,16 @@ export const updateToolDescription = async (req: Request, res: Response): Promis
     const tools = server.tools || {};
 
     // Set the tool's description
-    if (!tools[toolName]) {
-      tools[toolName] = { enabled: true };
+    const configKey = findToolConfigKey(
+      tools,
+      serverName,
+      toolName,
+      liveToolNames(serverName, server.owner),
+    );
+    if (!tools[configKey]) {
+      tools[configKey] = { enabled: true };
     }
-    tools[toolName].description = description;
+    tools[configKey].description = description;
 
     // Update via DAO (supports both file and database modes)
     const result = await serverDao.updateTools(serverName, tools);
@@ -1422,8 +1535,15 @@ export const updateToolDescription = async (req: Request, res: Response): Promis
       return;
     }
 
-    // Notify that tools have changed
-    notifyToolChanged();
+    // Patch the live serverInfo config in place so execution-time disabled-tool
+    // checks take effect immediately without waiting for a reconnect (#1178).
+    const liveServer = getServerByName(serverName, server.owner);
+    if (liveServer?.config) {
+      liveServer.config = { ...liveServer.config, tools };
+    }
+
+    // Broadcast without reconnecting upstream servers (#1449).
+    broadcastToolListChanged();
 
     syncToolEmbedding(serverName, toolName);
 
@@ -1460,7 +1580,10 @@ export const resetToolDescription = async (req: Request, res: Response): Promise
 
     const serverDao = getServerDao();
 
-    const tools = clearDescriptionOverride(server.tools || {}, toolName);
+    const tools = clearDescriptionOverride(
+      server.tools || {},
+      findToolConfigKey(server.tools, serverName, toolName, liveToolNames(serverName, server.owner)),
+    );
 
     const result = await serverDao.updateTools(serverName, tools);
 
@@ -1472,11 +1595,16 @@ export const resetToolDescription = async (req: Request, res: Response): Promise
       return;
     }
 
-    notifyToolChanged();
+    const liveServer = getServerByName(serverName, server.owner);
+    if (liveServer?.config) {
+      liveServer.config = { ...liveServer.config, tools };
+    }
+
+    broadcastToolListChanged();
     syncToolEmbedding(serverName, toolName);
 
     const defaultDescription =
-      getServerByName(serverName)?.tools.find((tool) => tool.name === toolName)?.description || '';
+      liveServer?.tools.find((tool) => tool.name === toolName)?.description || '';
 
     res.json({
       success: true,
@@ -1493,9 +1621,117 @@ export const resetToolDescription = async (req: Request, res: Response): Promise
   }
 };
 
+// Set the top-level input parameters of a tool that models do not see (#1343).
+export const updateToolHiddenParams = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const serverName = decodeURIComponent(req.params.serverName);
+    const toolName = decodeURIComponent(req.params.toolName);
+    const { hiddenParams } = req.body ?? {};
+
+    if (!serverName || !toolName || ['__proto__', 'constructor', 'prototype'].includes(toolName)) {
+      res.status(400).json({
+        success: false,
+        message: 'Server name and tool name are required',
+      });
+      return;
+    }
+
+    if (
+      !Array.isArray(hiddenParams) ||
+      !hiddenParams.every((name) => typeof name === 'string' && name.length > 0)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'hiddenParams must be an array of parameter names',
+      });
+      return;
+    }
+
+    const server = await loadAuthorizedServer(req, res, serverName);
+    if (!server) {
+      return;
+    }
+
+    const liveServer = getServerByName(serverName, server.owner);
+    const runtimeNames = (liveServer?.tools ?? []).map((tool) => tool.name);
+    const runtimeName = resolveRuntimeToolName(serverName, toolName, runtimeNames);
+    const liveTool = liveServer?.tools?.find((tool) => tool.name === runtimeName);
+
+    let deduped = [...new Set(hiddenParams)];
+    if (liveTool?.inputSchema && typeof liveTool.inputSchema === 'object') {
+      const properties =
+        liveTool.inputSchema.properties && typeof liveTool.inputSchema.properties === 'object'
+          ? (liveTool.inputSchema.properties as Record<string, unknown>)
+          : {};
+      const required = Array.isArray(liveTool.inputSchema.required)
+        ? (liveTool.inputSchema.required as unknown[])
+        : [];
+      for (const param of deduped) {
+        if (!Object.prototype.hasOwnProperty.call(properties, param)) {
+          res.status(400).json({
+            success: false,
+            message: `Unknown parameter '${param}' for tool '${toolName}'`,
+          });
+          return;
+        }
+        if (required.includes(param)) {
+          res.status(400).json({
+            success: false,
+            message: `Cannot hide required parameter '${param}' for tool '${toolName}'`,
+          });
+          return;
+        }
+      }
+      deduped = deduped.filter((param) => !required.includes(param));
+    }
+
+    const tools = { ...(server.tools || {}) };
+    const configKey = findToolConfigKey(tools, serverName, toolName, runtimeNames);
+    const existing = tools[configKey] ?? { enabled: true };
+    if (deduped.length > 0) {
+      tools[configKey] = { ...existing, hiddenParams: deduped };
+    } else {
+      const { hiddenParams: _removed, ...rest } = existing;
+      if (rest.enabled === false || rest.description !== undefined) {
+        tools[configKey] = rest;
+      } else {
+        delete tools[configKey];
+      }
+    }
+
+    if (!(await getServerDao().updateTools(serverName, tools))) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to save settings',
+      });
+      return;
+    }
+
+    if (liveServer?.config) {
+      liveServer.config = { ...liveServer.config, tools };
+    }
+
+    broadcastToolListChanged();
+    syncToolEmbedding(serverName, runtimeName ?? toolName);
+
+    res.json({
+      success: true,
+      message: `Tool ${toolName} hidden parameters updated successfully`,
+      data: { hiddenParams: deduped },
+    });
+  } catch {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+};
+
 export const updateSystemConfig = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
+      network,
+      normalizeToolNames,
       routing,
       install,
       smartRouting,
@@ -1593,7 +1829,68 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
         typeof smartRouting.azureOpenaiEmbeddingDeployment === 'string' ||
         typeof smartRouting.progressiveDisclosure === 'boolean' ||
         typeof smartRouting.embeddingMaxTokens === 'number' ||
-        smartRouting.embeddingMaxTokens === null);
+        smartRouting.embeddingMaxTokens === null ||
+        smartRouting.similarityThreshold !== undefined ||
+        smartRouting.fullSchemaTopN !== undefined ||
+        smartRouting.toolDefinitionFields !== undefined);
+
+    if (normalizeToolNames !== undefined && typeof normalizeToolNames !== 'boolean') {
+      res.status(400).json({
+        success: false,
+        message: 'normalizeToolNames must be a boolean',
+      });
+      return;
+    }
+
+    if (
+      network?.fakeIpExceptions !== undefined &&
+      !validateFakeIpExceptions(network.fakeIpExceptions)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'network.fakeIpExceptions must be an array of { serverId, hostname } rules',
+      });
+      return;
+    }
+
+    if (
+      smartRouting?.similarityThreshold !== undefined &&
+      smartRouting.similarityThreshold !== null &&
+      parseSimilarityThreshold(smartRouting.similarityThreshold) === undefined
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'smartRouting.similarityThreshold must be a number between 0 and 1',
+      });
+      return;
+    }
+
+    if (
+      smartRouting?.fullSchemaTopN !== undefined &&
+      smartRouting.fullSchemaTopN !== null &&
+      parseFullSchemaTopN(smartRouting.fullSchemaTopN) === undefined
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'smartRouting.fullSchemaTopN must be a non-negative integer',
+      });
+      return;
+    }
+
+    if (
+      smartRouting?.toolDefinitionFields !== undefined &&
+      smartRouting.toolDefinitionFields !== null &&
+      !parseToolDefinitionFields(smartRouting.toolDefinitionFields)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: `smartRouting.toolDefinitionFields must only contain ${TOOL_DEFINITION_FIELDS.join(', ')}`,
+      });
+      return;
+    }
+
+    const hasNetworkUpdate = network?.fakeIpExceptions !== undefined;
+    const hasNormalizeToolNamesUpdate = typeof normalizeToolNames === 'boolean';
 
     const hasToolResultCompressionUpdate =
       toolResultCompression &&
@@ -1670,6 +1967,8 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       !hasModelscopeUpdate &&
       !hasEmailUpdate &&
       !hasNameSeparatorUpdate &&
+      !hasNormalizeToolNamesUpdate &&
+      !hasNetworkUpdate &&
       !hasSessionRebuildUpdate &&
       !hasOAuthServerUpdate &&
       !hasBetterAuthUpdate &&
@@ -1994,6 +2293,30 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
         systemConfig.smartRouting.embeddingMaxTokens = undefined;
       }
 
+      if (smartRouting.similarityThreshold === null) {
+        systemConfig.smartRouting.similarityThreshold = undefined;
+      } else if (smartRouting.similarityThreshold !== undefined) {
+        systemConfig.smartRouting.similarityThreshold = parseSimilarityThreshold(
+          smartRouting.similarityThreshold,
+        );
+      }
+
+      if (smartRouting.fullSchemaTopN === null) {
+        systemConfig.smartRouting.fullSchemaTopN = undefined;
+      } else if (smartRouting.fullSchemaTopN !== undefined) {
+        systemConfig.smartRouting.fullSchemaTopN = parseFullSchemaTopN(
+          smartRouting.fullSchemaTopN,
+        );
+      }
+
+      if (smartRouting.toolDefinitionFields === null) {
+        systemConfig.smartRouting.toolDefinitionFields = undefined;
+      } else if (smartRouting.toolDefinitionFields !== undefined) {
+        systemConfig.smartRouting.toolDefinitionFields = parseToolDefinitionFields(
+          smartRouting.toolDefinitionFields,
+        );
+      }
+
       // Check if we need to sync embeddings
       const isNowEnabled = systemConfig.smartRouting.enabled || false;
       const hasConfigChanged =
@@ -2228,6 +2551,17 @@ export const updateSystemConfig = async (req: Request, res: Response): Promise<v
       systemConfig.enableSessionRebuild = enableSessionRebuild;
     }
 
+    if (typeof normalizeToolNames === 'boolean') {
+      systemConfig.normalizeToolNames = normalizeToolNames;
+    }
+
+    if (network?.fakeIpExceptions !== undefined) {
+      systemConfig.network = {
+        ...systemConfig.network,
+        fakeIpExceptions: network.fakeIpExceptions,
+      };
+    }
+
     if (activityLog && typeof activityLog.storeToolPayload === 'boolean') {
       systemConfig.activityLog = {
         ...systemConfig.activityLog,
@@ -2316,8 +2650,8 @@ export const togglePrompt = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Notify that tools have changed (as prompts are part of the tool listing)
-    notifyToolChanged();
+    // Notify that prompts have changed without reconnecting upstream servers (#1449).
+    broadcastPromptListChanged();
 
     res.json({
       success: true,
@@ -2382,8 +2716,8 @@ export const updatePromptDescription = async (req: Request, res: Response): Prom
       return;
     }
 
-    // Notify that tools have changed (as prompts are part of the tool listing)
-    notifyToolChanged();
+    // Notify that prompts have changed without reconnecting upstream servers (#1449).
+    broadcastPromptListChanged();
 
     res.json({
       success: true,
@@ -2428,7 +2762,7 @@ export const resetPromptDescription = async (req: Request, res: Response): Promi
       return;
     }
 
-    notifyToolChanged();
+    broadcastPromptListChanged();
 
     const defaultDescription =
       getServerByName(serverName)?.prompts.find((prompt) => prompt.name === promptName)
@@ -2497,8 +2831,8 @@ export const toggleResource = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Notify that tools/resources metadata has changed
-    notifyToolChanged();
+    // Notify that resources metadata has changed without reconnecting upstream servers (#1449).
+    broadcastResourceListChanged();
 
     res.json({
       success: true,
@@ -2563,8 +2897,8 @@ export const updateResourceDescription = async (req: Request, res: Response): Pr
       return;
     }
 
-    // Notify that tools/resources metadata has changed
-    notifyToolChanged();
+    // Notify that resources metadata has changed without reconnecting upstream servers (#1449).
+    broadcastResourceListChanged();
 
     res.json({
       success: true,
@@ -2609,7 +2943,7 @@ export const resetResourceDescription = async (req: Request, res: Response): Pro
       return;
     }
 
-    notifyToolChanged();
+    broadcastResourceListChanged();
 
     const defaultDescription =
       getServerByName(serverName)?.resources.find((resource) => resource.uri === resourceUri)

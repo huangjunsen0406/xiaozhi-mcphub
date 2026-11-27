@@ -62,8 +62,11 @@ export class Server {
   @Column({ type: 'int', nullable: true })
   keepAliveInterval?: number;
 
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  protocolNegotiation?: 'auto' | 'legacy';
+
   @Column({ type: 'simple-json', nullable: true })
-  tools?: Record<string, { enabled: boolean; description?: string }>;
+  tools?: Record<string, { enabled: boolean; description?: string; hiddenParams?: string[] }>;
 
   @Column({ type: 'simple-json', nullable: true })
   prompts?: Record<string, { enabled: boolean; description?: string }>;
@@ -88,6 +91,12 @@ export class Server {
 
   @Column({ type: 'boolean', nullable: true })
   perSessionClient?: boolean;
+
+  @Column({ type: 'boolean', nullable: true })
+  startOnDemand?: boolean;
+
+  @Column({ type: 'int', nullable: true })
+  idleTimeoutMs?: number;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

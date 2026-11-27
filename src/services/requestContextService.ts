@@ -10,6 +10,12 @@ import type { HostedAuthContext } from './hostedAuthService.js';
 export interface RequestContext {
   headers: Record<string, string | string[] | undefined>;
   sessionId?: string;
+  /** True for stateless 2026-07-28 HTTP requests (#1235). */
+  stateless?: boolean;
+  /** Per-request client capabilities declared by 2026-07-28 stateless clients (#1263). */
+  clientCapabilities?: Record<string, unknown>;
+  /** Credential/user/route-bound scope hash for explicit state handles (#1245). */
+  clientStateScope?: string;
   userAgent?: string;
   remoteAddress?: string;
   group?: string;
@@ -17,6 +23,7 @@ export interface RequestContext {
   keyId?: string;
   keyName?: string;
   keyKind?: BearerKeyKind;
+  excludedServerNames?: string[];
   hostedAuth?: HostedAuthContext;
 }
 
@@ -210,6 +217,20 @@ export class RequestContextService {
     if (requestContext) {
       requestContext.keyKind = keyKind;
     }
+  }
+
+  /**
+   * Set server names excluded by an `exclude`-scoped system bearer key (#1413).
+   */
+  public setBearerKeyExclusions(excludedServerNames?: string[]): void {
+    const requestContext = this.getRequestContext();
+    if (requestContext) {
+      requestContext.excludedServerNames = excludedServerNames;
+    }
+  }
+
+  public getBearerKeyExclusions(): string[] | undefined {
+    return this.getRequestContext()?.excludedServerNames;
   }
 
   /**

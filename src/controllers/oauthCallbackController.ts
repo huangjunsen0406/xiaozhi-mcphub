@@ -17,12 +17,12 @@
 
 import { Request, Response } from 'express';
 import {
-  getServerByName,
   getServerByOAuthState,
+  getServerByPendingOAuthState,
   createTransportFromConfig,
   updateServerToolsCache,
 } from '../services/mcpService.js';
-import { replaceEnvVars } from '../config/index.js';
+import { expandServerConfig } from '../services/serverConfigEnvironment.js';
 import { loadServerConfig } from '../services/oauthSettingsStore.js';
 import type { ServerInfo } from '../types/index.js';
 
@@ -133,24 +133,69 @@ const normalizeQueryParam = (value: unknown): string | undefined => {
   return undefined;
 };
 
-const extractServerNameFromState = (stateValue: string): string | undefined => {
-  try {
-    const normalized = stateValue.replace(/-/g, '+').replace(/_/g, '/');
-    const padding = (4 - (normalized.length % 4)) % 4;
-    const base64 = normalized + '='.repeat(padding);
-    const decoded = Buffer.from(base64, 'base64').toString('utf8');
-    const payload = JSON.parse(decoded);
+/**
+ * OAuth `state` is a server-generated, unguessable, single-use value bound to
+ * the in-flight authorization of exactly one server. The callback MUST resolve
+ * the target server only by exact match against a stored state — never by
+ * decoding the supplied value or falling back to a server name embedded in it
+ * (GHSA-vc28-27px-x492).
+ */
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-    if (payload && typeof payload.server === 'string') {
-      return payload.server;
+/** States whose authorization has already been completed (single-use). */
+const consumedOAuthStates = new Map<string, number>();
+
+const pruneConsumedOAuthStates = (): void => {
+  const now = Date.now();
+  for (const [state, consumedAt] of consumedOAuthStates) {
+    if (now - consumedAt > OAUTH_STATE_TTL_MS) {
+      consumedOAuthStates.delete(state);
     }
-  } catch (error) {
-    // Ignore decoding errors and fall back to delimiter-based parsing
+  }
+};
+
+export const resetOAuthStateTrackingForTests = (): void => {
+  consumedOAuthStates.clear();
+};
+
+const isOAuthStateCurrent = (serverInfo: ServerInfo, state: string): boolean => {
+  const inMemoryState = serverInfo.oauth?.state;
+  const pendingState = serverInfo.config?.oauth?.pendingAuthorization?.state;
+  const storedStates = [inMemoryState, pendingState].filter(
+    (s): s is string => typeof s === 'string',
+  );
+
+  if (storedStates.length === 0 || !storedStates.includes(state)) {
+    return false;
   }
 
-  const separatorIndex = stateValue.indexOf(':');
-  if (separatorIndex > 0) {
-    return stateValue.slice(0, separatorIndex);
+  const createdAt = serverInfo.config?.oauth?.pendingAuthorization?.createdAt;
+  if (createdAt !== undefined && Date.now() - createdAt > OAUTH_STATE_TTL_MS) {
+    console.warn('OAuth callback state expired; rejecting', {
+      serverName: serverInfo.name,
+    });
+    return false;
+  }
+
+  return true;
+};
+
+const resolveServerByOAuthState = (state: string): ServerInfo | undefined => {
+  pruneConsumedOAuthStates();
+
+  if (consumedOAuthStates.has(state)) {
+    console.warn('OAuth callback state already consumed; rejecting');
+    return undefined;
+  }
+
+  const serverInfo = getServerByOAuthState(state);
+  if (serverInfo && isOAuthStateCurrent(serverInfo, state)) {
+    return serverInfo;
+  }
+
+  const pendingServerInfo = getServerByPendingOAuthState(state);
+  if (pendingServerInfo && isOAuthStateCurrent(pendingServerInfo, state)) {
+    return pendingServerInfo;
   }
 
   return undefined;
@@ -229,26 +274,13 @@ export const handleOAuthCallback = async (req: Request, res: Response) => {
 
     console.log('OAuth callback received', { hasCode: true, state: stateParam });
 
-    // Find server by state parameter
-    let serverInfo: ServerInfo | undefined;
-
-    serverInfo = getServerByOAuthState(stateParam);
-
-    let decodedServerName: string | undefined;
-    if (!serverInfo) {
-      decodedServerName = extractServerNameFromState(stateParam);
-      if (decodedServerName) {
-        console.log('State lookup failed; decoded server name from state', {
-          decodedServerName,
-        });
-        serverInfo = getServerByName(decodedServerName);
-      }
-    }
+    // Find the target server by exact match against a stored, unconsumed,
+    // unexpired server-generated state (GHSA-vc28-27px-x492).
+    const serverInfo = resolveServerByOAuthState(stateParam);
 
     if (!serverInfo) {
       console.error('No server found for OAuth callback', {
-        state: stateParam,
-        decodedServerName,
+        state: '<redacted>',
       });
       return res
         .status(400)
@@ -262,17 +294,6 @@ export const handleOAuthCallback = async (req: Request, res: Response) => {
         );
     }
 
-    // Optional: Validate state parameter for additional security
-    if (serverInfo.oauth?.state && serverInfo.oauth.state !== stateParam) {
-      console.warn('OAuth state mismatch detected', {
-        serverName: serverInfo.name,
-        // State values are considered sensitive and are not logged
-        expectedState: '<redacted>',
-        receivedState: '<redacted>',
-      });
-      // Note: We log a warning but don't fail the request since we have server name as primary identifier
-    }
-
     console.log('Processing OAuth callback for server', { serverName: serverInfo.name });
 
     // For StreamableHTTPClientTransport, we need to call finishAuth() on the transport
@@ -283,17 +304,17 @@ export const handleOAuthCallback = async (req: Request, res: Response) => {
         const currentTransport = serverInfo.transport as any;
         await currentTransport.finishAuth(codeParam);
 
+        // Mark state consumed so a replayed callback is rejected (single-use).
+        consumedOAuthStates.set(stateParam, Date.now());
+
         console.log('Successfully exchanged authorization code for tokens', {
           serverName: serverInfo.name,
         });
 
         // Refresh server configuration from storage (DB or file) to pick up newly saved tokens.
-        // loadServerConfig is DAO-backed and handles both DB and file modes, so a redundant
-        // loadSettings() call is not needed. Apply replaceEnvVars so fields like url/command
-        // have environment variable references expanded, consistent with initial server setup.
         const freshConfig = await loadServerConfig(serverInfo.name);
         const effectiveConfig = freshConfig
-          ? (replaceEnvVars(freshConfig as any) as typeof freshConfig)
+          ? await expandServerConfig(freshConfig)
           : serverInfo.config;
 
         if (!effectiveConfig) {

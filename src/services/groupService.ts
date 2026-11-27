@@ -1,6 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { IGroup, IGroupServerConfig } from '../types/index.js';
-import { notifyToolChanged } from './mcpService.js';
+import {
+  broadcastPromptListChanged,
+  broadcastResourceListChanged,
+  broadcastToolListChanged,
+} from './mcpService.js';
+
+const notifyGroupCatalogChanged = (): void => {
+  broadcastToolListChanged();
+  broadcastPromptListChanged();
+  broadcastResourceListChanged();
+};
 import { getDataService } from './services.js';
 import { UserContextService } from './userContextService.js';
 import { getGroupDao, getServerDao, getSystemConfigDao } from '../dao/index.js';
@@ -16,10 +26,16 @@ export const normalizeGroupServers = (
     }
     // New format: ensure capability selections default to 'all' if not specified
     const alias = server.alias?.trim();
+    const pinnedTools =
+      Array.isArray(server.pinnedTools) && server.pinnedTools.length > 0
+        ? [...new Set(server.pinnedTools)]
+        : undefined;
     return {
       name: server.name,
       ...(alias ? { alias } : {}),
+      ...(server.preserveToolNames === true ? { preserveToolNames: true } : {}),
       tools: server.tools || 'all',
+      ...(pinnedTools ? { pinnedTools } : {}),
       prompts: server.prompts || 'all',
       resources: server.resources || 'all',
     };
@@ -237,7 +253,7 @@ export const updateGroup = async (id: string, data: Partial<IGroup>): Promise<IG
     const updatedGroup = await groupDao.update(id, data);
 
     if (updatedGroup) {
-      notifyToolChanged();
+      notifyGroupCatalogChanged();
     }
 
     return updatedGroup;
@@ -277,7 +293,7 @@ export const updateGroupServers = async (
     const updatedGroup = await groupDao.update(groupId, { servers: validServers });
 
     if (updatedGroup) {
-      notifyToolChanged();
+      notifyGroupCatalogChanged();
     }
 
     return updatedGroup;
@@ -336,13 +352,13 @@ export const addServerToGroup = async (
       const updatedGroup = await groupDao.update(groupId, { servers: normalizedServers });
 
       if (updatedGroup) {
-        notifyToolChanged();
+        notifyGroupCatalogChanged();
       }
 
       return updatedGroup;
     }
 
-    notifyToolChanged();
+    notifyGroupCatalogChanged();
     return group;
   } catch (error) {
     console.error(`Failed to add server ${serverName} to group ${groupId}:`, error);
@@ -427,13 +443,22 @@ export const updateServerToolsInGroup = async (
       return null; // Server not in group
     }
 
-    // Update the tools configuration for the server
-    normalizedServers[serverIndex].tools = tools;
+    // Update the tools configuration for the server and prune pinnedTools not in the new selection
+    const serverConfig = normalizedServers[serverIndex];
+    serverConfig.tools = tools;
+    if (Array.isArray(tools) && Array.isArray(serverConfig.pinnedTools)) {
+      const pinnedTools = serverConfig.pinnedTools.filter((toolName) => tools.includes(toolName));
+      if (pinnedTools.length > 0) {
+        serverConfig.pinnedTools = pinnedTools;
+      } else {
+        delete serverConfig.pinnedTools;
+      }
+    }
 
     const updatedGroup = await groupDao.update(groupId, { servers: normalizedServers });
 
     if (updatedGroup) {
-      notifyToolChanged();
+      notifyGroupCatalogChanged();
     }
 
     return updatedGroup;

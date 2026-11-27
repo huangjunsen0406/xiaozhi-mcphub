@@ -159,6 +159,8 @@
     "passwordTooShort": "Le mot de passe doit contenir au moins 6 caractères"
   },
   "server": {
+    "protocolVersion": "Version du protocole MCP",
+    "protocolVersionUnknown": "—",
     "addServer": "Ajouter un serveur",
     "add": "Ajouter",
     "edit": "Modifier",

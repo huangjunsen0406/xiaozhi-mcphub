@@ -11,7 +11,8 @@ const mockClientClose = jest.fn();
 const mockListTools = jest.fn().mockResolvedValue({ tools: [] });
 const mockStderrListeners = new Map<string, (data?: Buffer) => void>();
 
-jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+jest.mock('@modelcontextprotocol/client', () => ({
+  ...jest.requireActual('@modelcontextprotocol/client'),
   Client: jest.fn().mockImplementation(() => ({
     connect: mockClientConnect,
     close: mockClientClose,
@@ -20,9 +21,10 @@ jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
     getInstructions: jest.fn(() => undefined),
     listTools: mockListTools,
   })),
+  SSEClientTransport: jest.fn(),
 }));
 
-jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+jest.mock('@modelcontextprotocol/client/stdio', () => ({
   StdioClientTransport: jest.fn().mockImplementation((params: { args?: string[] }) => ({
     // Kept so a test can tell which server a connect() call belongs to.
     params,
@@ -33,10 +35,6 @@ jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
       }),
     },
   })),
-}));
-
-jest.mock('@modelcontextprotocol/sdk/client/sse.js', () => ({
-  SSEClientTransport: jest.fn(),
 }));
 
 jest.mock('../../src/services/oauthService.js', () => ({

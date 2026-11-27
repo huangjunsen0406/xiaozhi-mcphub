@@ -7,7 +7,7 @@ import { isOAuthServerEnabled } from '../services/oauthServerService.js';
 import { getBearerKeyDao, getSystemConfigDao } from '../dao/index.js';
 import { BearerKey, SystemConfig } from '../types/index.js';
 import { getBetterAuthRuntimeConfig } from '../services/betterAuthConfig.js';
-import { safeCompare } from '../utils/safeCompare.js';
+import { bearerKeyMatches } from '../utils/bearerKeyToken.js';
 import { getBearerTokenFromHeaders } from '../utils/bearerAuth.js';
 
 const isTestEnv =
@@ -43,7 +43,9 @@ const validateBearerAuth = async (req: Request, systemConfig?: SystemConfig | nu
     return null;
   }
 
-  const matchingKey: BearerKey | undefined = enabledKeys.find((key) => safeCompare(key.token, token));
+  const matchingKey: BearerKey | undefined = enabledKeys.find((key) =>
+    bearerKeyMatches(key, token),
+  );
   if (!matchingKey) {
     console.warn('Bearer auth failed: token did not match any configured bearer key');
     return null;

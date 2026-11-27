@@ -1,29 +1,34 @@
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { createHash } from 'node:crypto';
 import treeKill from 'tree-kill';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListPromptsRequestSchema,
-  GetPromptRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ReadResourceRequestSchema,
-  ServerCapabilities,
+  type Client,
+  SSEClientTransport,
+  StreamableHTTPClientTransport,
+  StreamableHTTPClientTransportOptions,
+} from '@modelcontextprotocol/client';
+import {
+  Server,
+  type ServerCapabilities,
   type Prompt as McpPrompt,
   type Resource as McpResource,
   type Tool as McpTool,
-} from '@modelcontextprotocol/sdk/types.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+} from '@modelcontextprotocol/server';
+import { LegacyMcpClient } from '../clients/legacyMcpClient.js';
+import { LEGACY_PROTOCOL_VERSIONS, resolveUpstreamProtocolMode } from '../utils/mcpProtocol.js';
+import { getMcpRequestGroup } from '../utils/mcpRequestGroup.js';
+import { remainingListTtl } from '../utils/listFreshness.js';
 import {
-  StreamableHTTPClientTransport,
-  StreamableHTTPClientTransportOptions,
-} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { normalizeHeaders } from '@modelcontextprotocol/sdk/shared/transport.js';
+  applyHiddenParams,
+  findToolConfig,
+  removeHiddenArguments,
+  type ToolConfig,
+} from '../utils/toolConfig.js';
+import { projectGroupToolName, assertValidGroupToolNames } from '../utils/groupToolNames.js';
+import { compatibleToolNames } from '../utils/compatibleToolNames.js';
 import { createFetchWithProxy, getProxyConfigFromEnv } from './proxy.js';
 import { assertSafeUrl, createRedirectValidatingFetch } from '../utils/ssrf.js';
 import { getUserDao } from '../dao/index.js';
@@ -87,6 +92,7 @@ import {
   stripMcpAppsMetadata,
 } from '../utils/mcpApps.js';
 import { supportsCacheRefresh, injectRefreshFlag, clearRunnerCache } from '../utils/cacheUtils.js';
+import { expandServerConfig, getServerEnvironment } from './serverConfigEnvironment.js';
 
 const servers: { [sessionId: string]: Server } = {};
 
@@ -340,7 +346,10 @@ const startXiaozhiWhenServersSettle = async (): Promise<void> => {
       break;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, checkInterval));
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, checkInterval);
+      timer.unref?.();
+    });
     waited += checkInterval;
   }
 
@@ -412,7 +421,10 @@ export const getMcpServer = async (sessionId?: string, group?: string): Promise<
   );
 
   if (!sessionId) {
-    return createMcpServer(descriptor.name, descriptor.version, descriptor);
+    return createMcpServer(descriptor.name, descriptor.version, {
+      ...descriptor,
+      modern: RequestContextService.getInstance().getRequestContext()?.stateless === true,
+    });
   }
 
   if (!servers[sessionId]) {
@@ -539,7 +551,7 @@ const getOrCreateIsolatedClient = async (
 
     const reservedClients = sessionIsolatedClients.get(sessionId);
     const transport = await createTransportFromConfig(serverInfo.name, serverConfig);
-    const client = createUpstreamMcpClient(serverInfo.name, () => serverInfo);
+    const client = createUpstreamMcpClient(serverInfo.name, () => serverInfo, serverInfo.config);
 
     try {
       await client.connect(transport, serverInfo.options || {});
@@ -635,6 +647,16 @@ const broadcastListChanged = (
 
 export const broadcastToolListChanged = (): void => {
   broadcastListChanged('tool', (server) => server.sendToolListChanged());
+  void import('./xiaozhiEndpointService.js')
+    .then(({ xiaozhiEndpointService }) => {
+      if (xiaozhiEndpointService.isEnabled()) {
+        return xiaozhiEndpointService.notifyToolsChanged();
+      }
+      return undefined;
+    })
+    .catch(() => {
+      // Ignore notification failures when Xiaozhi endpoint service is inactive
+    });
 };
 
 export const broadcastResourceListChanged = (): void => {
@@ -719,10 +741,7 @@ const resolveDescriptionOverride = (
   return hasDescriptionOverride(config) ? config?.description || '' : defaultDescription || '';
 };
 
-const buildToolWithDescriptionMetadata = (
-  tool: Tool,
-  toolConfig?: { enabled: boolean; description?: string },
-): Tool => {
+const buildToolWithDescriptionMetadata = (tool: Tool, toolConfig?: ToolConfig): Tool => {
   const upstreamDescription = tool.description || '';
 
   return {
@@ -730,6 +749,7 @@ const buildToolWithDescriptionMetadata = (
     description: resolveDescriptionOverride(upstreamDescription, toolConfig),
     defaultDescription: upstreamDescription,
     hasDescriptionOverride: hasDescriptionOverride(toolConfig),
+    ...(toolConfig?.hiddenParams?.length ? { hiddenParams: toolConfig.hiddenParams } : {}),
     enabled: toolConfig?.enabled !== false,
   };
 };
@@ -845,13 +865,16 @@ const logListChangedRefreshError = (listType: 'tool' | 'prompt' | 'resource'): v
 const createUpstreamMcpClient = (
   name: string,
   getServerInfo: () => ServerInfo | undefined,
+  serverConfig?: ServerConfig,
 ): Client => {
-  return new Client(
+  const mode = serverConfig ? resolveUpstreamProtocolMode(serverConfig) : 'legacy';
+  return new LegacyMcpClient(
     {
       name: `mcp-client-${name}`,
       version: '1.0.0',
     },
     {
+      versionNegotiation: { mode },
       capabilities: MCP_APPS_CAPABILITIES,
       listChanged: {
         tools: {
@@ -1278,10 +1301,20 @@ export const createRequestContextAwareFetch = (
       return baseFetch(url, init);
     }
 
+    const headers = init?.headers;
+    const entries =
+      headers instanceof Headers
+        ? [...headers.entries()]
+        : Array.isArray(headers)
+          ? headers
+          : Object.entries(headers ?? {});
+    const replacedNames = new Set(
+      Object.keys(passthroughHeaders).map((name) => name.toLowerCase()),
+    );
     return baseFetch(url, {
       ...init,
       headers: {
-        ...normalizeHeaders(init?.headers),
+        ...Object.fromEntries(entries.filter(([name]) => !replacedNames.has(name.toLowerCase()))),
         ...passthroughHeaders,
       },
     });
@@ -1328,10 +1361,7 @@ const withModelScopeAuth = (
 // Helper function to create transport based on server configuration
 export const createTransportFromConfig = async (name: string, conf: ServerConfig): Promise<any> => {
   let transport;
-  const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    ...replaceEnvVars(conf.env || {}),
-  };
+  const env = await getServerEnvironment(conf);
 
   // SSRF guard: block URL/streamable-http transports from reaching
   // loopback / RFC1918 / link-local targets (e.g. cloud metadata service).
@@ -1344,7 +1374,7 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
   const allowInternal = !!ownerUser?.isAdmin;
 
   if (conf.url) {
-    await assertSafeUrl(conf.url, { allowInternal });
+    await assertSafeUrl(conf.url, { allowInternal, serverId: name });
   }
 
   if (conf.type === 'streamable-http') {
@@ -1354,6 +1384,8 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
     const requestAwareFetch = createRedirectValidatingFetch(
       createRequestContextAwareFetch(baseFetch, conf.passthroughHeaders),
       allowInternal,
+      undefined,
+      name,
     );
 
     if (Object.keys(headers).length > 0) {
@@ -1389,6 +1421,8 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
     const requestAwareFetch = createRedirectValidatingFetch(
       createRequestContextAwareFetch(baseFetch, conf.passthroughHeaders),
       allowInternal,
+      undefined,
+      name,
     );
 
     if (Object.keys(headers).length > 0) {
@@ -1455,7 +1489,7 @@ export const createTransportFromConfig = async (name: string, conf: ServerConfig
     }
 
     // Apply proxychains4 wrapper if proxy is configured (Linux/macOS only)
-    let resolvedArgs = replaceEnvVars(conf.args) as string[];
+    let resolvedArgs = replaceEnvVars(conf.args, env) as string[];
 
     // If this server is pending a reinstall, inject cache-busting flags (uvx only).
     // For npx, the cache directory was already cleared before reconnect.
@@ -1497,6 +1531,54 @@ type IsolatedClientContext = {
   transport: any;
 };
 
+const UUID_V4_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve the isolated-client key for a `perSessionClient` tool call.
+ * - Legacy stateful requests use `sessionId`.
+ * - Stateless 2026-07-28 requests require an authenticated credential scope and
+ *   an explicit `X-MCPHub-State-Id` UUID v4 header (or `_meta['openai/session']`
+ *   fallback when the header is omitted) (#1245, #1307).
+ */
+const resolveIsolatedClientKey = (
+  serverName: string,
+  sessionId: string,
+  requestMeta?: Record<string, unknown>,
+): string => {
+  const reqCtx = RequestContextService.getInstance().getRequestContext();
+  if (!reqCtx?.stateless) {
+    return sessionId;
+  }
+
+  const scope = reqCtx.clientStateScope;
+  if (!scope) {
+    throw new Error(
+      `Server '${serverName}' requires bearer authentication and X-MCPHub-State-Id on stateless MCP requests`,
+    );
+  }
+
+  const rawHeader = RequestContextService.getInstance().getHeader('x-mcphub-state-id');
+  const explicitHeader = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
+  if (explicitHeader !== undefined) {
+    const trimmed = explicitHeader.trim();
+    if (!UUID_V4_RE.test(trimmed)) {
+      throw new Error('Invalid X-MCPHub-State-Id header: must be a UUID v4');
+    }
+    return `state:${scope}:${trimmed.toLowerCase()}`;
+  }
+
+  const openAiSession = requestMeta?.['openai/session'];
+  if (typeof openAiSession === 'string' && openAiSession.trim().length > 0) {
+    const hashed = createHash('sha256').update(openAiSession.trim()).digest('hex');
+    return `state:${scope}:openai:${hashed}`;
+  }
+
+  throw new Error(
+    `Server '${serverName}' requires X-MCPHub-State-Id (UUID v4) on stateless MCP requests`,
+  );
+};
+
 // Helper function to handle client.callTool with reconnection logic
 const callToolWithReconnect = async (
   serverInfo: ServerInfo,
@@ -1516,7 +1598,7 @@ const callToolWithReconnect = async (
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const result = await client.callTool(toolParams, undefined, options || {});
+      const result = await client.callTool(toolParams, options || {});
       // Check auth error
       checkAuthError(result);
       return result;
@@ -1531,13 +1613,14 @@ const callToolWithReconnect = async (
         );
 
         try {
-          const server = await getServerDao().findById(serverInfo.name);
-          if (!server) {
+          const rawServer = await getServerDao().findById(serverInfo.name);
+          if (!rawServer) {
             throw new Error(`Server configuration not found for: ${serverInfo.name}`);
           }
 
+          const server = await expandServerConfig(rawServer);
           const newTransport = await createTransportFromConfig(serverInfo.name, server);
-          const newClient = createUpstreamMcpClient(serverInfo.name, () => serverInfo);
+          const newClient = createUpstreamMcpClient(serverInfo.name, () => serverInfo, server);
 
           // Reconnect with new transport
           await newClient.connect(newTransport, serverInfo.options || {});
@@ -1562,6 +1645,8 @@ const callToolWithReconnect = async (
             serverInfo.client = newClient;
             serverInfo.transport = newTransport;
             serverInfo.status = 'connected';
+            serverInfo.recovery = undefined;
+            setupServerKeepAlive(serverInfo, server);
           }
 
           // Point the local refs at the new connection for the next attempt.
@@ -1593,6 +1678,9 @@ const callToolWithReconnect = async (
           if (!isolated) {
             serverInfo.status = 'disconnected';
             serverInfo.error = `Failed to reconnect: ${formatErrorForLogging(reconnectError)}`;
+            if (serverInfo.config) {
+              setupServerKeepAlive(serverInfo, serverInfo.config);
+            }
           }
 
           // If this was the last attempt, throw the original error
@@ -1746,7 +1834,7 @@ export const initializeClientsFromSettings = async (
       const { name } = conf;
 
       // Expand environment variables in all configuration values
-      const expandedConf = replaceEnvVars(conf as any) as ServerConfigWithName;
+      const expandedConf = await expandServerConfig(conf);
 
       // Skip disabled servers
       if (expandedConf.enabled === false) {
@@ -1763,6 +1851,33 @@ export const initializeClientsFromSettings = async (
           createTime: Date.now(),
           enabled: false,
         });
+        continue;
+      }
+
+      // On-demand stdio servers: skip startup connect unless explicitly targeted;
+      // preserve cached tools/prompts/resources so agents can still discover and wake them (#1012).
+      if (
+        expandedConf.startOnDemand === true &&
+        serverName !== name &&
+        (!expandedConf.type || expandedConf.type === 'stdio')
+      ) {
+        const existingOnDemand = existingServerInfos.find((s) => s.name === name);
+        nextServerInfos.push({
+          ...(existingOnDemand ?? {
+            name,
+            status: 'disconnected' as const,
+            error: null,
+            tools: [],
+            prompts: [],
+            resources: [],
+            createTime: Date.now(),
+          }),
+          owner: expandedConf.owner,
+          visibility: expandedConf.visibility,
+          enabled: true,
+          config: expandedConf,
+        });
+        console.log(`Skipping startup connect for on-demand server: ${name}`);
         continue;
       }
 
@@ -1924,7 +2039,7 @@ export const initializeClientsFromSettings = async (
       }
 
       const serverInfoRef: { current?: ServerInfo } = {};
-      const client = createUpstreamMcpClient(name, () => serverInfoRef.current);
+      const client = createUpstreamMcpClient(name, () => serverInfoRef.current, expandedConf);
 
       // Get request options from server configuration, with fallbacks
       const serverRequestOptions = expandedConf.options || {};
@@ -2214,6 +2329,7 @@ export const getServersInfo = async (
       ({
         name,
         version,
+        client,
         instructions,
         owner,
         visibility,
@@ -2232,14 +2348,18 @@ export const getServersInfo = async (
           serverConfig?.oauth?.accessToken || serverConfig?.oauth?.refreshToken,
         );
 
-        // Add enabled status and custom description to each tool
+        // Add enabled status and custom description to each tool.
+        // Check both prefixed and bare tool names (#1178).
         const toolsWithEnabled = tools.map((tool) => {
-          const toolConfig = serverConfig?.tools?.[tool.name];
+          const bareToolName = normalizeToolNameForServer(name, tool.name);
+          const toolConfig = serverConfig?.tools?.[tool.name] ?? serverConfig?.tools?.[bareToolName];
           return buildToolWithDescriptionMetadata(tool, toolConfig);
         });
 
         const promptsWithEnabled = prompts.map((prompt) => {
-          const promptConfig = serverConfig?.prompts?.[prompt.name];
+          const barePromptName = normalizeToolNameForServer(name, prompt.name);
+          const promptConfig =
+            serverConfig?.prompts?.[prompt.name] ?? serverConfig?.prompts?.[barePromptName];
           return {
             ...prompt,
             description: resolveDescriptionOverride(prompt.description, promptConfig),
@@ -2250,6 +2370,11 @@ export const getServersInfo = async (
         return {
           name,
           version,
+          protocolVersion:
+            enabled && status === 'connected' && resolvedType !== 'openapi'
+              ? (client as { getNegotiatedProtocolVersion?: () => string | undefined })
+                  ?.getNegotiatedProtocolVersion?.()
+              : undefined,
           instructions,
           owner,
           visibility,
@@ -2322,6 +2447,13 @@ export const getServerByName = (
 // Get server by OAuth state parameter
 export const getServerByOAuthState = (state: string): ServerInfo | undefined => {
   return serverInfos.find((serverInfo) => serverInfo.oauth?.state === state);
+};
+
+// Get server by persisted pending-authorization state (restart recovery, GHSA-vc28-27px-x492)
+export const getServerByPendingOAuthState = (state: string): ServerInfo | undefined => {
+  return serverInfos.find(
+    (serverInfo) => serverInfo.config?.oauth?.pendingAuthorization?.state === state,
+  );
 };
 
 /**
@@ -2425,7 +2557,8 @@ const filterToolsByConfig = async (serverName: string, tools: Tool[]): Promise<T
   }
 
   return tools.filter((tool) => {
-    const toolConfig = serverConfig.tools?.[tool.name];
+    const bareToolName = normalizeToolNameForServer(serverName, tool.name);
+    const toolConfig = serverConfig.tools?.[tool.name] ?? serverConfig.tools?.[bareToolName];
     // If tool is not in config, it's enabled by default
     return toolConfig?.enabled !== false;
   });
@@ -2561,6 +2694,10 @@ function checkAuthError(result: any) {
 }
 
 const closeServerRuntime = (serverInfo: ServerInfo): void => {
+  if (serverInfo.idleTimeoutId) {
+    clearTimeout(serverInfo.idleTimeoutId);
+    serverInfo.idleTimeoutId = undefined;
+  }
   if (serverInfo.keepAliveIntervalId) {
     clearInterval(serverInfo.keepAliveIntervalId);
     serverInfo.keepAliveIntervalId = undefined;
@@ -2600,6 +2737,51 @@ const closeServerRuntime = (serverInfo: ServerInfo): void => {
 };
 
 // Close server client and transport
+// On-demand stdio spawning helpers (#1012)
+const shutdownOnDemandServer = (serverInfo: ServerInfo): void => {
+  if (serverInfo.idleTimeoutId) {
+    clearTimeout(serverInfo.idleTimeoutId);
+    serverInfo.idleTimeoutId = undefined;
+  }
+  closeServerRuntime(serverInfo);
+  serverInfo.status = 'disconnected';
+  console.log(
+    `[${serverInfo.name}] On-demand server shut down after idle; ${serverInfo.tools.length} tools cached`,
+  );
+};
+
+const scheduleIdleShutdown = (serverInfo: ServerInfo): void => {
+  if (!serverInfo.config?.startOnDemand) return;
+  if (serverInfo.idleTimeoutId) {
+    clearTimeout(serverInfo.idleTimeoutId);
+  }
+  const idleMs = serverInfo.config.idleTimeoutMs ?? 300_000;
+  const timer = setTimeout(() => {
+    if (serverInfo.status === 'connected') {
+      shutdownOnDemandServer(serverInfo);
+    }
+  }, idleMs);
+  timer.unref?.();
+  serverInfo.idleTimeoutId = timer;
+};
+
+const ensureServerReady = async (serverInfo: ServerInfo): Promise<void> => {
+  if (serverInfo.status === 'connected') return;
+  if (serverInfo.spawningPromise) {
+    await serverInfo.spawningPromise;
+    return;
+  }
+
+  console.log(`[${serverInfo.name}] Cold-starting on-demand server...`);
+  const spawnPromise = reconnectServer(serverInfo.name);
+  serverInfo.spawningPromise = spawnPromise;
+  try {
+    await spawnPromise;
+  } finally {
+    serverInfo.spawningPromise = undefined;
+  }
+};
+
 function closeServer(name: string, owner?: string | null) {
   const serverInfo = getServerByName(name, owner);
   if (serverInfo) {
@@ -2747,11 +2929,15 @@ const getMcpAppsRouteContext = async (
   sessionId: string,
   group: string | undefined,
 ): Promise<McpAppsRouteContext> => {
-  if (
-    !sessionId ||
-    isSmartRoutingGroup(group) ||
-    !hasMcpAppsCapability(servers[sessionId]?.getClientCapabilities())
-  ) {
+  const reqCtx = RequestContextService.getInstance().getRequestContext();
+  // Stateless (2026-07-28) requests have no session; capabilities arrive per request (#1263).
+  const clientCapabilities = reqCtx?.stateless
+    ? reqCtx.clientCapabilities
+    : sessionId
+      ? servers[sessionId]?.getClientCapabilities()
+      : undefined;
+
+  if (isSmartRoutingGroup(group) || !hasMcpAppsCapability(clientCapabilities)) {
     return { enabled: false };
   }
 
@@ -2834,11 +3020,22 @@ const findToolOnServer = (
   toolName: string,
   allowRawName: boolean,
 ): Tool | undefined => {
-  return serverInfo.tools.find(
-    (tool) =>
-      tool.name === toolName ||
-      (allowRawName && normalizeToolNameForServer(serverInfo.name, tool.name) === toolName),
+  const tool = serverInfo.tools.find(
+    (item) =>
+      item.name === toolName ||
+      (allowRawName && normalizeToolNameForServer(serverInfo.name, item.name) === toolName),
   );
+  if (!tool) {
+    return undefined;
+  }
+  // A tool disabled via toggleTool must also be blocked at execution time (#1178).
+  const bareToolName = normalizeToolNameForServer(serverInfo.name, tool.name);
+  const toolConfig =
+    serverInfo.config?.tools?.[tool.name] ?? serverInfo.config?.tools?.[bareToolName];
+  if (toolConfig && toolConfig.enabled === false) {
+    return undefined;
+  }
+  return tool;
 };
 
 const assertToolAvailableForRoute = (tool: Tool, appsRouteContext: McpAppsRouteContext): void => {
@@ -2860,13 +3057,28 @@ const resolveToolInGroup = async (
   const { filteredServerInfos, serverConfigsByName } =
     await getFilteredServerInfosForGroup(lookupGroup);
 
+  // Validate full group catalog when preserveToolNames is active so collisions fail closed (#1391).
+  const hasOriginalToolNames = [...serverConfigsByName.values()].some(
+    (cfg) => cfg.preserveToolNames === true,
+  );
+  if (hasOriginalToolNames) {
+    await listGroupTools(lookupGroup, filteredServerInfos, serverConfigsByName, {
+      enabled: allowRawName,
+    });
+  }
+
   for (const serverInfo of filteredServerInfos) {
-    if (serverInfo.status !== 'connected' || serverInfo.enabled === false) {
+    if (
+      (serverInfo.status !== 'connected' && serverInfo.config?.startOnDemand !== true) ||
+      serverInfo.enabled === false
+    ) {
       continue;
     }
 
     const serverConfig = serverConfigsByName.get(serverInfo.name);
-    const internalToolName = resolveNameFromGroup(toolName, serverInfo.name, serverConfig);
+    const internalToolName = serverConfig?.preserveToolNames
+      ? `${serverInfo.name}${getNameSeparator()}${toolName}`
+      : resolveNameFromGroup(toolName, serverInfo.name, serverConfig);
     const tool = findToolOnServer(serverInfo, internalToolName, allowRawName);
     if (!tool) {
       continue;
@@ -2888,6 +3100,28 @@ const resolveToolInGroup = async (
   return undefined;
 };
 
+const findEnabledPromptOnServer = async (
+  serverInfo: ServerInfo,
+  name: string,
+  allowRawName = false,
+) => {
+  if (serverInfo.status !== 'connected' || serverInfo.enabled === false) {
+    return undefined;
+  }
+  const prompt = serverInfo.prompts.find(
+    (item) =>
+      item.name === name ||
+      (allowRawName && item.name === `${serverInfo.name}${getNameSeparator()}${name}`),
+  );
+  if (!prompt) {
+    return undefined;
+  }
+  const config = await getServerDao().findById(serverInfo.name);
+  const barePromptName = normalizeToolNameForServer(serverInfo.name, prompt.name);
+  const promptConfig = config?.prompts?.[prompt.name] ?? config?.prompts?.[barePromptName];
+  return config?.enabled === false || promptConfig?.enabled === false ? undefined : prompt;
+};
+
 async function resolvePromptInGroup(
   group: string | undefined,
   promptName: string,
@@ -2901,13 +3135,16 @@ async function resolvePromptInGroup(
     await getFilteredServerInfosForGroup(lookupGroup);
 
   for (const serverInfo of filteredServerInfos) {
-    if (serverInfo.status !== 'connected' || serverInfo.enabled === false) {
+    if (
+      (serverInfo.status !== 'connected' && serverInfo.config?.startOnDemand !== true) ||
+      serverInfo.enabled === false
+    ) {
       continue;
     }
 
     const serverConfig = serverConfigsByName.get(serverInfo.name);
     const internalPromptName = resolveNameFromGroup(promptName, serverInfo.name, serverConfig);
-    const prompt = serverInfo.prompts.find((item) => item.name === internalPromptName);
+    const prompt = await findEnabledPromptOnServer(serverInfo, internalPromptName);
     if (!prompt) {
       continue;
     }
@@ -2943,29 +3180,25 @@ const projectToolForDownstream = (
     ...projectedTool,
     name: appsRouteContext.enabled
       ? normalizeToolNameForServer(serverName, projectedTool.name)
-      : projectNameForGroup(projectedTool.name, serverName, serverConfig),
+      : serverConfig?.preserveToolNames
+        ? projectGroupToolName(projectedTool.name, serverName, serverConfig, getNameSeparator())
+        : projectNameForGroup(projectedTool.name, serverName, serverConfig),
   };
 };
 
-export const handleListToolsRequest = async (_: any, extra: any) => {
-  const sessionId = extra.sessionId || '';
-  // Use extra.group if provided (for Xiaozhi endpoints, which have no SSE transport
-  // registered and therefore cannot be resolved via session lookup)
-  const group = extra.group || getGroup(sessionId);
-  console.log(`Handling ListToolsRequest for group: ${group}`);
+const SMART_ROUTING_META_TOOL_NAMES = new Set(['search_tools', 'describe_tool', 'call_tool']);
 
-  // Special handling for $smart group to return smart routing tools
-  // Support both $smart and $smart/{group} patterns
-  if (isSmartRoutingGroup(group)) {
-    return getSmartRoutingTools(group);
-  }
-
-  const { filteredServerInfos, serverConfigsByName } = await getFilteredServerInfosForGroup(group);
-  const appsRouteContext = await getMcpAppsRouteContext(sessionId, group);
-
-  const allTools = [];
+const listGroupTools = async (
+  group: string | undefined,
+  filteredServerInfos: ServerInfo[],
+  serverConfigsByName: Map<string, IGroupServerConfig>,
+  appsRouteContext: McpAppsRouteContext,
+  snapshots?: object[],
+): Promise<Tool[]> => {
+  const allTools: Tool[] = [];
   for (const serverInfo of filteredServerInfos) {
     if (serverInfo.tools && serverInfo.tools.length > 0) {
+      snapshots?.push(serverInfo.tools);
       const groupServerConfig = serverConfigsByName.get(serverInfo.name);
 
       // Filter tools based on server configuration
@@ -2974,13 +3207,15 @@ export const handleListToolsRequest = async (_: any, extra: any) => {
       // If this is a group request, apply group-level tool filtering
       tools = await filterToolsByGroup(group, serverInfo.name, tools, groupServerConfig);
 
-      // Apply custom descriptions from server configuration
+      // Apply custom descriptions and hidden parameters from server configuration
       const serverConfig = await getServerDao().findById(serverInfo.name);
+      const runtimeNames = serverInfo.tools.map((t) => t.name);
       const toolsWithCustomDescriptions = tools.map((tool) => {
-        const toolConfig = serverConfig?.tools?.[tool.name];
+        const toolConfig = findToolConfig(serverConfig?.tools, serverInfo.name, tool.name, runtimeNames);
+        const hiddenApplied = applyHiddenParams(tool, toolConfig);
         return {
-          ...tool,
-          description: resolveDescriptionOverride(tool.description, toolConfig),
+          ...hiddenApplied,
+          description: resolveDescriptionOverride(hiddenApplied.description, toolConfig),
         };
       });
 
@@ -2998,12 +3233,113 @@ export const handleListToolsRequest = async (_: any, extra: any) => {
     }
   }
 
+  if ([...serverConfigsByName.values()].some((cfg) => cfg.preserveToolNames === true)) {
+    assertValidGroupToolNames(allTools);
+  }
+
+  return allTools;
+};
+
+// Tools a $smart/<group> lists next to its meta-tools (#1238).
+const getPinnedSmartRoutingTools = async (group: string | undefined): Promise<Tool[]> => {
+  const lookupGroup = getGroupLookupName(group);
+  if (!lookupGroup) {
+    return [];
+  }
+
+  const { filteredServerInfos, serverConfigsByName } =
+    await getFilteredServerInfosForGroup(lookupGroup);
+  const pinnedConfigsByName = new Map<string, IGroupServerConfig>();
+  for (const [serverName, serverConfig] of serverConfigsByName) {
+    const selection = serverConfig.tools;
+    const pinnedTools = (serverConfig.pinnedTools ?? []).filter(
+      (toolName) => !Array.isArray(selection) || selection.includes(toolName),
+    );
+    if (pinnedTools.length > 0) {
+      pinnedConfigsByName.set(serverName, { ...serverConfig, tools: pinnedTools });
+    }
+  }
+  if (pinnedConfigsByName.size === 0) {
+    return [];
+  }
+
+  return listGroupTools(
+    lookupGroup,
+    filteredServerInfos.filter((serverInfo) => pinnedConfigsByName.has(serverInfo.name)),
+    pinnedConfigsByName,
+    { enabled: false },
+  );
+};
+
+const handleRawListToolsRequest = async (_: any, extra: any): Promise<any> => {
+  const projectionStartedAt = performance.now();
+  const sessionId = extra?.sessionId || '';
+  const group = getMcpRequestGroup(extra);
+  const isStateless = RequestContextService.getInstance().getRequestContext()?.stateless === true;
+  console.log(`Handling ListToolsRequest for group: ${group}`);
+
+  // Special handling for $smart group to return smart routing tools
+  // Support both $smart and $smart/{group} patterns
+  if (isSmartRoutingGroup(group)) {
+    const smartResult = await getSmartRoutingTools(group);
+    let pinnedTools: Tool[] = [];
+    try {
+      pinnedTools = (await getPinnedSmartRoutingTools(group)).filter(
+        (tool) => !SMART_ROUTING_META_TOOL_NAMES.has(tool.name),
+      );
+    } catch (error) {
+      console.warn(`Failed to list pinned tools for ${group}; returning meta-tools only`, error);
+    }
+    const merged =
+      pinnedTools.length > 0
+        ? { tools: [...smartResult.tools, ...pinnedTools] }
+        : smartResult;
+    return isStateless ? { ...merged, ttlMs: 0, cacheScope: 'private' as const } : merged;
+  }
+
+  const { filteredServerInfos, serverConfigsByName } = await getFilteredServerInfosForGroup(group);
+  const appsRouteContext = await getMcpAppsRouteContext(sessionId, group);
+
+  const snapshots: object[] = [];
+  const allTools = await listGroupTools(
+    group,
+    filteredServerInfos,
+    serverConfigsByName,
+    appsRouteContext,
+    snapshots,
+  );
+
+  if (isStateless) {
+    const ttlMs = remainingListTtl(snapshots, projectionStartedAt, performance.now());
+    return {
+      tools: allTools,
+      ttlMs,
+      cacheScope: 'private' as const,
+    };
+  }
+
   return {
     tools: allTools,
   };
 };
 
-export const handleCallToolRequest = async (request: any, extra: any) => {
+export const handleListToolsRequest = async (request: any, extra: any): Promise<any> => {
+  const result = await handleRawListToolsRequest(request, extra);
+  const shouldNormalize =
+    typeof getSystemConfigDao === 'function'
+      ? (await getSystemConfigDao().get())?.normalizeToolNames === true
+      : false;
+  if (!shouldNormalize) {
+    return result;
+  }
+  const aliases = compatibleToolNames(result.tools);
+  return {
+    ...result,
+    tools: result.tools.map((tool: Tool) => ({ ...tool, name: aliases.get(tool.name)! })),
+  };
+};
+
+const handleOriginalCallToolRequest = async (request: any, extra: any) => {
   console.log('Handling CallToolRequest for tool', summarizeToolRequestForLogging(request.params));
   const startTime = Date.now();
   const activityLogger = getActivityLoggingService();
@@ -3087,11 +3423,11 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
           targetTool = groupTool.tool;
         }
       } else {
-        // Find the first server that has this tool
+        // Find the first server that has this tool (include sleeping on-demand servers)
         targetServerInfo = serverInfos.find(
           (serverInfo) =>
-            serverInfo.status === 'connected' &&
             serverInfo.enabled !== false &&
+            (serverInfo.status === 'connected' || serverInfo.config?.startOnDemand === true) &&
             serverInfo.tools.some((tool) => tool.name === toolName),
         );
       }
@@ -3099,6 +3435,14 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
       if (!targetServerInfo) {
         throw new Error(`No available servers found with tool: ${toolName}`);
       }
+
+      if (targetServerInfo.config?.startOnDemand && targetServerInfo.status !== 'connected') {
+        await ensureServerReady(targetServerInfo);
+        if ((targetServerInfo as ServerInfo).status !== 'connected') {
+          throw new Error(`Failed to start on-demand server '${targetServerInfo.name}'`);
+        }
+      }
+      targetServerInfo.lastUsedAt = Date.now();
 
       // Check if the tool exists on the server
       const tool =
@@ -3108,13 +3452,21 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
       }
       assertToolAvailableForRoute(tool, appsRouteContext);
 
+      const targetToolConfig = findToolConfig(
+        targetServerInfo.config?.tools,
+        targetServerInfo.name,
+        tool.name,
+        targetServerInfo.tools.map((t) => t.name),
+      );
+
       // Handle OpenAPI servers differently
       if (targetServerInfo.openApiClient) {
         // For OpenAPI servers, use the OpenAPI client
         const openApiClient = targetServerInfo.openApiClient;
 
-        // Use toolArgs if it has properties, otherwise fallback to request.params.arguments
-        const finalArgs = toolArgs && typeof toolArgs === 'object' ? toolArgs : {};
+        // Use toolArgs if it has properties, otherwise fallback to empty object, stripping hidden params (#1343)
+        const rawFinalArgs = toolArgs && typeof toolArgs === 'object' ? toolArgs : {};
+        const finalArgs = removeHiddenArguments(rawFinalArgs, tool.inputSchema, targetToolConfig);
 
         console.log('Invoking OpenAPI tool', {
           toolName: targetToolName,
@@ -3200,17 +3552,29 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
       }
 
       // Call the tool on the target server (MCP servers)
-      // For servers with perSessionClient: true, use a per-session dedicated client
+      // For servers with perSessionClient: true, use a per-session or explicit-state dedicated client
       let isolatedCtx: IsolatedClientContext | undefined;
-      if (targetServerInfo.config?.perSessionClient && sessionId) {
-        const isolated = await getOrCreateIsolatedClient(sessionId, targetServerInfo);
-        isolatedCtx = { sessionId, client: isolated.client, transport: isolated.transport };
+      if (targetServerInfo.config?.perSessionClient) {
+        const isolatedKey = resolveIsolatedClientKey(
+          targetServerInfo.name,
+          sessionId,
+          request.params?._meta,
+        );
+        if (isolatedKey) {
+          const isolated = await getOrCreateIsolatedClient(isolatedKey, targetServerInfo);
+          isolatedCtx = {
+            sessionId: isolatedKey,
+            client: isolated.client,
+            transport: isolated.transport,
+          };
+        }
       } else if (!targetServerInfo.client) {
         throw new Error(`Client not found for server: ${targetServerInfo.name}`);
       }
 
-      // Use toolArgs if it has properties, otherwise fallback to request.params.arguments
-      const finalArgs = toolArgs && typeof toolArgs === 'object' ? toolArgs : {};
+      // Use toolArgs if it has properties, otherwise fallback to empty object, stripping hidden params (#1343)
+      const rawFinalArgs = toolArgs && typeof toolArgs === 'object' ? toolArgs : {};
+      const finalArgs = removeHiddenArguments(rawFinalArgs, tool.inputSchema, targetToolConfig);
 
       console.log('Invoking tool', {
         toolName: targetToolName,
@@ -3231,6 +3595,7 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
         1,
         isolatedCtx,
       );
+      scheduleIdleShutdown(targetServerInfo);
       await settleHostedIfNeeded({
         success: !result.isError,
         requestContent: finalArgs,
@@ -3288,6 +3653,26 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
     }
     assertToolAvailableForRoute(tool, appsRouteContext);
 
+    const directToolConfig = findToolConfig(
+      serverInfo.config?.tools,
+      serverInfo.name,
+      tool.name,
+      serverInfo.tools.map((t) => t.name),
+    );
+    const sanitizedDirectArgs = removeHiddenArguments(
+      request.params.arguments || {},
+      tool.inputSchema,
+      directToolConfig,
+    );
+
+    if (serverInfo.config?.startOnDemand && serverInfo.status !== 'connected') {
+      await ensureServerReady(serverInfo);
+      if ((serverInfo as ServerInfo).status !== 'connected') {
+        throw new Error(`Failed to start on-demand server '${serverInfo.name}'`);
+      }
+    }
+    serverInfo.lastUsedAt = Date.now();
+
     // Handle OpenAPI servers differently
     if (serverInfo.openApiClient) {
       // For OpenAPI servers, use the OpenAPI client
@@ -3329,7 +3714,7 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
         }
       }
 
-      const finalArgs = request.params.arguments || {};
+      const finalArgs = sanitizedDirectArgs;
       await reserveHostedIfNeeded(serverInfo.name, cleanToolName);
       const result = await openApiClient.callTool(cleanToolName, finalArgs, passthroughHeaders);
       await settleHostedIfNeeded({
@@ -3378,11 +3763,22 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
     }
 
     // Handle MCP servers
-    // For servers with perSessionClient: true, use a per-session dedicated client
+    // For servers with perSessionClient: true, use a per-session or explicit-state dedicated client
     let isolatedCtx: IsolatedClientContext | undefined;
-    if (serverInfo.config?.perSessionClient && sessionId) {
-      const isolated = await getOrCreateIsolatedClient(sessionId, serverInfo);
-      isolatedCtx = { sessionId, client: isolated.client, transport: isolated.transport };
+    if (serverInfo.config?.perSessionClient) {
+      const isolatedKey = resolveIsolatedClientKey(
+        serverInfo.name,
+        sessionId,
+        request.params?._meta,
+      );
+      if (isolatedKey) {
+        const isolated = await getOrCreateIsolatedClient(isolatedKey, serverInfo);
+        isolatedCtx = {
+          sessionId: isolatedKey,
+          client: isolated.client,
+          transport: isolated.transport,
+        };
+      }
     } else if (!serverInfo.client) {
       throw new Error(`Client not found for server: ${serverInfo.name}`);
     }
@@ -3391,11 +3787,12 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
     await reserveHostedIfNeeded(serverInfo.name, cleanToolName);
     const result = await callToolWithReconnect(
       serverInfo,
-      { ...request.params, name: cleanToolName },
+      { ...request.params, name: cleanToolName, arguments: sanitizedDirectArgs },
       serverInfo.options || {},
       1,
       isolatedCtx,
     );
+    scheduleIdleShutdown(serverInfo);
     await settleHostedIfNeeded({
       success: !result.isError,
       requestContent: request.params.arguments,
@@ -3473,14 +3870,33 @@ export const handleCallToolRequest = async (request: any, extra: any) => {
   }
 };
 
-export const handleGetPromptRequest = async (request: any, extra: any) => {
+export const handleCallToolRequest = async (request: any, extra: any) => {
+  const shouldNormalize =
+    typeof getSystemConfigDao === 'function'
+      ? (await getSystemConfigDao().get())?.normalizeToolNames === true
+      : false;
+  if (shouldNormalize && !extra?.server) {
+    const requestedName = request?.params?.name;
+    if (typeof requestedName === 'string' && !SMART_ROUTING_META_TOOL_NAMES.has(requestedName)) {
+      const catalog = await handleRawListToolsRequest({}, extra);
+      const aliases = compatibleToolNames(catalog.tools);
+      const original = [...aliases].find(([, alias]) => alias === requestedName)?.[0];
+      if (original !== undefined && original !== requestedName) {
+        request = { ...request, params: { ...request.params, name: original } };
+      }
+    }
+  }
+  return handleOriginalCallToolRequest(request, extra);
+};
+
+export const handleGetPromptRequest = async (request: any, extra: any): Promise<any> => {
   try {
     const { name, arguments: promptArgs } = request.params;
     const sessionId = extra?.sessionId || '';
     const group = extra?.group || getGroup(sessionId) || undefined;
 
-    // Check built-in prompts first
-    const builtinPrompt = await getBuiltinPromptDao().findByName(name);
+    // Check built-in prompts first unless the request pins a specific server (GHSA-vgj6-pm6x-8g97)
+    const builtinPrompt = !extra?.server && (await getBuiltinPromptDao().findByName(name));
     if (builtinPrompt && builtinPrompt.enabled !== false) {
       // Perform {{param}} template substitution
       let content = builtinPrompt.template;
@@ -3504,16 +3920,12 @@ export const handleGetPromptRequest = async (request: any, extra: any) => {
     const lookupGroup = getGroupLookupName(group);
     if (extra && extra.server) {
       // The caller pinned a server (REST /mcp/:serverName/prompts/:promptName):
-      // resolve strictly against it so a prompt that only exists elsewhere is
-      // never served, and honour the per-prompt enabled flag.
+      // resolve strictly against it and honour the per-prompt enabled flag.
       const candidate = getServerByName(extra.server);
-      if (
-        candidate &&
-        candidate.status === 'connected' &&
-        candidate.enabled !== false &&
-        candidate.prompts.some((prompt) => prompt.name === name)
-      ) {
+      const prompt = candidate && (await findEnabledPromptOnServer(candidate, name, true));
+      if (prompt) {
         server = candidate;
+        promptNameForServer = prompt.name;
       }
     } else if (lookupGroup) {
       const groupPrompt = await resolvePromptInGroup(lookupGroup, name);
@@ -3522,13 +3934,15 @@ export const handleGetPromptRequest = async (request: any, extra: any) => {
         promptNameForServer = groupPrompt.promptName;
       }
     } else {
-      // Find the first server that has this prompt
-      server = serverInfos.find(
-        (serverInfo) =>
-          serverInfo.status === 'connected' &&
-          serverInfo.enabled !== false &&
-          serverInfo.prompts.find((prompt) => prompt.name === name),
-      );
+      // Find the first server that has this enabled prompt
+      for (const candidate of serverInfos) {
+        const prompt = await findEnabledPromptOnServer(candidate, name);
+        if (prompt) {
+          server = candidate;
+          promptNameForServer = prompt.name;
+          break;
+        }
+      }
     }
     if (!server) {
       throw new Error(`Server not found: ${name}`);
@@ -3573,8 +3987,8 @@ export const handleGetPromptRequest = async (request: any, extra: any) => {
 };
 
 export const handleListPromptsRequest = async (_: any, extra: any) => {
-  const sessionId = extra.sessionId || '';
-  const group = getGroup(sessionId);
+  const sessionId = extra?.sessionId || '';
+  const group = getMcpRequestGroup(extra);
   const lookupGroup = getGroupLookupName(group);
   console.log(`Handling ListPromptsRequest for group: ${group}`);
 
@@ -3602,7 +4016,9 @@ export const handleListPromptsRequest = async (_: any, extra: any) => {
       let enabledPrompts = serverInfo.prompts;
       if (serverConfig && serverConfig.prompts) {
         enabledPrompts = serverInfo.prompts.filter((prompt: any) => {
-          const promptConfig = serverConfig.prompts?.[prompt.name];
+          const barePromptName = normalizeToolNameForServer(serverInfo.name, prompt.name);
+          const promptConfig =
+            serverConfig.prompts?.[prompt.name] ?? serverConfig.prompts?.[barePromptName];
           // If prompt is not in config, it's enabled by default
           return promptConfig?.enabled !== false;
         });
@@ -3635,8 +4051,8 @@ export const handleListPromptsRequest = async (_: any, extra: any) => {
 };
 
 export const handleListResourcesRequest = async (_: any, extra: any) => {
-  const sessionId = extra.sessionId || '';
-  const group = getGroup(sessionId);
+  const sessionId = extra?.sessionId || '';
+  const group = getMcpRequestGroup(extra);
   const lookupGroup = getGroupLookupName(group);
   console.log(`Handling ListResourcesRequest for group: ${group}`);
   const appsRouteContext = await getMcpAppsRouteContext(sessionId, group);
@@ -3696,9 +4112,9 @@ export const handleListResourcesRequest = async (_: any, extra: any) => {
   };
 };
 
-export const handleListResourceTemplatesRequest = async (_: any, extra: any) => {
-  const sessionId = extra.sessionId || '';
-  const group = getGroup(sessionId);
+export const handleListResourceTemplatesRequest = async (_: any, extra: any): Promise<any> => {
+  const sessionId = extra?.sessionId || '';
+  const group = getMcpRequestGroup(extra);
   const lookupGroup = getGroupLookupName(group);
   console.log(`Handling ListResourceTemplatesRequest for group: ${group}`);
   const appsRouteContext = await getMcpAppsRouteContext(sessionId, group);
@@ -3739,8 +4155,8 @@ export const handleListResourceTemplatesRequest = async (_: any, extra: any) => 
 export const handleReadResourceRequest = async (request: any, extra: any) => {
   try {
     const { uri } = request.params;
-    const sessionId = extra.sessionId || '';
-    const group = getGroup(sessionId);
+    const sessionId = extra?.sessionId || '';
+    const group = getMcpRequestGroup(extra);
     const lookupGroup = getGroupLookupName(group);
     const appsRouteContext = await getMcpAppsRouteContext(sessionId, group);
 
@@ -3786,7 +4202,21 @@ export const handleReadResourceRequest = async (request: any, extra: any) => {
     }
 
     if (!server && appsRouteContext.enabled && uri.startsWith('ui://')) {
-      server = appsRouteContext.serverInfo;
+      const candidate = appsRouteContext.serverInfo;
+      if (candidate) {
+        const candidateConfig = await getServerDao().findById(candidate.name);
+        if (candidateConfig?.resources?.[uri]?.enabled !== false) {
+          const allowed = await filterResourcesByGroup(
+            lookupGroup,
+            candidate.name,
+            [{ uri }],
+            serverConfigsByName.get(candidate.name),
+          );
+          if (allowed.length > 0) {
+            server = candidate;
+          }
+        }
+      }
     }
 
     if (!server?.client) {
@@ -3824,6 +4254,7 @@ type CreateMcpServerOptions = {
   group?: string;
   instructions?: string;
   appendGroupSuffix?: boolean;
+  modern?: boolean;
 };
 
 export const createMcpServer = (
@@ -3845,6 +4276,9 @@ export const createMcpServer = (
   const server = new Server(
     { name: serverName, version },
     {
+      ...(!normalizedOptions.modern
+        ? { supportedProtocolVersions: LEGACY_PROTOCOL_VERSIONS }
+        : {}),
       capabilities: {
         tools: { listChanged: true },
         prompts: { listChanged: true },
@@ -3856,13 +4290,13 @@ export const createMcpServer = (
         : {}),
     },
   );
-  server.setRequestHandler(ListToolsRequestSchema, handleListToolsRequest);
-  server.setRequestHandler(CallToolRequestSchema, handleCallToolRequest);
-  server.setRequestHandler(GetPromptRequestSchema, handleGetPromptRequest);
-  server.setRequestHandler(ListPromptsRequestSchema, handleListPromptsRequest);
-  server.setRequestHandler(ListResourcesRequestSchema, handleListResourcesRequest);
-  server.setRequestHandler(ListResourceTemplatesRequestSchema, handleListResourceTemplatesRequest);
-  server.setRequestHandler(ReadResourceRequestSchema, handleReadResourceRequest);
+  server.setRequestHandler('tools/list', handleListToolsRequest);
+  server.setRequestHandler('tools/call', handleCallToolRequest);
+  server.setRequestHandler('prompts/get', handleGetPromptRequest);
+  server.setRequestHandler('prompts/list', handleListPromptsRequest);
+  server.setRequestHandler('resources/list', handleListResourcesRequest);
+  server.setRequestHandler('resources/templates/list', handleListResourceTemplatesRequest);
+  server.setRequestHandler('resources/read', handleReadResourceRequest);
   return server;
 };
 
@@ -3902,9 +4336,14 @@ export const getFilteredServerInfosForGroup = async (
     serverConfigs.map((serverConfig) => [serverConfig.name, serverConfig] as const),
   );
 
+  const excludedServerNames = RequestContextService.getInstance().getBearerKeyExclusions?.();
+  const excludedSet =
+    excludedServerNames && excludedServerNames.length > 0 ? new Set(excludedServerNames) : null;
+
   const filteredServerInfos: ServerInfo[] = [];
   for (const serverInfo of getDataService().filterData(serverInfos)) {
     if (serverInfo.enabled === false) continue;
+    if (excludedSet?.has(serverInfo.name)) continue;
     if (options?.requireClient && !serverInfo.client) continue;
 
     if (!group) {

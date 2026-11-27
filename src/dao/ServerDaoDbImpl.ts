@@ -98,6 +98,7 @@ export class ServerDaoDbImpl implements ServerDao {
       visibility: entity.visibility ?? 'private',
       enableKeepAlive: entity.enableKeepAlive,
       keepAliveInterval: entity.keepAliveInterval,
+      protocolNegotiation: entity.protocolNegotiation,
       tools: entity.tools,
       prompts: entity.prompts,
       resources: entity.resources,
@@ -107,6 +108,8 @@ export class ServerDaoDbImpl implements ServerDao {
       openapi: entity.openapi,
       passthroughHeaders: entity.passthroughHeaders,
       perSessionClient: entity.perSessionClient,
+      startOnDemand: entity.startOnDemand,
+      idleTimeoutMs: entity.idleTimeoutMs,
     });
     return this.mapToServerConfig(server);
   }
@@ -149,6 +152,7 @@ export class ServerDaoDbImpl implements ServerDao {
       updateData.enableKeepAlive = entity.enableKeepAlive ?? false;
     }
     assignNullable('keepAliveInterval');
+    assignNullable('protocolNegotiation');
     assignNullable('tools');
     assignNullable('prompts');
     assignNullable('resources');
@@ -158,6 +162,8 @@ export class ServerDaoDbImpl implements ServerDao {
     assignNullable('openapi');
     assignNullable('passthroughHeaders');
     assignNullable('perSessionClient');
+    assignNullable('startOnDemand');
+    assignNullable('idleTimeoutMs');
 
     const server = await this.repository.update(name, updateData as any);
     return server ? this.mapToServerConfig(server) : null;
@@ -257,7 +263,8 @@ export class ServerDaoDbImpl implements ServerDao {
     visibility?: 'private' | 'group' | 'public';
     enableKeepAlive?: boolean;
     keepAliveInterval?: number;
-    tools?: Record<string, { enabled: boolean; description?: string }>;
+    protocolNegotiation?: 'auto' | 'legacy';
+    tools?: Record<string, { enabled: boolean; description?: string; hiddenParams?: string[] }>;
     prompts?: Record<string, { enabled: boolean; description?: string }>;
     resources?: Record<string, { enabled: boolean; description?: string }>;
     options?: Record<string, any>;
@@ -266,6 +273,8 @@ export class ServerDaoDbImpl implements ServerDao {
     openapi?: Record<string, any>;
     passthroughHeaders?: string[];
     perSessionClient?: boolean;
+    startOnDemand?: boolean;
+    idleTimeoutMs?: number;
   }): ServerConfigWithName {
     return {
       name: server.name,
@@ -281,6 +290,7 @@ export class ServerDaoDbImpl implements ServerDao {
       visibility: server.visibility ?? 'private',
       enableKeepAlive: server.enableKeepAlive,
       keepAliveInterval: server.keepAliveInterval,
+      protocolNegotiation: server.protocolNegotiation,
       tools: server.tools,
       prompts: server.prompts,
       resources: server.resources,
@@ -290,6 +300,8 @@ export class ServerDaoDbImpl implements ServerDao {
       openapi: server.openapi,
       passthroughHeaders: server.passthroughHeaders,
       perSessionClient: server.perSessionClient,
+      startOnDemand: server.startOnDemand,
+      idleTimeoutMs: server.idleTimeoutMs,
     };
   }
 }

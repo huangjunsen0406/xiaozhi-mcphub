@@ -1,5 +1,4 @@
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { SSEClientTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { setupClientKeepAlive } from '../../src/services/keepAliveService.js';
 import { ServerConfig, ServerInfo } from '../../src/types/index.js';
 
@@ -305,5 +304,48 @@ describe('setupClientKeepAlive', () => {
 
     expect(serverInfo.keepAliveIntervalId).toBeUndefined();
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('schedules background exponential backoff recovery for disconnected remote servers without keep-alive (#1385)', async () => {
+    jest.useFakeTimers();
+    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    const reconnectServer = jest.fn().mockRejectedValueOnce(new Error('still down')).mockResolvedValueOnce(undefined);
+    const serverInfo = makeServerInfo(
+      new StreamableHTTPClientTransport(new URL('https://example.com/mcp')),
+      jest.fn(),
+      'disconnected',
+    );
+    serverInfo.client = undefined;
+
+    await setupClientKeepAlive(
+      serverInfo,
+      { type: 'streamable-http', url: 'https://example.com/mcp' },
+      { reconnectServer },
+    );
+
+    expect(serverInfo.recovery?.attempts).toBe(0);
+    expect(serverInfo.recovery?.nextAttemptAt).toBeDefined();
+    const firstNext = serverInfo.recovery!.nextAttemptAt;
+
+    // Calling again while pending must not postpone recovery
+    await setupClientKeepAlive(
+      serverInfo,
+      { type: 'streamable-http', url: 'https://example.com/mcp' },
+      { reconnectServer },
+    );
+    expect(serverInfo.recovery?.nextAttemptAt).toBe(firstNext);
+
+    // First retry fires around 7.5s (10s * 0.75)
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(reconnectServer).toHaveBeenCalledTimes(1);
+    expect(serverInfo.recovery?.attempts).toBe(1);
+    expect(serverInfo.error).toContain('still down');
+
+    // Second retry fires around 15s (20s * 0.75)
+    await jest.advanceTimersByTimeAsync(20000);
+    expect(reconnectServer).toHaveBeenCalledTimes(2);
+    expect(serverInfo.recovery?.attempts).toBe(2);
+
+    randomSpy.mockRestore();
   });
 });

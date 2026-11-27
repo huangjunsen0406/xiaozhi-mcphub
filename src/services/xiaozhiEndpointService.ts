@@ -29,6 +29,52 @@ const DEFAULT_MAX_CONCURRENT_RECONNECTS = 3;
 /** Random jitter factor applied to reconnect delay (0–jitter). */
 const DEFAULT_RECONNECT_JITTER_RATIO = 0.2;
 
+export const XIAOZHI_MCP_VERSION_MODERN = '2026-07-28';
+export const XIAOZHI_MCP_VERSION_LEGACY = '2024-11-05';
+export const XIAOZHI_SUPPORTED_MCP_VERSIONS = [
+  XIAOZHI_MCP_VERSION_MODERN,
+  XIAOZHI_MCP_VERSION_LEGACY,
+] as const;
+
+const META_PROTOCOL_VERSION = 'io.modelcontextprotocol/protocolVersion';
+const META_CLIENT_CAPABILITIES = 'io.modelcontextprotocol/clientCapabilities';
+const META_CLIENT_INFO = 'io.modelcontextprotocol/clientInfo';
+const META_SERVER_INFO = 'io.modelcontextprotocol/serverInfo';
+const XIAOZHI_DISCOVERY_TTL_MS = 60_000;
+
+const JSONRPC_PARSE_ERROR = -32700;
+const JSONRPC_INVALID_REQUEST = -32600;
+const JSONRPC_METHOD_NOT_FOUND = -32601;
+const JSONRPC_INVALID_PARAMS = -32602;
+const JSONRPC_INTERNAL_ERROR = -32603;
+const MCP_UNSUPPORTED_VERSION = -32022;
+
+const XIAOZHI_SERVER_INFO = {
+  name: 'mcphub-xiaozhi-bridge',
+  version: '1.1.6',
+} as const;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isValidRequestId = (value: unknown): value is string | number =>
+  typeof value === 'string' || (typeof value === 'number' && Number.isSafeInteger(value));
+
+const isModernXiaozhiRequest = (method: string, params: Record<string, unknown>): boolean => {
+  if (method === 'server/discover') {
+    return true;
+  }
+  const meta = params._meta;
+  if (!isPlainObject(meta)) {
+    return false;
+  }
+  return Object.keys(meta).some((key) => key.startsWith('io.modelcontextprotocol/'));
+};
+
+const getModernServerMeta = (): Record<string, unknown> => ({
+  [META_SERVER_INFO]: { ...XIAOZHI_SERVER_INFO },
+});
+
 interface EndpointConnection {
   ws: WebSocket;
   endpoint: XiaozhiEndpoint;
@@ -330,24 +376,204 @@ export class XiaozhiEndpointService {
     });
   }
 
+  private async decodeMessage(
+    endpointId: string,
+    data: WebSocket.RawData,
+  ): Promise<{ id: string | number; method: string; params: Record<string, unknown> } | null> {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(data.toString());
+    } catch {
+      await this.sendError(endpointId, null, JSONRPC_PARSE_ERROR, 'Parse error');
+      return null;
+    }
+
+    if (!isPlainObject(raw)) {
+      await this.sendError(endpointId, null, JSONRPC_INVALID_REQUEST, 'Invalid Request');
+      return null;
+    }
+
+    const hasId = 'id' in raw;
+    let requestId: string | number | null = null;
+    if (hasId) {
+      if (!isValidRequestId(raw.id)) {
+        await this.sendError(endpointId, null, JSONRPC_INVALID_REQUEST, 'Invalid request id');
+        return null;
+      }
+      requestId = raw.id;
+    }
+
+    if (raw.jsonrpc !== '2.0') {
+      if (requestId !== null) {
+        await this.sendError(
+          endpointId,
+          requestId,
+          JSONRPC_INVALID_REQUEST,
+          'Invalid JSON-RPC version',
+        );
+      }
+      return null;
+    }
+
+    const method = raw.method;
+    if (typeof method !== 'string' || !method) {
+      if (requestId !== null) {
+        await this.sendError(endpointId, requestId, JSONRPC_INVALID_REQUEST, 'Missing method');
+      }
+      return null;
+    }
+
+    // Notifications (missing id or notifications/*) must never receive a response.
+    if (!hasId || method.startsWith('notifications/')) {
+      return null;
+    }
+
+    const rawParams = raw.params === undefined || raw.params === null ? {} : raw.params;
+    if (!isPlainObject(rawParams)) {
+      await this.sendError(endpointId, requestId!, JSONRPC_INVALID_PARAMS, 'Invalid params');
+      return null;
+    }
+
+    if ('_meta' in rawParams && !isPlainObject(rawParams._meta)) {
+      await this.sendError(
+        endpointId,
+        requestId!,
+        JSONRPC_INVALID_PARAMS,
+        'Missing or invalid MCP request metadata',
+      );
+      return null;
+    }
+
+    return { id: requestId!, method, params: rawParams };
+  }
+
+  private async validateModernMeta(
+    endpointId: string,
+    requestId: string | number,
+    params: Record<string, unknown>,
+  ): Promise<boolean> {
+    const meta = params._meta;
+    if (!isPlainObject(meta)) {
+      await this.sendError(endpointId, requestId, JSONRPC_INVALID_PARAMS, 'Missing _meta');
+      return false;
+    }
+
+    const version = meta[META_PROTOCOL_VERSION];
+    if (typeof version !== 'string' || !version) {
+      await this.sendError(
+        endpointId,
+        requestId,
+        JSONRPC_INVALID_PARAMS,
+        `Invalid or missing ${META_PROTOCOL_VERSION}`,
+      );
+      return false;
+    }
+
+    if (version !== XIAOZHI_MCP_VERSION_MODERN) {
+      await this.sendError(
+        endpointId,
+        requestId,
+        MCP_UNSUPPORTED_VERSION,
+        'Unsupported protocol version',
+        {
+          supported: [...XIAOZHI_SUPPORTED_MCP_VERSIONS],
+          requested: version,
+        },
+      );
+      return false;
+    }
+
+    const clientCaps = meta[META_CLIENT_CAPABILITIES];
+    if (!isPlainObject(clientCaps)) {
+      await this.sendError(
+        endpointId,
+        requestId,
+        JSONRPC_INVALID_PARAMS,
+        `Invalid or missing ${META_CLIENT_CAPABILITIES}`,
+      );
+      return false;
+    }
+
+    if ('extensions' in clientCaps && !isPlainObject(clientCaps.extensions)) {
+      await this.sendError(
+        endpointId,
+        requestId,
+        JSONRPC_INVALID_PARAMS,
+        'Invalid MCP client capabilities extensions',
+      );
+      return false;
+    }
+
+    if (META_CLIENT_INFO in meta) {
+      const info = meta[META_CLIENT_INFO];
+      if (
+        !isPlainObject(info) ||
+        typeof info.name !== 'string' ||
+        typeof info.version !== 'string'
+      ) {
+        await this.sendError(
+          endpointId,
+          requestId,
+          JSONRPC_INVALID_PARAMS,
+          `Invalid ${META_CLIENT_INFO}`,
+        );
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   private async handleMessage(
     endpoint: XiaozhiEndpoint,
     data: WebSocket.RawData,
   ): Promise<void> {
+    let requestId: string | number | undefined;
     try {
-      const message = JSON.parse(data.toString()) as {
-        method?: string;
-        id?: unknown;
-        params?: Record<string, unknown>;
-      };
+      const rawText = data.toString();
+      let parsedPreview: unknown = rawText;
+      try {
+        parsedPreview = JSON.parse(rawText);
+      } catch {
+        // Keep raw string when payload is not valid JSON
+      }
+      logXiaozhi('info', 'Incoming Xiaozhi MCP message', {
+        endpointId: endpoint.id,
+        name: endpoint.name,
+        payload: parsedPreview,
+      });
 
-      if (message.method === 'initialize') {
-        await this.sendResponse(endpoint.id, message.id, {
-          protocolVersion: '2024-11-05',
-          serverInfo: {
-            name: 'mcphub-xiaozhi-bridge',
-            version: '1.1.1',
+      const decoded = await this.decodeMessage(endpoint.id, data);
+      if (!decoded) {
+        return;
+      }
+
+      requestId = decoded.id;
+      const { id, method, params } = decoded;
+      const modern = isModernXiaozhiRequest(method, params);
+
+      if (modern && !(await this.validateModernMeta(endpoint.id, id, params))) {
+        return;
+      }
+
+      if (method === 'server/discover') {
+        await this.sendResponse(endpoint.id, id, {
+          resultType: 'complete',
+          supportedVersions: [...XIAOZHI_SUPPORTED_MCP_VERSIONS],
+          capabilities: {
+            tools: {},
           },
+          ttlMs: XIAOZHI_DISCOVERY_TTL_MS,
+          cacheScope: 'private',
+          _meta: getModernServerMeta(),
+        });
+        return;
+      }
+
+      if (method === 'initialize' && !modern) {
+        await this.sendResponse(endpoint.id, id, {
+          protocolVersion: XIAOZHI_MCP_VERSION_LEGACY,
+          serverInfo: { ...XIAOZHI_SERVER_INFO },
           capabilities: {
             tools: {},
           },
@@ -355,12 +581,35 @@ export class XiaozhiEndpointService {
         return;
       }
 
-      if (message.method === 'ping') {
-        await this.sendResponse(endpoint.id, message.id, {});
+      if (method === 'ping') {
+        await this.sendResponse(
+          endpoint.id,
+          id,
+          modern
+            ? {
+                resultType: 'complete',
+                _meta: getModernServerMeta(),
+              }
+            : {},
+        );
         return;
       }
 
-      if (message.method === 'tools/list') {
+      if (method === 'tools/list') {
+        if ('withUserTools' in params && typeof params.withUserTools !== 'boolean') {
+          await this.sendError(
+            endpoint.id,
+            id,
+            JSONRPC_INVALID_PARAMS,
+            'Invalid withUserTools parameter',
+          );
+          return;
+        }
+        if (params.cursor !== undefined && typeof params.cursor !== 'string') {
+          await this.sendError(endpoint.id, id, JSONRPC_INVALID_PARAMS, 'Invalid tools/list cursor');
+          return;
+        }
+
         const smartRoutingConfig = await getSmartRoutingConfig(endpoint.owner);
         const extraParams: { sessionId: string; group?: string } = {
           sessionId: `xiaozhi-${endpoint.id}`,
@@ -385,17 +634,47 @@ export class XiaozhiEndpointService {
           endpointId: endpoint.id,
           name: endpoint.name,
           mode,
+          modern,
         });
 
-        const response = await handleListToolsRequest(message.params || {}, extraParams);
-        await this.sendResponse(endpoint.id, message.id, response);
+        const response = await handleListToolsRequest(params, extraParams);
+        if (modern) {
+          const responseObj: Record<string, unknown> = isPlainObject(response)
+            ? response
+            : { tools: [] };
+          const existingMeta = isPlainObject(responseObj._meta) ? responseObj._meta : {};
+          await this.sendResponse(endpoint.id, id, {
+            ...responseObj,
+            resultType: 'complete',
+            ttlMs: XIAOZHI_DISCOVERY_TTL_MS,
+            cacheScope: 'private',
+            _meta: {
+              ...existingMeta,
+              ...getModernServerMeta(),
+            },
+          });
+        } else {
+          await this.sendResponse(endpoint.id, id, response);
+        }
         return;
       }
 
-      if (message.method === 'tools/call') {
+      if (method === 'tools/call') {
+        const toolName = typeof params.name === 'string' && params.name ? params.name : undefined;
+        if (!toolName) {
+          await this.sendError(endpoint.id, id, JSONRPC_INVALID_PARAMS, 'Missing tool name');
+          return;
+        }
+        if (
+          params.arguments !== undefined &&
+          params.arguments !== null &&
+          !isPlainObject(params.arguments)
+        ) {
+          await this.sendError(endpoint.id, id, JSONRPC_INVALID_PARAMS, 'Invalid tool arguments');
+          return;
+        }
+
         const smartRoutingConfig = await getSmartRoutingConfig(endpoint.owner);
-        const toolName =
-          typeof message.params?.name === 'string' ? message.params.name : undefined;
         const isSmartRoutingTool = toolName === 'search_tools' || toolName === 'call_tool';
         const extraParams: { sessionId: string; group?: string } = {
           sessionId: `xiaozhi-${endpoint.id}`,
@@ -414,17 +693,57 @@ export class XiaozhiEndpointService {
           endpointId: endpoint.id,
           name: endpoint.name,
           toolName,
+          modern,
+          params,
         });
 
-        const response = await handleCallToolRequest(message, extraParams);
-        await this.sendResponse(endpoint.id, message.id, response);
+        try {
+          const response = await handleCallToolRequest(
+            { jsonrpc: '2.0', id, method, params },
+            extraParams,
+          );
+          if (modern) {
+            const responseObj = isPlainObject(response) ? response : { content: [] };
+            const existingMeta = isPlainObject(responseObj._meta) ? responseObj._meta : {};
+            await this.sendResponse(endpoint.id, id, {
+              ...responseObj,
+              resultType: 'complete',
+              isError: Boolean(responseObj.isError),
+              _meta: {
+                ...existingMeta,
+                ...getModernServerMeta(),
+              },
+            });
+          } else {
+            await this.sendResponse(endpoint.id, id, response);
+          }
+        } catch (toolError) {
+          const errMessage = toolError instanceof Error ? toolError.message : String(toolError);
+          if (modern) {
+            await this.sendResponse(endpoint.id, id, {
+              resultType: 'complete',
+              content: [{ type: 'text', text: errMessage }],
+              isError: true,
+              _meta: getModernServerMeta(),
+            });
+          } else {
+            await this.sendError(endpoint.id, id, JSONRPC_INTERNAL_ERROR, errMessage);
+          }
+        }
         return;
       }
 
       logXiaozhi('warn', 'Unhandled Xiaozhi message method', {
         endpointId: endpoint.id,
-        method: message.method,
+        method,
+        modern,
       });
+      await this.sendError(
+        endpoint.id,
+        id,
+        JSONRPC_METHOD_NOT_FOUND,
+        `Method not found: ${method}`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const connection = this.connections.get(endpoint.id);
@@ -434,6 +753,13 @@ export class XiaozhiEndpointService {
         name: endpoint.name,
         error: message,
       });
+      if (requestId !== undefined) {
+        try {
+          await this.sendError(endpoint.id, requestId, JSONRPC_INTERNAL_ERROR, message);
+        } catch {
+          // Ignore send failures while reporting an error on a closed socket.
+        }
+      }
     }
   }
 
@@ -452,6 +778,35 @@ export class XiaozhiEndpointService {
         jsonrpc: '2.0' as const,
         id: messageId,
         result,
+      }),
+    );
+  }
+
+  private async sendError(
+    endpointId: string,
+    messageId: string | number | null,
+    code: number,
+    message: string,
+    data?: unknown,
+  ): Promise<void> {
+    const connection = this.connections.get(endpointId);
+    if (!connection || connection.ws.readyState !== WebSocket.OPEN) {
+      throw new Error(`Endpoint ${endpointId} is not connected`);
+    }
+
+    const errorObj: { code: number; message: string; data?: unknown } = {
+      code,
+      message,
+    };
+    if (data !== undefined) {
+      errorObj.data = data;
+    }
+
+    connection.ws.send(
+      JSON.stringify({
+        jsonrpc: '2.0' as const,
+        id: messageId,
+        error: errorObj,
       }),
     );
   }

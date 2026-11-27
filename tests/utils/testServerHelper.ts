@@ -2,6 +2,7 @@ import { Server } from 'http';
 import { AppServer } from '../../src/server.js';
 import { McpSettings } from '../../src/types/index.js';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { createMockSettings } from './mockSettings.js';
 import { clearSettingsCache } from '../../src/config/index.js';
@@ -90,12 +91,7 @@ export class TestServerHelper {
     // Store original path if it exists
     this.originalConfigPath = process.env.MCPHUB_SETTING_PATH || null;
 
-    const configDir = path.join(process.cwd(), 'temp-test-config');
-
-    // Create temp config directory if it doesn't exist
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
-    }
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcphub-test-config-'));
 
     this.testConfigPath = path.join(configDir, 'mcp_settings.json');
 

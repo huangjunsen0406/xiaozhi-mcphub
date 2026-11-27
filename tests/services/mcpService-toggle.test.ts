@@ -5,7 +5,8 @@ const mockClientConnect = jest.fn().mockResolvedValue(undefined);
 const mockClientClose = jest.fn();
 const mockListTools = jest.fn().mockResolvedValue({ tools: [] });
 
-jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+jest.mock('@modelcontextprotocol/client', () => ({
+  ...jest.requireActual('@modelcontextprotocol/client'),
   Client: jest.fn().mockImplementation(() => ({
     connect: mockClientConnect,
     close: mockClientClose,
@@ -14,7 +15,7 @@ jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   })),
 }));
 
-jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+jest.mock('@modelcontextprotocol/client/stdio', () => ({
   StdioClientTransport: jest.fn().mockImplementation(() => ({
     close: jest.fn(),
     stderr: {

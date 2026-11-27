@@ -1410,7 +1410,10 @@ export const searchToolsByVector = async (
     toolName: string;
     description: string;
     inputSchema: any;
+    /** Ranking score: tool similarity blended with its server's similarity. */
     similarity: number;
+    /** Raw query-to-tool cosine similarity, the value the threshold is applied to. */
+    toolSimilarity: number;
     searchableText: string;
   }>
 > => {
@@ -1466,6 +1469,7 @@ export const searchToolsByVector = async (
               serverSimilarityBoost !== undefined
                 ? result.similarity * 0.8 + serverSimilarityBoost * 0.2
                 : result.similarity,
+            toolSimilarity: result.similarity,
             searchableText: result.embedding.text_content,
           };
         }
@@ -1494,6 +1498,7 @@ export const searchToolsByVector = async (
             serverSimilarityBoost !== undefined
               ? result.similarity * 0.8 + serverSimilarityBoost * 0.2
               : result.similarity,
+          toolSimilarity: result.similarity,
           searchableText: textContent,
         };
       })

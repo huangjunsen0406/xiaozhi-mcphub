@@ -213,6 +213,7 @@ export async function migrateToDatabase(): Promise<boolean> {
             visibility: config.visibility ?? 'private',
             enableKeepAlive: config.enableKeepAlive,
             keepAliveInterval: config.keepAliveInterval,
+            protocolNegotiation: config.protocolNegotiation,
             tools: config.tools,
             prompts: config.prompts,
             resources: config.resources,
@@ -221,6 +222,8 @@ export async function migrateToDatabase(): Promise<boolean> {
             openapi: config.openapi,
             passthroughHeaders: config.passthroughHeaders,
             perSessionClient: config.perSessionClient,
+            startOnDemand: config.startOnDemand,
+            idleTimeoutMs: config.idleTimeoutMs,
           });
           console.log(`  - Created server: ${name}`);
         } else {
@@ -263,6 +266,8 @@ export async function migrateToDatabase(): Promise<boolean> {
         auth: settings.systemConfig.auth || {},
         enableSessionRebuild: settings.systemConfig.enableSessionRebuild,
         discovery: settings.systemConfig.discovery || {},
+        network: settings.systemConfig.network,
+        normalizeToolNames: settings.systemConfig.normalizeToolNames,
       };
       await systemConfigRepo.update(systemConfig);
       console.log('  - System configuration updated');
@@ -277,12 +282,16 @@ export async function migrateToDatabase(): Promise<boolean> {
         await bearerKeyRepo.create({
           name: key.name,
           token: key.token,
+          tokenHash: key.tokenHash,
+          tokenPrefix: key.tokenPrefix,
           enabled: key.enabled,
           kind: key.kind ?? 'system',
           owner: key.owner,
           accessType: key.accessType,
           allowedGroups: key.allowedGroups ?? [],
           allowedServers: key.allowedServers ?? [],
+          excludedGroups: key.excludedGroups ?? [],
+          excludedServers: key.excludedServers ?? [],
         } as any);
         console.log(`  - Migrated bearer key: ${key.name} (${key.id ?? 'no-id'})`);
       }

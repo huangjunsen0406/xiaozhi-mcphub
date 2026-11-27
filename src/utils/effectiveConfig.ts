@@ -177,6 +177,8 @@ export const extractUserConfigPatch = (
  * Whether the PUT body only contains user-scoped sections (no global-only fields).
  */
 export const bodyHasGlobalOnlySystemFields = (body: Record<string, any>): boolean => {
+  if (body.network && typeof body.network === 'object') return true;
+  if (body.normalizeToolNames !== undefined) return true;
   if (body.routing && typeof body.routing === 'object') return true;
   if (body.install && typeof body.install === 'object') return true;
   if (typeof body.nameSeparator === 'string') return true;

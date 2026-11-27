@@ -159,6 +159,8 @@
     "user": "User"
   },
   "server": {
+    "protocolVersion": "MCP protocol version",
+    "protocolVersionUnknown": "—",
     "addServer": "Add Server",
     "add": "Add",
     "edit": "Edit",

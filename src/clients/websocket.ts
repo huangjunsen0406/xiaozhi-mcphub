@@ -1,5 +1,4 @@
-import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import type { Transport, JSONRPCMessage } from '@modelcontextprotocol/server';
 import WebSocket from 'ws';
 
 export interface WebSocketClientTransportOptions {

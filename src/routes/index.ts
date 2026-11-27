@@ -15,8 +15,10 @@ import {
   disconnectServerOAuth,
   clearCache,
   toggleTool,
+  batchToggleTools,
   updateToolDescription,
   resetToolDescription,
+  updateToolHiddenParams,
   togglePrompt,
   updatePromptDescription,
   resetPromptDescription,
@@ -153,6 +155,7 @@ import {
   getBearerKeys,
   createBearerKey,
   updateBearerKey,
+  resetBearerKey,
   deleteBearerKey,
 } from '../controllers/bearerKeyController.js';
 import {
@@ -268,6 +271,7 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.post('/servers/:name/reload', reloadServer);
   authenticatedRouter.post('/servers/:name/reinstall', reinstallServerHandler);
   authenticatedRouter.post('/servers/:name/oauth/disconnect', disconnectServerOAuth);
+  authenticatedRouter.post('/servers/:serverName/tools/toggle', batchToggleTools);
   authenticatedRouter.post('/servers/:serverName/tools/:toolName/toggle', toggleTool);
   authenticatedRouter.put(
     '/servers/:serverName/tools/:toolName/description',
@@ -276,6 +280,10 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.delete(
     '/servers/:serverName/tools/:toolName/description',
     resetToolDescription,
+  );
+  authenticatedRouter.put(
+    '/servers/:serverName/tools/:toolName/hidden-params',
+    updateToolHiddenParams,
   );
   authenticatedRouter.post('/servers/:serverName/prompts/:promptName/toggle', togglePrompt);
   authenticatedRouter.put(
@@ -346,6 +354,7 @@ export const initRoutes = async (app: express.Application): Promise<void> => {
   authenticatedRouter.get('/auth/keys', getBearerKeys);
   authenticatedRouter.post('/auth/keys', createBearerKey);
   authenticatedRouter.put('/auth/keys/:id', updateBearerKey);
+  authenticatedRouter.post('/auth/keys/:id/reset', resetBearerKey);
   authenticatedRouter.delete('/auth/keys/:id', deleteBearerKey);
 
   // Activity routes (database mode only)

@@ -19,7 +19,8 @@ const stdioInstances: Array<{ pid: number | null }> = [];
 // file. We expose a setter that the test can call after import.
 let currentTestPid: number | null = 12345;
 
-jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+jest.mock('@modelcontextprotocol/client', () => ({
+  ...jest.requireActual('@modelcontextprotocol/client'),
   Client: jest.fn().mockImplementation(() => ({
     connect: mockClientConnect,
     close: mockClientClose,
@@ -28,7 +29,7 @@ jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   })),
 }));
 
-jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => {
+jest.mock('@modelcontextprotocol/client/stdio', () => {
   class FakeStdioClientTransport {
     pid: number | null;
     stderr: { on: jest.Mock };
@@ -153,8 +154,8 @@ import {
   toggleServerStatus,
 } from '../../src/services/mcpService.js';
 import type { ServerInfo } from '../../src/types/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { Client } from '@modelcontextprotocol/client';
 
 const makeStdioServerInfo = (name: string): ServerInfo =>
   ({

@@ -15,6 +15,8 @@ export class SystemConfigDaoDbImpl implements SystemConfigDao {
   async get(): Promise<SystemConfig> {
     const config = await this.repository.get();
     return {
+      network: config.network as any,
+      normalizeToolNames: config.normalizeToolNames,
       routing: config.routing as any,
       install: config.install as any,
       smartRouting: config.smartRouting as any,
@@ -35,6 +37,8 @@ export class SystemConfigDaoDbImpl implements SystemConfigDao {
   async update(config: Partial<SystemConfig>): Promise<SystemConfig> {
     const updated = await this.repository.update(config as any);
     return {
+      network: updated.network as any,
+      normalizeToolNames: updated.normalizeToolNames,
       routing: updated.routing as any,
       install: updated.install as any,
       smartRouting: updated.smartRouting as any,
@@ -55,6 +59,8 @@ export class SystemConfigDaoDbImpl implements SystemConfigDao {
   async reset(): Promise<SystemConfig> {
     const config = await this.repository.reset();
     return {
+      network: config.network as any,
+      normalizeToolNames: config.normalizeToolNames,
       routing: config.routing as any,
       install: config.install as any,
       smartRouting: config.smartRouting as any,

@@ -159,6 +159,8 @@
     "user": "用户"
   },
   "server": {
+    "protocolVersion": "MCP 协议版本",
+    "protocolVersionUnknown": "—",
     "addServer": "添加服务器",
     "add": "添加",
     "edit": "编辑",

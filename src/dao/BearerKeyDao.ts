@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { BearerKey } from '../types/index.js';
 import { JsonFileBaseDao } from './base/JsonFileBaseDao.js';
-import { safeCompare } from '../utils/safeCompare.js';
+import { bearerKeyMatches, toStoredToken } from '../utils/bearerKeyToken.js';
 
 /**
  * DAO interface for bearer authentication keys
@@ -16,6 +16,11 @@ export interface BearerKeyDao {
   update(id: string, data: Partial<Omit<BearerKey, 'id'>>): Promise<BearerKey | null>;
   delete(id: string): Promise<boolean>;
   deleteByOwner(owner: string): Promise<number>;
+  /**
+   * Replace raw tokens still stored (keys created before hashing) with their hash and prefix.
+   * Returns the number of keys hashed.
+   */
+  hashLegacyTokens(): Promise<number>;
   /**
    * Update server name in all bearer keys (when server is renamed)
    */
@@ -32,6 +37,10 @@ export class BearerKeyDaoImpl extends JsonFileBaseDao implements BearerKeyDao {
     return {
       ...key,
       kind: key.kind ?? 'system',
+      allowedGroups: key.allowedGroups ?? [],
+      allowedServers: key.allowedServers ?? [],
+      excludedGroups: key.excludedGroups ?? [],
+      excludedServers: key.excludedServers ?? [],
     };
   }
 
@@ -58,18 +67,23 @@ export class BearerKeyDaoImpl extends JsonFileBaseDao implements BearerKeyDao {
         {
           id: randomUUID(),
           name: 'default',
-          token: rawKey,
+          ...toStoredToken(rawKey),
           enabled: enableBearerAuth,
           kind: 'system',
           accessType: 'all',
           allowedGroups: [],
           allowedServers: [],
+          excludedGroups: [],
+          excludedServers: [],
         },
       ];
     }
 
     // Cases 1 and 4 both result in empty keys list
     settings.bearerKeys = migrated;
+    if (rawKey && settings.systemConfig?.routing) {
+      settings.systemConfig.routing.bearerAuthKey = '';
+    }
     await this.saveSettings(settings);
 
     return migrated;
@@ -97,7 +111,7 @@ export class BearerKeyDaoImpl extends JsonFileBaseDao implements BearerKeyDao {
 
   async findByToken(token: string): Promise<BearerKey | undefined> {
     const keys = await this.loadKeysWithMigration();
-    return keys.find((key) => safeCompare(key.token, token));
+    return keys.find((key) => bearerKeyMatches(key, token));
   }
 
   async findByOwner(owner: string): Promise<BearerKey[]> {
@@ -107,13 +121,16 @@ export class BearerKeyDaoImpl extends JsonFileBaseDao implements BearerKeyDao {
 
   async create(data: Omit<BearerKey, 'id'>): Promise<BearerKey> {
     const keys = await this.loadKeysWithMigration();
-    const newKey: BearerKey = {
+    const { token, ...rest } = data;
+    const stored: BearerKey = {
       id: randomUUID(),
-      ...data,
+      ...rest,
+      ...(token && !rest.tokenHash ? toStoredToken(token) : {}),
     };
-    keys.push(newKey);
+    keys.push(stored);
     await this.saveKeys(keys);
-    return newKey;
+    // Return raw token once on creation; persisted record holds only hash & prefix.
+    return token ? { ...this.normalizeKey(stored), token } : this.normalizeKey(stored);
   }
 
   async update(id: string, data: Partial<Omit<BearerKey, 'id'>>): Promise<BearerKey | null> {
@@ -128,9 +145,36 @@ export class BearerKeyDaoImpl extends JsonFileBaseDao implements BearerKeyDao {
       ...data,
       id: keys[index].id,
     };
+    if (data.tokenHash !== undefined) {
+      delete updated.token;
+    }
     keys[index] = updated;
     await this.saveKeys(keys);
-    return updated;
+    return this.normalizeKey(updated);
+  }
+
+  async hashLegacyTokens(): Promise<number> {
+    const settings = await this.loadSettings();
+    const keys = await this.loadKeysWithMigration();
+    let count = 0;
+    const nextKeys = keys.map((key) => {
+      if (key.token && !key.tokenHash) {
+        count += 1;
+        const { token, ...rest } = key;
+        return { ...rest, ...toStoredToken(token) };
+      }
+      return key;
+    });
+    const hadLegacyRoutingKey = Boolean(settings.systemConfig?.routing?.bearerAuthKey);
+    if (count > 0 || hadLegacyRoutingKey) {
+      const latest = await this.loadSettings();
+      latest.bearerKeys = nextKeys;
+      if (latest.systemConfig?.routing?.bearerAuthKey) {
+        latest.systemConfig.routing.bearerAuthKey = '';
+      }
+      await this.saveSettings(latest);
+    }
+    return count;
   }
 
   async delete(id: string): Promise<boolean> {
@@ -171,8 +215,27 @@ export class BearerKeyDaoImpl extends JsonFileBaseDao implements BearerKeyDao {
 
         if (updated) {
           key.allowedServers = newServers;
-          updatedCount++;
         }
+      }
+
+      if (key.excludedServers && key.excludedServers.length > 0) {
+        let excludedUpdated = false;
+        const newExcluded = key.excludedServers.map((server) => {
+          if (server === oldName) {
+            excludedUpdated = true;
+            return newName;
+          }
+          return server;
+        });
+
+        if (excludedUpdated) {
+          key.excludedServers = newExcluded;
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        updatedCount++;
       }
     }
 

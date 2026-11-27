@@ -8,22 +8,6 @@ const makeOkResult = () => ({
   isError: false,
 });
 
-jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
-  Client: jest.fn().mockImplementation(() => {
-    const client = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      close: jest.fn(),
-      getServerCapabilities: jest.fn(() => ({ tools: {} })),
-      getServerVersion: jest.fn(() => ({ version: '1.0.0' })),
-      getInstructions: jest.fn(() => undefined),
-      listTools: jest.fn().mockResolvedValue({ tools: [] }),
-      callTool: jest.fn().mockResolvedValue(makeOkResult()),
-    };
-    mockCreatedClients.push(client);
-    return client;
-  }),
-}));
-
 const mockCreatedTransports: any[] = [];
 
 class MockStreamableHTTPClientTransport {
@@ -57,15 +41,26 @@ class MockStdioClientTransport {
   }
 }
 
-jest.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
+jest.mock('@modelcontextprotocol/client', () => ({
+  ...jest.requireActual('@modelcontextprotocol/client'),
+  Client: jest.fn().mockImplementation(() => {
+    const client = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      close: jest.fn(),
+      getServerCapabilities: jest.fn(() => ({ tools: {} })),
+      getServerVersion: jest.fn(() => ({ version: '1.0.0' })),
+      getInstructions: jest.fn(() => undefined),
+      listTools: jest.fn().mockResolvedValue({ tools: [] }),
+      callTool: jest.fn().mockResolvedValue(makeOkResult()),
+    };
+    mockCreatedClients.push(client);
+    return client;
+  }),
   StreamableHTTPClientTransport: MockStreamableHTTPClientTransport,
-}));
-
-jest.mock('@modelcontextprotocol/sdk/client/sse.js', () => ({
   SSEClientTransport: MockSSEClientTransport,
 }));
 
-jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+jest.mock('@modelcontextprotocol/client/stdio', () => ({
   StdioClientTransport: MockStdioClientTransport,
 }));
 
@@ -338,7 +333,7 @@ describe('mcpService per-session client isolation (perSessionClient)', () => {
 
     // Make the next isolated client's handshake fail so we exercise the
     // connect-failure cleanup path (transport + process tree must be torn down).
-    const { Client: MockClient } = jest.requireMock('@modelcontextprotocol/sdk/client/index.js');
+    const { Client: MockClient } = jest.requireMock('@modelcontextprotocol/client');
     MockClient.mockImplementationOnce(() => {
       const client = {
         connect: jest.fn().mockRejectedValue(new Error('handshake failed')),

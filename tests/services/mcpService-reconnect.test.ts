@@ -19,10 +19,6 @@ const mockReconnectClient = {
   }),
 };
 
-jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
-  Client: jest.fn().mockImplementation(() => mockReconnectClient),
-}));
-
 class MockSSEClientTransport {
   constructor(
     public url: URL,
@@ -41,15 +37,14 @@ class MockStreamableHTTPClientTransport {
   close = jest.fn();
 }
 
-jest.mock('@modelcontextprotocol/sdk/client/sse.js', () => ({
+jest.mock('@modelcontextprotocol/client', () => ({
+  ...jest.requireActual('@modelcontextprotocol/client'),
+  Client: jest.fn().mockImplementation(() => mockReconnectClient),
   SSEClientTransport: MockSSEClientTransport,
-}));
-
-jest.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
   StreamableHTTPClientTransport: MockStreamableHTTPClientTransport,
 }));
 
-jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+jest.mock('@modelcontextprotocol/client/stdio', () => ({
   StdioClientTransport: jest.fn(),
 }));
 
@@ -145,7 +140,7 @@ jest.mock('../../src/config/index.js', () => ({
 }));
 
 import * as mcpService from '../../src/services/mcpService.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 
 describe('mcpService streamable-http reconnect', () => {
   beforeEach(() => {
@@ -212,7 +207,6 @@ describe('mcpService streamable-http reconnect', () => {
     expect(mockReconnectClient.listTools).toHaveBeenCalledTimes(1);
     expect(mockReconnectClient.callTool).toHaveBeenCalledWith(
       { name: 'get_current_time', arguments: {} },
-      undefined,
       {},
     );
 

@@ -102,7 +102,7 @@ jest.mock('./userContextService.js', () => ({
   },
 }));
 
-jest.mock('@modelcontextprotocol/sdk/server/sse.js', () => ({
+jest.mock('@modelcontextprotocol/server-legacy/sse', () => ({
   SSEServerTransport: jest.fn().mockImplementation((_path, _res) => ({
     sessionId: 'test-session-id',
     connect: jest.fn(),
@@ -110,22 +110,28 @@ jest.mock('@modelcontextprotocol/sdk/server/sse.js', () => ({
   })),
 }));
 
-jest.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-  StreamableHTTPServerTransport: jest
+jest.mock('@modelcontextprotocol/node', () => ({
+  NodeStreamableHTTPServerTransport: jest
     .fn()
     .mockImplementation(() => mockStreamableHTTPServerTransport),
+  toWebRequest: jest.fn(async () => ({})),
+  toNodeHandler: jest.fn(() => jest.fn()),
 }));
 
-jest.mock('@modelcontextprotocol/sdk/types.js', () => ({
+jest.mock('@modelcontextprotocol/server', () => ({
   isInitializeRequest: jest.fn(() => true),
+  isLegacyRequest: jest.fn(async () => true),
+  createMcpHandler: jest.fn(() => ({
+    close: jest.fn().mockResolvedValue(undefined),
+  })),
 }));
 
 // Import mocked modules
 import { getMcpServer } from './mcpService.js';
 import { UserContextService } from './userContextService.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { SSEServerTransport } from '@modelcontextprotocol/server-legacy/sse';
+import { NodeStreamableHTTPServerTransport as StreamableHTTPServerTransport } from '@modelcontextprotocol/node';
+import { isInitializeRequest } from '@modelcontextprotocol/server';
 import { getBearerKeyDao, getGroupDao, getUserDao } from '../dao/index.js';
 
 // Helper function to update the mock system config
@@ -1134,6 +1140,146 @@ describe('sseService', () => {
 
         await handleMcpPostRequest(req, res);
         expectBearerUnauthorized(res, 'Invalid bearer token');
+      });
+
+      it('denies exclude-scoped key on excluded group or excluded server, and allows non-excluded group (#1413)', async () => {
+        const excludeKey = {
+          id: 'ex-key',
+          name: 'exclude-prod',
+          token: 'exclude-token',
+          enabled: true,
+          kind: 'system',
+          accessType: 'exclude',
+          excludedGroups: ['prod-group'],
+          excludedServers: ['secret-srv'],
+        };
+
+        setMockSystemConfig({
+          routing: {
+            enableGlobalRoute: true,
+            enableGroupNameRoute: true,
+            enableBearerAuth: true,
+            skipAuth: false,
+          },
+          enableSessionRebuild: false,
+        });
+
+        // Excluded group denied
+        (getBearerKeyDao as jest.MockedFunction<any>).mockReturnValueOnce({
+          findEnabled: jest.fn().mockResolvedValue([excludeKey]),
+        });
+        (getGroupDao as jest.MockedFunction<any>).mockReturnValue({
+          findByName: jest.fn().mockImplementation((name: string) =>
+            name === 'prod-group'
+              ? Promise.resolve({ id: 'g-prod', name: 'prod-group', servers: ['srv-prod'] })
+              : name === 'dev-group'
+                ? Promise.resolve({ id: 'g-dev', name: 'dev-group', servers: ['srv-dev'] })
+                : Promise.resolve(null),
+          ),
+          findById: jest.fn().mockResolvedValue(null),
+        });
+        const resDenied = createMockResponse();
+        await handleMcpPostRequest(
+          createMockRequest({
+            params: { group: 'prod-group' },
+            body: { jsonrpc: '2.0', method: 'initialize', id: 1 },
+            headers: { authorization: 'Bearer exclude-token' },
+          }),
+          resDenied,
+        );
+        expectBearerUnauthorized(resDenied, 'Invalid bearer token');
+
+        // Non-excluded group allowed
+        (getBearerKeyDao as jest.MockedFunction<any>).mockReturnValueOnce({
+          findEnabled: jest.fn().mockResolvedValue([excludeKey]),
+        });
+        const resAllowed = createMockResponse();
+        await handleMcpPostRequest(
+          createMockRequest({
+            params: { group: 'dev-group' },
+            body: { jsonrpc: '2.0', method: 'initialize', id: 1 },
+            headers: { authorization: 'Bearer exclude-token' },
+          }),
+          resAllowed,
+        );
+        expect(resAllowed.status).not.toHaveBeenCalledWith(401);
+      });
+
+      it('enforces group ID allowlist for personal keys (#1470)', async () => {
+        const personalKey = {
+          id: 'u-key',
+          name: 'alice-scoped',
+          token: 'alice-scoped-token',
+          enabled: true,
+          kind: 'user',
+          owner: 'alice',
+          accessType: 'groups',
+          allowedGroups: ['11111111-1111-4111-8111-111111111111'],
+        };
+
+        setMockSystemConfig({
+          routing: {
+            enableGlobalRoute: true,
+            enableGroupNameRoute: true,
+            enableBearerAuth: true,
+            skipAuth: false,
+          },
+          enableSessionRebuild: false,
+        });
+        (getUserDao as jest.MockedFunction<any>).mockReturnValue({
+          findByUsername: jest.fn().mockResolvedValue({ username: 'alice', isAdmin: false }),
+        });
+        (getGroupDao as jest.MockedFunction<any>).mockReturnValue({
+          findByOwnerAndName: jest.fn().mockImplementation((_owner: string, name: string) =>
+            name === 'allowed-g'
+              ? Promise.resolve({
+                  id: '11111111-1111-4111-8111-111111111111',
+                  name: 'allowed-g',
+                  owner: 'alice',
+                  servers: ['srv-a'],
+                })
+              : name === 'other-g'
+                ? Promise.resolve({
+                    id: '22222222-2222-4222-8222-222222222222',
+                    name: 'other-g',
+                    owner: 'alice',
+                    servers: ['srv-b'],
+                  })
+                : Promise.resolve(null),
+          ),
+          findByName: jest.fn().mockResolvedValue(null),
+          findById: jest.fn().mockResolvedValue(null),
+        });
+
+        // Disallowed group rejected
+        (getBearerKeyDao as jest.MockedFunction<any>).mockReturnValueOnce({
+          findEnabled: jest.fn().mockResolvedValue([personalKey]),
+        });
+        const resDenied = createMockResponse();
+        await handleMcpPostRequest(
+          createMockRequest({
+            params: { group: 'other-g' },
+            body: { jsonrpc: '2.0', method: 'initialize', id: 1 },
+            headers: { authorization: 'Bearer alice-scoped-token' },
+          }),
+          resDenied,
+        );
+        expectBearerUnauthorized(resDenied, 'Invalid bearer token');
+
+        // Allowed group permitted
+        (getBearerKeyDao as jest.MockedFunction<any>).mockReturnValueOnce({
+          findEnabled: jest.fn().mockResolvedValue([personalKey]),
+        });
+        const resOk = createMockResponse();
+        await handleMcpPostRequest(
+          createMockRequest({
+            params: { group: 'allowed-g' },
+            body: { jsonrpc: '2.0', method: 'initialize', id: 1 },
+            headers: { authorization: 'Bearer alice-scoped-token' },
+          }),
+          resOk,
+        );
+        expect(resOk.status).not.toHaveBeenCalledWith(401);
       });
     });
 

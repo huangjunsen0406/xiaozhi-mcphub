@@ -10,6 +10,12 @@ export class SystemConfig {
   id: string;
 
   @Column({ type: 'simple-json', nullable: true })
+  network?: Record<string, any>;
+
+  @Column({ type: 'boolean', nullable: true })
+  normalizeToolNames?: boolean;
+
+  @Column({ type: 'simple-json', nullable: true })
   routing?: Record<string, any>;
 
   @Column({ type: 'simple-json', nullable: true })

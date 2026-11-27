@@ -8,6 +8,7 @@
 import type { ServerInfo, ServerCost, ItemCost, GroupCost, IGroupServerConfig, SmartRoutingCost } from '../types/index.js';
 import { itemCostForTool, itemCostForPrompt, itemCostForResource, countTokens, serializeToolDefinition } from '../utils/tokenCost.js';
 import { getServersInfo } from './mcpService.js';
+import { applyHiddenParams } from '../utils/toolConfig.js';
 import { getNameSeparator } from '../config/index.js';
 import { getAllGroups, normalizeGroupServers } from './groupService.js';
 import { getSmartRoutingConfig } from '../utils/smartRouting.js';
@@ -26,7 +27,8 @@ export async function serverCostFromInfo(info: ServerInfo): Promise<ServerCost> 
   // Tools and prompts carry an explicit `enabled` boolean set by getServersInfo.
   // Count all three kinds concurrently rather than awaiting each batch in sequence.
   const [tools, prompts, resources] = await Promise.all([
-    Promise.all((info.tools ?? []).map((t) => itemCostForTool(t))),
+    // Cost what a model receives: hidden parameters are not in the schema it sees
+    Promise.all((info.tools ?? []).map((t) => itemCostForTool(applyHiddenParams(t, t)))),
     Promise.all((info.prompts ?? []).map((p) => itemCostForPrompt(p))),
     Promise.all((info.resources ?? []).map((r) => itemCostForResource(r))),
   ]);
@@ -60,8 +62,11 @@ const shortName = (full: string, server: string, sep: string): string => {
 const isSelected = (selection: string[] | 'all' | undefined, short: string): boolean =>
   selection === undefined || selection === 'all' || selection.includes(short);
 
-/** Compute the Smart Routing meta-tool token cost for a group scope. */
-const smartRoutingCostFor = async (groupName: string): Promise<SmartRoutingCost> => {
+/** Smart Routing cost for a group scope: its meta-tools plus the pinned tools' cost. */
+const smartRoutingCostFor = async (
+  groupName: string,
+  pinnedCost: number,
+): Promise<SmartRoutingCost> => {
   const ref = `$smart/${groupName}`;
   const sumCost = async (tools: any[]): Promise<number> => {
     const counts = await Promise.all(
@@ -77,7 +82,10 @@ const smartRoutingCostFor = async (groupName: string): Promise<SmartRoutingCost>
     getSmartRoutingMetaToolDefinitions(ref, false),
     getSmartRoutingMetaToolDefinitions(ref, true),
   ]);
-  return { base: await sumCost(baseTools), progressiveDisclosure: await sumCost(pdTools) };
+  return {
+    base: (await sumCost(baseTools)) + pinnedCost,
+    progressiveDisclosure: (await sumCost(pdTools)) + pinnedCost,
+  };
 };
 
 /** Per-group Context Footprint — Direct (gross/exposed) + Smart Routing costs. */
@@ -96,6 +104,7 @@ export async function getGroupCosts(): Promise<GroupCost[]> {
       const members: IGroupServerConfig[] = normalizeGroupServers(group.servers);
       let exposed = 0;
       let gross = 0;
+      let pinnedCost = 0;
       let connectedCount = 0;
 
       for (const member of members) {
@@ -115,6 +124,9 @@ export async function getGroupCosts(): Promise<GroupCost[]> {
             item.kind === 'resource' ? item.name : shortName(item.name, member.name, sep);
           if (item.enabled && isSelected(selection, key)) {
             exposed += item.cost;
+            if (item.kind === 'tool' && member.pinnedTools?.includes(key)) {
+              pinnedCost += item.cost;
+            }
           }
         }
       }
@@ -125,7 +137,7 @@ export async function getGroupCosts(): Promise<GroupCost[]> {
         connectedCount,
         totalCount: members.length,
         direct: { exposed, gross },
-        smartRouting: smartEnabled ? await smartRoutingCostFor(group.name) : null,
+        smartRouting: smartEnabled ? await smartRoutingCostFor(group.name, pinnedCost) : null,
       };
     }),
   );

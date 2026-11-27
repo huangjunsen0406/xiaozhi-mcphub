@@ -2,7 +2,7 @@ import { ApiClient } from '../http.js';
 import { CliUsageError } from '../errors.js';
 import { GlobalFlags, buildClient, resolveTarget } from '../context.js';
 import { extractFlags } from '../parse-args.js';
-import { green, maskToken, printJson, printLine, printTable } from '../output.js';
+import { green, printJson, printLine, printTable } from '../output.js';
 import type { BearerKey, BearerKeyAccessType } from '../../types/index.js';
 
 interface ApiResponse<T> {
@@ -11,7 +11,13 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-const VALID_ACCESS_TYPES: BearerKeyAccessType[] = ['all', 'groups', 'servers', 'custom'];
+const VALID_ACCESS_TYPES: BearerKeyAccessType[] = [
+  'all',
+  'groups',
+  'servers',
+  'custom',
+  'exclude',
+];
 
 export interface KeysDeps {
   client?: ApiClient;
@@ -46,7 +52,7 @@ async function list(client: ApiClient, globals: GlobalFlags): Promise<void> {
       name: k.name,
       enabled: k.enabled ? 'yes' : 'no',
       accessType: k.accessType,
-      token: maskToken(k.token),
+      token: k.token ?? '',
     })),
     ['id', 'name', 'enabled', 'accessType', 'token'],
   );
@@ -54,13 +60,20 @@ async function list(client: ApiClient, globals: GlobalFlags): Promise<void> {
 
 async function create(client: ApiClient, args: string[], globals: GlobalFlags): Promise<void> {
   const { flags } = extractFlags(args, {
-    valued: ['--name', '--access-type', '--groups', '--servers'],
+    valued: [
+      '--name',
+      '--access-type',
+      '--groups',
+      '--servers',
+      '--exclude-groups',
+      '--exclude-servers',
+    ],
     boolean: ['--disabled'],
   });
   const name = flags['--name'] as string | undefined;
   if (!name) {
     throw new CliUsageError(
-      'Usage: mcphub keys create --name <n> [--access-type all|groups|servers|custom] [--groups a,b] [--servers x,y]',
+      'Usage: mcphub keys create --name <n> [--access-type all|groups|servers|custom|exclude] [--groups a,b] [--servers x,y] [--exclude-groups a,b] [--exclude-servers x,y]',
     );
   }
   const accessType = (flags['--access-type'] as BearerKeyAccessType | undefined) ?? 'all';
@@ -79,6 +92,14 @@ async function create(client: ApiClient, args: string[], globals: GlobalFlags): 
   }
   if (accessType === 'servers' || accessType === 'custom') {
     if (flags['--servers']) body.allowedServers = splitCsv(flags['--servers'] as string);
+  }
+  if (accessType === 'exclude') {
+    if (flags['--exclude-groups']) {
+      body.excludedGroups = splitCsv(flags['--exclude-groups'] as string);
+    }
+    if (flags['--exclude-servers']) {
+      body.excludedServers = splitCsv(flags['--exclude-servers'] as string);
+    }
   }
 
   const res = await client.post<ApiResponse<BearerKey>>('/api/auth/keys', body);

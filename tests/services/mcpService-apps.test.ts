@@ -11,22 +11,17 @@ const mockClient = {
   callTool: jest.fn(),
 };
 
-jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+jest.mock('@modelcontextprotocol/client', () => ({
+  ...jest.requireActual('@modelcontextprotocol/client'),
   Client: jest.fn().mockImplementation(() => mockClient),
+  SSEClientTransport: jest.fn(),
+  StreamableHTTPClientTransport: jest.fn(),
 }));
 
-jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+jest.mock('@modelcontextprotocol/client/stdio', () => ({
   StdioClientTransport: jest.fn().mockImplementation(() => ({
     close: jest.fn(),
   })),
-}));
-
-jest.mock('@modelcontextprotocol/sdk/client/sse.js', () => ({
-  SSEClientTransport: jest.fn(),
-}));
-
-jest.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
-  StreamableHTTPClientTransport: jest.fn(),
 }));
 
 jest.mock('../../src/services/oauthService.js', () => ({
@@ -133,7 +128,7 @@ jest.mock('../../src/config/index.js', () => ({
   },
 }));
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { Client } from '@modelcontextprotocol/client';
 import {
   broadcastToolListChanged,
   cleanupAllServers,
@@ -284,7 +279,6 @@ describe('mcpService MCP Apps transparent proxy', () => {
     expect(appsResult.isError).toBe(false);
     expect(mockClient.callTool).toHaveBeenCalledWith(
       { name: 'poll-dashboard', arguments: {} },
-      undefined,
       expect.anything(),
     );
     expect(ordinaryResult.isError).toBe(true);
