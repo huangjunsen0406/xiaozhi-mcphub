@@ -54,7 +54,7 @@ jobs:
           cp -r frontend/dist "$PACKAGE_DIR/frontend-dist"
           
           # 复制必要文件
-          cp package.json pnpm-lock.yaml "$PACKAGE_DIR/"
+          cp package.json pnpm-lock.yaml .pnpmfile.cjs "$PACKAGE_DIR/"
           cp README.md README.zh.md LICENSE "$PACKAGE_DIR/"
           cp docker-compose.yml Dockerfile entrypoint.sh "$PACKAGE_DIR/"
           cp nginx.conf.example servers.json "$PACKAGE_DIR/"
