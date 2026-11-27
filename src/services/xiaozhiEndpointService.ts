@@ -28,6 +28,10 @@ const DEFAULT_RECONNECT = {
 const DEFAULT_MAX_CONCURRENT_RECONNECTS = 3;
 /** Random jitter factor applied to reconnect delay (0–jitter). */
 const DEFAULT_RECONNECT_JITTER_RATIO = 0.2;
+/** Active WebSocket ping interval to detect half-open/zombie connections (#43). */
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
+/** Max time to wait for a pong or inbound frame after sending a WebSocket ping (#43). */
+const DEFAULT_HEARTBEAT_TIMEOUT_MS = 10_000;
 
 export const XIAOZHI_MCP_VERSION_MODERN = '2026-07-28';
 export const XIAOZHI_MCP_VERSION_LEGACY = '2024-11-05';
@@ -51,7 +55,7 @@ const MCP_UNSUPPORTED_VERSION = -32022;
 
 const XIAOZHI_SERVER_INFO = {
   name: 'mcphub-xiaozhi-bridge',
-  version: '1.1.6',
+  version: '1.2.1',
 } as const;
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -79,6 +83,8 @@ interface EndpointConnection {
   ws: WebSocket;
   endpoint: XiaozhiEndpoint;
   reconnectTimer?: NodeJS.Timeout;
+  heartbeatTimer?: NodeJS.Timeout;
+  pongTimeoutTimer?: NodeJS.Timeout;
   reconnectAttempts: number;
   isInInfiniteReconnectMode: boolean;
   infiniteRetryCount: number;
@@ -90,6 +96,7 @@ interface EndpointConnection {
   lastCloseReason?: string;
   nextReconnectAt?: number;
   connectedAt?: number;
+  lastActivityAt?: number;
 }
 
 const logXiaozhi = (
@@ -175,6 +182,8 @@ export class XiaozhiEndpointService {
   private sleepInterval: number;
   private maxConcurrentReconnects: number;
   private reconnectJitterRatio: number;
+  private heartbeatIntervalMs: number;
+  private heartbeatTimeoutMs: number;
   /** Endpoint ids currently waiting on a reconnect timer (for backpressure). */
   private pendingReconnectIds: Set<string> = new Set();
 
@@ -197,6 +206,22 @@ export class XiaozhiEndpointService {
         ),
       ),
     );
+    const parsedHeartbeatInterval = parseInt(
+      process.env.XIAOZHI_HEARTBEAT_INTERVAL_MS ?? String(DEFAULT_HEARTBEAT_INTERVAL_MS),
+      10,
+    );
+    this.heartbeatIntervalMs =
+      Number.isFinite(parsedHeartbeatInterval) && parsedHeartbeatInterval >= 0
+        ? parsedHeartbeatInterval
+        : DEFAULT_HEARTBEAT_INTERVAL_MS;
+    const parsedHeartbeatTimeout = parseInt(
+      process.env.XIAOZHI_HEARTBEAT_TIMEOUT_MS ?? String(DEFAULT_HEARTBEAT_TIMEOUT_MS),
+      10,
+    );
+    this.heartbeatTimeoutMs =
+      Number.isFinite(parsedHeartbeatTimeout) && parsedHeartbeatTimeout > 0
+        ? parsedHeartbeatTimeout
+        : DEFAULT_HEARTBEAT_TIMEOUT_MS;
 
     logXiaozhi('info', 'Xiaozhi endpoint reconnect config', {
       aggressiveReconnect: this.aggressiveReconnect,
@@ -206,6 +231,8 @@ export class XiaozhiEndpointService {
       sleepIntervalMs: this.sleepInterval,
       maxConcurrentReconnects: this.maxConcurrentReconnects,
       reconnectJitterRatio: this.reconnectJitterRatio,
+      heartbeatIntervalMs: this.heartbeatIntervalMs,
+      heartbeatTimeoutMs: this.heartbeatTimeoutMs,
     });
   }
 
@@ -308,6 +335,9 @@ export class XiaozhiEndpointService {
     void this.updateEndpointStatus(endpoint.id, 'connecting');
 
     ws.on('open', () => {
+      if (this.connections.get(endpoint.id) !== connection) {
+        return;
+      }
       logXiaozhi('info', 'Xiaozhi endpoint connected', {
         endpointId: endpoint.id,
         name: endpoint.name,
@@ -323,7 +353,9 @@ export class XiaozhiEndpointService {
       connection.lastCloseReason = undefined;
       connection.nextReconnectAt = undefined;
       connection.connectedAt = Date.now();
+      connection.lastActivityAt = connection.connectedAt;
       this.pendingReconnectIds.delete(endpoint.id);
+      this.startHeartbeat(connection);
       void this.updateEndpointStatus(endpoint.id, 'connected');
 
       try {
@@ -341,7 +373,25 @@ export class XiaozhiEndpointService {
       }
     });
 
+    ws.on('pong', () => {
+      if (this.connections.get(endpoint.id) !== connection) {
+        return;
+      }
+      this.markConnectionAlive(connection);
+    });
+
+    ws.on('ping', () => {
+      if (this.connections.get(endpoint.id) !== connection) {
+        return;
+      }
+      this.markConnectionAlive(connection);
+    });
+
     ws.on('error', (error) => {
+      if (this.connections.get(endpoint.id) !== connection) {
+        return;
+      }
+      this.stopHeartbeat(connection);
       const message = error instanceof Error ? error.message : String(error);
       connection.lastError = message;
       logXiaozhi('error', 'Xiaozhi endpoint socket error', {
@@ -354,6 +404,10 @@ export class XiaozhiEndpointService {
     });
 
     ws.on('close', (code, reasonBuf) => {
+      if (this.connections.get(endpoint.id) !== connection) {
+        return;
+      }
+      this.stopHeartbeat(connection);
       const reason = reasonBuf?.toString() || '';
       connection.lastCloseCode = code;
       connection.lastCloseReason = reason || undefined;
@@ -372,8 +426,96 @@ export class XiaozhiEndpointService {
     });
 
     ws.on('message', (data) => {
+      if (this.connections.get(endpoint.id) !== connection) {
+        return;
+      }
+      this.markConnectionAlive(connection);
       void this.handleMessage(endpoint, data);
     });
+  }
+
+  private markConnectionAlive(connection: EndpointConnection): void {
+    connection.lastActivityAt = Date.now();
+    if (connection.pongTimeoutTimer) {
+      clearTimeout(connection.pongTimeoutTimer);
+      connection.pongTimeoutTimer = undefined;
+    }
+  }
+
+  private stopHeartbeat(connection: EndpointConnection): void {
+    if (connection.heartbeatTimer) {
+      clearInterval(connection.heartbeatTimer);
+      connection.heartbeatTimer = undefined;
+    }
+    if (connection.pongTimeoutTimer) {
+      clearTimeout(connection.pongTimeoutTimer);
+      connection.pongTimeoutTimer = undefined;
+    }
+  }
+
+  private handleHeartbeatFailure(connection: EndpointConnection, reason: string): void {
+    if (this.connections.get(connection.endpoint.id) !== connection) {
+      return;
+    }
+    this.stopHeartbeat(connection);
+    connection.lastError = reason;
+    connection.connectedAt = undefined;
+    logXiaozhi('warn', 'Xiaozhi endpoint heartbeat failed; terminating stale socket', {
+      endpointId: connection.endpoint.id,
+      name: connection.endpoint.name,
+      reason,
+    });
+    try {
+      connection.ws.terminate();
+    } catch {
+      // Ignore terminate errors on already-closed sockets
+    }
+    void this.updateEndpointStatus(connection.endpoint.id, 'disconnected');
+    this.scheduleReconnect(connection);
+  }
+
+  private startHeartbeat(connection: EndpointConnection): void {
+    this.stopHeartbeat(connection);
+    if (this.heartbeatIntervalMs <= 0) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (this.connections.get(connection.endpoint.id) !== connection) {
+        this.stopHeartbeat(connection);
+        return;
+      }
+      if (connection.ws.readyState !== WebSocket.OPEN) {
+        this.stopHeartbeat(connection);
+        return;
+      }
+      if (connection.pongTimeoutTimer) {
+        return;
+      }
+
+      const pongTimer = setTimeout(() => {
+        connection.pongTimeoutTimer = undefined;
+        this.handleHeartbeatFailure(
+          connection,
+          `Heartbeat timeout (no pong within ${this.heartbeatTimeoutMs}ms)`,
+        );
+      }, this.heartbeatTimeoutMs);
+      pongTimer.unref?.();
+      connection.pongTimeoutTimer = pongTimer;
+
+      try {
+        connection.ws.ping(undefined, undefined, (err?: Error) => {
+          if (err) {
+            this.handleHeartbeatFailure(connection, `Heartbeat ping failed: ${err.message}`);
+          }
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.handleHeartbeatFailure(connection, `Heartbeat ping failed: ${message}`);
+      }
+    }, this.heartbeatIntervalMs);
+    interval.unref?.();
+    connection.heartbeatTimer = interval;
   }
 
   private async decodeMessage(
@@ -537,11 +679,13 @@ export class XiaozhiEndpointService {
       } catch {
         // Keep raw string when payload is not valid JSON
       }
-      logXiaozhi('info', 'Incoming Xiaozhi MCP message', {
-        endpointId: endpoint.id,
-        name: endpoint.name,
-        payload: parsedPreview,
-      });
+      if (!(isPlainObject(parsedPreview) && parsedPreview.method === 'ping')) {
+        logXiaozhi('info', 'Incoming Xiaozhi MCP message', {
+          endpointId: endpoint.id,
+          name: endpoint.name,
+          payload: parsedPreview,
+        });
+      }
 
       const decoded = await this.decodeMessage(endpoint.id, data);
       if (!decoded) {
@@ -924,6 +1068,7 @@ export class XiaozhiEndpointService {
           endpointId: endpoint.id,
           error: message,
         });
+        this.scheduleReconnect(connection);
       }
     }, delay);
   }
@@ -944,6 +1089,7 @@ export class XiaozhiEndpointService {
       return;
     }
 
+    this.stopHeartbeat(connection);
     if (connection.reconnectTimer) {
       clearTimeout(connection.reconnectTimer);
       connection.reconnectTimer = undefined;
@@ -1029,6 +1175,7 @@ export class XiaozhiEndpointService {
     const connection = this.connections.get(endpointId);
     if (!connection) return;
 
+    this.stopHeartbeat(connection);
     if (connection.reconnectTimer) {
       clearTimeout(connection.reconnectTimer);
       connection.reconnectTimer = undefined;

@@ -278,4 +278,173 @@ describe('xiaozhiEndpointService', () => {
       expect(badId[0]).toMatchObject({ id: null, error: { code: -32600 } });
     });
   });
+
+  describe('WebSocket heartbeat watchdog & zombie reconnect (#43)', () => {
+    const endpoint = {
+      id: 'ep-hb',
+      name: 'hb-test',
+      enabled: true,
+      webSocketUrl: 'wss://example.com/mcp',
+      description: '',
+      useSmartRouting: false,
+      reconnect: {
+        maxAttempts: 3,
+        infiniteReconnect: true,
+        infiniteRetryDelay: 1800000,
+        initialDelay: 2000,
+        maxDelay: 60000,
+        backoffMultiplier: 2,
+      },
+      createdAt: '2026-11-27T00:00:00.000Z',
+      status: 'connected' as const,
+    };
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('terminates a half-open socket and schedules reconnect when no pong arrives', async () => {
+      jest.useFakeTimers();
+      const fakeWs = {
+        readyState: 1, // WebSocket.OPEN
+        ping: jest.fn(),
+        terminate: jest.fn(() => {
+          fakeWs.readyState = 3; // WebSocket.CLOSED
+        }),
+        removeAllListeners: jest.fn(),
+        close: jest.fn(),
+      };
+      const connection: any = {
+        ws: fakeWs,
+        endpoint: { ...endpoint },
+        reconnectAttempts: 0,
+        isInInfiniteReconnectMode: false,
+        infiniteRetryCount: 0,
+        isInSleepMode: false,
+        reconnectPending: false,
+        connectedAt: Date.now(),
+      };
+      (xiaozhiEndpointService as any).config = { enabled: true, endpoints: [connection.endpoint] };
+      (xiaozhiEndpointService as any).connections.set(endpoint.id, connection);
+      (xiaozhiEndpointService as any).startHeartbeat(connection);
+
+      // First ping fires at 30s
+      jest.advanceTimersByTime(30_000);
+      expect(fakeWs.ping).toHaveBeenCalledTimes(1);
+      expect(fakeWs.terminate).not.toHaveBeenCalled();
+
+      // No pong arrives within 10s -> terminate & schedule reconnect
+      jest.advanceTimersByTime(10_000);
+      expect(fakeWs.terminate).toHaveBeenCalledTimes(1);
+      expect(connection.lastError).toMatch(/Heartbeat timeout/);
+      expect(connection.reconnectPending).toBe(true);
+      expect(connection.reconnectTimer).toBeDefined();
+      expect(xiaozhiEndpointService.getEndpointStatus(endpoint.id)?.connected).toBe(false);
+
+      await (xiaozhiEndpointService as any).disconnectEndpoint(endpoint.id);
+    });
+
+    it('keeps connection alive when pong arrives before timeout', async () => {
+      jest.useFakeTimers();
+      const fakeWs = {
+        readyState: 1,
+        ping: jest.fn(),
+        terminate: jest.fn(),
+        removeAllListeners: jest.fn(),
+        close: jest.fn(),
+      };
+      const connection: any = {
+        ws: fakeWs,
+        endpoint: { ...endpoint },
+        reconnectAttempts: 0,
+        isInInfiniteReconnectMode: false,
+        infiniteRetryCount: 0,
+        isInSleepMode: false,
+        reconnectPending: false,
+        connectedAt: Date.now(),
+      };
+      (xiaozhiEndpointService as any).config = { enabled: true, endpoints: [connection.endpoint] };
+      (xiaozhiEndpointService as any).connections.set(endpoint.id, connection);
+      (xiaozhiEndpointService as any).startHeartbeat(connection);
+
+      jest.advanceTimersByTime(30_000);
+      expect(fakeWs.ping).toHaveBeenCalledTimes(1);
+
+      // Pong arrives after 500ms -> cancels pong timeout
+      jest.advanceTimersByTime(500);
+      (xiaozhiEndpointService as any).markConnectionAlive(connection);
+
+      jest.advanceTimersByTime(15_000);
+      expect(fakeWs.terminate).not.toHaveBeenCalled();
+      expect(connection.reconnectPending).toBe(false);
+
+      await (xiaozhiEndpointService as any).disconnectEndpoint(endpoint.id);
+      expect(connection.heartbeatTimer).toBeUndefined();
+      expect(connection.pongTimeoutTimer).toBeUndefined();
+    });
+
+    it('terminates immediately if ws.ping reports a write error', async () => {
+      jest.useFakeTimers();
+      const fakeWs = {
+        readyState: 1,
+        ping: jest.fn((_d: unknown, _m: unknown, cb?: (err?: Error) => void) => {
+          cb?.(new Error('EPIPE'));
+        }),
+        terminate: jest.fn(() => {
+          fakeWs.readyState = 3;
+        }),
+        removeAllListeners: jest.fn(),
+        close: jest.fn(),
+      };
+      const connection: any = {
+        ws: fakeWs,
+        endpoint: { ...endpoint },
+        reconnectAttempts: 0,
+        isInInfiniteReconnectMode: false,
+        infiniteRetryCount: 0,
+        isInSleepMode: false,
+        reconnectPending: false,
+      };
+      (xiaozhiEndpointService as any).config = { enabled: true, endpoints: [connection.endpoint] };
+      (xiaozhiEndpointService as any).connections.set(endpoint.id, connection);
+      (xiaozhiEndpointService as any).startHeartbeat(connection);
+
+      jest.advanceTimersByTime(30_000);
+      expect(fakeWs.terminate).toHaveBeenCalledTimes(1);
+      expect(connection.lastError).toContain('EPIPE');
+      expect(connection.reconnectPending).toBe(true);
+
+      await (xiaozhiEndpointService as any).disconnectEndpoint(endpoint.id);
+    });
+
+    it('continues rescheduling standard reconnect when connectEndpoint throws', async () => {
+      jest.useFakeTimers();
+      const connectSpy = jest
+        .spyOn(xiaozhiEndpointService as any, 'connectEndpoint')
+        .mockRejectedValueOnce(new Error('DNS lookup failed'))
+        .mockResolvedValueOnce(undefined);
+
+      const connection: any = {
+        ws: { readyState: 3, removeAllListeners: jest.fn(), close: jest.fn() },
+        endpoint: { ...endpoint },
+        reconnectAttempts: 0,
+        isInInfiniteReconnectMode: false,
+        infiniteRetryCount: 0,
+        isInSleepMode: false,
+        reconnectPending: false,
+      };
+      (xiaozhiEndpointService as any).scheduleReconnect(connection);
+      expect(connection.reconnectTimer).toBeDefined();
+
+      // Advance past first backoff (~2-2.4s)
+      await jest.advanceTimersByTimeAsync(3000);
+      expect(connectSpy).toHaveBeenCalledTimes(1);
+      // Must have scheduled a second retry instead of stalling
+      expect(connection.reconnectTimer).toBeDefined();
+
+      await jest.advanceTimersByTimeAsync(6000);
+      expect(connectSpy).toHaveBeenCalledTimes(2);
+      connectSpy.mockRestore();
+    });
+  });
 });
