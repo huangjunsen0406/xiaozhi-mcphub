@@ -156,6 +156,7 @@
     "verifyFailedTitle": "验证失败",
     "verifyFailedBody": "验证链接无效或已过期。",
     "currentPasswordIncorrect": "当前密码不正确",
+    "firstLoginAdminHint": "首次部署？默认管理员用户名为 \"admin\"，初始密码请查看环境变量 / docker-compose.yml 中的 ADMIN_PASSWORD，或在容器启动日志中搜索 \"Generated admin password\"。",
     "user": "用户"
   },
   "server": {

@@ -156,6 +156,7 @@
     "verifyFailedTitle": "Verification failed",
     "verifyFailedBody": "The verification link is invalid or has expired.",
     "currentPasswordIncorrect": "Current password is incorrect",
+    "firstLoginAdminHint": "First-time setup? Default admin username is \"admin\". Check ADMIN_PASSWORD in your environment / docker-compose.yml, or look for \"Generated admin password\" in the server startup logs.",
     "user": "User"
   },
   "server": {

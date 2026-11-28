@@ -108,6 +108,7 @@
     "passwordRequireSpecial": "Le mot de passe doit contenir au moins un caractère spécial",
     "passwordStrengthHint": "Le mot de passe doit contenir au moins 8 caractères et inclure des lettres, des chiffres et des caractères spéciaux",
     "currentPasswordIncorrect": "Le mot de passe actuel est incorrect",
+    "firstLoginAdminHint": "Première installation ? Le nom d'administrateur par défaut est « admin ». Vérifiez ADMIN_PASSWORD dans votre environnement / docker-compose.yml ou recherchez « Generated admin password » dans les logs de démarrage.",
     "user": "Utilisateur",
     "backToLogin": "Retour à la connexion",
     "confirmPasswordPlaceholder": "Saisissez à nouveau le mot de passe",

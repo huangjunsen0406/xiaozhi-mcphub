@@ -35,6 +35,9 @@ services:
       # Application settings
       PORT: 3000
       NODE_ENV: production
+      # Initial password for the admin account (first launch on an empty database only; change after login).
+      # Remove this line to auto-generate a random password printed in the startup logs.
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"
 
       # Optional: Custom npm registry
       # NPM_REGISTRY: https://registry.npmjs.org/

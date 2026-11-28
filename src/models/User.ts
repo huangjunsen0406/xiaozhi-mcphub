@@ -149,8 +149,39 @@ const generateRandomPassword = (): string => {
   return crypto.randomBytes(18).toString('base64url');
 };
 
+// Holds a newly auto-generated admin password briefly during startup so it can be
+// reprinted at the bottom of the startup logs once MCP servers finish initializing.
+let pendingGeneratedAdminPassword: string | null = null;
+
+const logGeneratedAdminPasswordBanner = (generatedPassword: string): void => {
+  console.log('========================================');
+  console.log('  Initial admin username: admin');
+  console.log('  Generated admin password: ' + generatedPassword);
+  console.log('  Please change this password after first login.');
+  console.log(
+    '  Note: this only runs on an empty user store. If you upgraded from v1.0.3',
+  );
+  console.log(
+    '  and expected your old password, reconnect DB_URL to the original Postgres',
+  );
+  console.log('  volume — the legacy admin hash lives in the users table.');
+  console.log('========================================');
+};
+
+// Reprint the generated admin password once at the end of startup so it is not
+// buried by upstream MCP server logs, then immediately clear it from memory.
+export const logPendingGeneratedAdminPassword = (): void => {
+  if (!pendingGeneratedAdminPassword) {
+    return;
+  }
+  const passwordToLog = pendingGeneratedAdminPassword;
+  pendingGeneratedAdminPassword = null;
+  logGeneratedAdminPasswordBanner(passwordToLog);
+};
+
 // Initialize with default admin user if no users exist
 export const initializeDefaultUser = async (): Promise<void> => {
+  pendingGeneratedAdminPassword = null;
   const userDao = getUserDao();
   const users = await userDao.findAll();
 
@@ -186,15 +217,6 @@ export const initializeDefaultUser = async (): Promise<void> => {
 
   const generatedPassword = generateRandomPassword();
   await createDefaultAdmin(generatedPassword);
-  console.log('========================================');
-  console.log('  Generated admin password: ' + generatedPassword);
-  console.log('  Please change this password after first login.');
-  console.log(
-    '  Note: this only runs on an empty user store. If you upgraded from v1.0.3',
-  );
-  console.log(
-    '  and expected your old password, reconnect DB_URL to the original Postgres',
-  );
-  console.log('  volume — the legacy admin hash lives in the users table.');
-  console.log('========================================');
+  pendingGeneratedAdminPassword = generatedPassword;
+  logGeneratedAdminPasswordBanner(generatedPassword);
 };

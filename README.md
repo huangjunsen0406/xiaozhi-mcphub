@@ -58,12 +58,18 @@ docker run -d \
 
 Optional environment variables:
 
+- `ADMIN_PASSWORD`: Initial password for the `admin` account (only takes effect on first launch with an empty user store; ignored once users already exist).
 - `BASE_PATH`: Deploy under a sub-path (e.g., `/mcphub`).
 - `JWT_SECRET`: JWT secret (recommended to set explicitly in production).
 - `SMART_ROUTING_ENABLED`: Enable/disable smart routing (default "false").
 - `OPENAI_API_KEY`, `OPENAI_API_BASE_URL`, `OPENAI_API_EMBEDDING_MODEL`: Required when enabling smart routing.
 
-Default admin: `admin` / `admin123` (please change after first login).
+> **Default admin account (`admin`):**
+> - **Docker Compose (`docker-compose.yml`):** Sets `ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"` out of the box so you can sign in immediately with `admin` / `admin123` (or your custom `ADMIN_PASSWORD`), and the dashboard will prompt you to change it after login.
+> - **Docker `docker run` / production without `ADMIN_PASSWORD`:** On first launch with an empty user store, a **random password** is automatically generated and printed prominently in the startup logs (`Generated admin password: ...` — check via `docker logs xiaozhi-mcphub`). You can also pre-set it with `-e ADMIN_PASSWORD="your-secure-password"`.
+> - **Upgrading from an older version (e.g., v1.0.3):** Existing admin credentials in your database are preserved and will not be overwritten.
+> - **Local development (`NODE_ENV=development` / `pnpm dev`):** Defaults to `admin` / `admin123` when `ADMIN_PASSWORD` is not set.
+> - Please change the admin password after first login. Note that creating or modifying `STDIO`-based MCP servers requires an admin account.
 
 ### Method 2: Docker Compose one-click
 
@@ -79,6 +85,7 @@ docker compose logs -f mcphub
 Key variables (edit in compose if needed):
 
 - `DB_URL`: `postgres://xiaozhi:<password>@db:5432/xiaozhi_mcphub` (legacy `DATABASE_URL` still works)
+- `ADMIN_PASSWORD`: Initial password for `admin` (defaults to `admin123` in `docker-compose.yml`; only applies on first launch with an empty database — change it in compose or right after login; remove the line to auto-generate a random password in logs)
 - `SMART_ROUTING_ENABLED`: Enable/disable smart routing (default "false").
 - Optional: `BASE_PATH`, `JWT_SECRET`, `OPENAI_API_KEY`, etc. (see above)
 
@@ -117,7 +124,7 @@ export DB_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
 pnpm dev
 ```
 
-Access the frontend dev server at `http://localhost:5173` (the frontend proxies to backend `:3000`).
+Access the frontend dev server at `http://localhost:5173` (the frontend proxies to backend `:3000`). In local development mode (`NODE_ENV=development`), the default admin account is `admin` / `admin123` when `ADMIN_PASSWORD` is not set.
 
 ## 🗺️ Smart Routing (optional)
 
@@ -136,7 +143,7 @@ Set `SMART_ROUTING_ENABLED` to `true` and provide `OPENAI_API_KEY` to enable it.
 
 ## 📦 Defaults & Initialization
 
-- Default admin: `admin` / `admin123`
+- Default admin: Username `admin`. On first launch with an empty user store in production/Docker, it uses `ADMIN_PASSWORD` if set, or generates a random password printed to the startup logs (`docker logs`); `admin123` is only used in local development (`NODE_ENV=development`).
 - Default MCP servers: amap / playwright / fetch / slack (can be modified in the console and configured via ENV)
 
 ## 📄 License (Apache License 2.0)

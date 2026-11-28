@@ -108,6 +108,7 @@
     "passwordRequireSpecial": "Şifre en az bir özel karakter içermelidir",
     "passwordStrengthHint": "Şifre en az 8 karakter olmalı ve harf, rakam ve özel karakter içermelidir",
     "currentPasswordIncorrect": "Mevcut şifre yanlış",
+    "firstLoginAdminHint": "İlk kurulum mu? Varsayılan yönetici kullanıcı adı \"admin\"dir. Ortam / docker-compose.yml dosyanızdaki ADMIN_PASSWORD değerini kontrol edin veya sunucu başlangıç günlüklerinde \"Generated admin password\" ifadesini arayın.",
     "user": "Kullanıcı",
     "backToLogin": "Girişe dön",
     "confirmPasswordPlaceholder": "Şifrenizi tekrar girin",

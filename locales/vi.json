@@ -156,6 +156,7 @@
     "verifyFailedTitle": "Xác minh thất bại",
     "verifyFailedBody": "Liên kết xác minh không hợp lệ hoặc đã hết hạn.",
     "currentPasswordIncorrect": "Mật khẩu hiện tại không đúng",
+    "firstLoginAdminHint": "Lần đầu triển khai? Tên đăng nhập quản trị mặc định là \"admin\". Kiểm tra ADMIN_PASSWORD trong biến môi trường / docker-compose.yml hoặc tìm \"Generated admin password\" trong nhật ký khởi động máy chủ.",
     "user": "Người dùng"
   },
   "server": {

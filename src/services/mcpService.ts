@@ -376,6 +376,15 @@ const startXiaozhiWhenServersSettle = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('小智客户端服务启动失败:', error);
+  } finally {
+    // Reprint any newly generated initial admin password at the very end of startup logs
+    // so operators inspecting `docker logs --tail` can spot it immediately.
+    try {
+      const { logPendingGeneratedAdminPassword } = await import('../models/User.js');
+      logPendingGeneratedAdminPassword?.();
+    } catch {
+      // Ignore if User module is partially mocked in unit tests
+    }
   }
 };
 

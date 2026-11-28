@@ -37,6 +37,9 @@ services:
       # 设置 DB_URL 即自动启用数据库模式；小智端点功能依赖数据库
       DB_URL: "postgres://xiaozhi:xiaozhi123456@db:5432/xiaozhi_mcphub"
       NODE_ENV: production
+      # 首次空库启动时的管理员(admin)密码，建议改为强密码（登录后也会弹窗提醒修改）；
+      # 如删除此行，首次启动将自动生成随机密码并打印在容器日志中（docker compose logs mcphub）
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"
       SMART_ROUTING_ENABLED: "false"
       # 生产建议开启：
       # JWT_SECRET: "请改成一串长随机值"

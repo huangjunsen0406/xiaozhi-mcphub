@@ -57,12 +57,18 @@ docker run -d \
 ```
 
 - 可选环境变量：
+  - `ADMIN_PASSWORD`：`admin` 管理员的初始密码（仅首次空用户库初始化时生效，已有用户后会被忽略）。
   - `BASE_PATH`：二级路径部署（如 `/mcphub`）。
   - `JWT_SECRET`：JWT 密钥（生产环境建议手动设置）。
   - `SMART_ROUTING_ENABLED`：是否开启智能路由（默认 "false"）。
   - `OPENAI_API_KEY`、`OPENAI_API_BASE_URL`、`OPENAI_API_EMBEDDING_MODEL`：开启智能路由时所需。
 
-默认管理员：`admin` / `admin123`（首次登录后请修改密码）。
+> **默认管理员账号（`admin`）：**
+> - **Docker Compose（`docker-compose.yml`）**：已内置 `ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"`，开箱即可用 `admin` / `admin123`（或你自定义的 `ADMIN_PASSWORD`）登录，首次登录后系统会弹窗提醒修改密码。
+> - **`docker run` / 未设置 `ADMIN_PASSWORD` 的生产首次启动**：空库启动时会**自动生成随机密码**并在启动日志中醒目打印（搜索 `Generated admin password`，可通过 `docker logs xiaozhi-mcphub` 查看）；也可以通过 `-e ADMIN_PASSWORD="你的强密码"` 预设。
+> - **从旧版（如 v1.0.3）升级**：沿用原数据库中已有的管理员密码，不会重置覆盖。
+> - **本地开发模式（`NODE_ENV=development` / `pnpm dev`）**：未设置 `ADMIN_PASSWORD` 时默认为 `admin` / `admin123`。
+> - 首次登录后请及时修改管理员密码；普通注册用户无法创建或修改 `STDIO` 类型的 MCP 服务器，需使用管理员账号操作。
 
 ### 方式二：Docker Compose 一键启动
 
@@ -78,6 +84,7 @@ docker compose logs -f mcphub
 关键变量（可在 compose 中修改）
 
 - `DB_URL`: `postgres://xiaozhi:密码@db:5432/xiaozhi_mcphub`（旧名 `DATABASE_URL` 仍兼容）
+- `ADMIN_PASSWORD`: `admin` 初始密码（`docker-compose.yml` 默认配置为 `admin123`，仅首次空库启动时生效，建议修改；删掉该行则自动生成随机密码并打印到日志）
 - `SMART_ROUTING_ENABLED`: 开启/关闭智能路由（默认 "false"）
 - 可选：`BASE_PATH`、`JWT_SECRET`、`OPENAI_API_KEY` 等（见上）
 
@@ -116,7 +123,7 @@ export DB_URL="postgres://xiaozhi:xiaozhi123456@localhost:5432/xiaozhi_mcphub"
 pnpm dev
 ```
 
-访问前端开发站点：`http://localhost:5173`（前端通过代理访问后端 `:3000`）。
+访问前端开发站点：`http://localhost:5173`（前端通过代理访问后端 `:3000`）。本地开发模式（`NODE_ENV=development`）下，未设置 `ADMIN_PASSWORD` 时默认管理员为 `admin` / `admin123`。
 
 ## 🗺️ 智能路由（可选）
 
@@ -135,7 +142,7 @@ pnpm dev
 
 ## 📦 默认内容与初始化
 
-- 默认管理员：`admin` / `admin123`
+- 默认管理员：用户名 `admin`。生产/Docker 首次空库启动时，若设置了 `ADMIN_PASSWORD` 则使用该密码，否则自动生成随机密码并输出到启动日志（通过 `docker logs` 查看）；`admin123` 仅用于本地开发模式（`NODE_ENV=development`）。
 - 默认 MCP 服务器：amap / playwright / fetch / slack（可在控制台修改与配置 ENV）
 
 ## 📄 许可（Apache License 2.0）

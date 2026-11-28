@@ -17,7 +17,10 @@ jest.mock('bcryptjs', () => ({
   hash: jest.fn((password: string) => Promise.resolve(`hashed_${password}`)),
 }));
 
-import { initializeDefaultUser } from '../../src/models/User.js';
+import {
+  initializeDefaultUser,
+  logPendingGeneratedAdminPassword,
+} from '../../src/models/User.js';
 
 describe('initializeDefaultUser', () => {
   let consoleLogSpy: jest.SpyInstance<void, unknown[]>;
@@ -167,5 +170,43 @@ describe('initializeDefaultUser', () => {
 
     // Two random passwords should differ (probabilistically certain)
     expect(password1).not.toBe(password2);
+  });
+
+  it('should reprint generated password once via logPendingGeneratedAdminPassword and then clear it', async () => {
+    mockFindAll.mockResolvedValue([]);
+    mockCreateWithHashedPassword.mockResolvedValue({
+      username: 'admin',
+      password: 'hashed',
+      isAdmin: true,
+    });
+
+    await initializeDefaultUser();
+    const [, password] = mockCreateWithHashedPassword.mock.calls[0];
+
+    consoleLogSpy.mockClear();
+    logPendingGeneratedAdminPassword();
+    expect(loggedMessages()).toContain(password);
+    expect(loggedMessages()).toContain('Initial admin username: admin');
+
+    // Second call should be a no-op because the cached password was cleared
+    consoleLogSpy.mockClear();
+    logPendingGeneratedAdminPassword();
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not reprint password when ADMIN_PASSWORD env var is used', async () => {
+    process.env.ADMIN_PASSWORD = 'MyCustomP@ss1';
+    mockFindAll.mockResolvedValue([]);
+    mockCreateWithHashedPassword.mockResolvedValue({
+      username: 'admin',
+      password: 'hashed',
+      isAdmin: true,
+    });
+
+    await initializeDefaultUser();
+    consoleLogSpy.mockClear();
+
+    logPendingGeneratedAdminPassword();
+    expect(consoleLogSpy).not.toHaveBeenCalled();
   });
 });

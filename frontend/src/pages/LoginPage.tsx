@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Info } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getToken } from '../services/authService';
 import { getPublicConfig } from '../services/configService';
@@ -381,6 +381,17 @@ const LoginPage: React.FC = () => {
               >
                 {t('auth.register')}
               </Link>
+            </div>
+
+            <div
+              className={`flex items-start gap-2 p-3 text-xs leading-relaxed rounded-lg border transition-colors ${
+                error
+                  ? 'text-amber-800 bg-amber-50 border-amber-200 dark:text-amber-200 dark:bg-amber-900/20 dark:border-amber-800'
+                  : 'text-gray-600 bg-gray-50 border-gray-200 dark:text-gray-400 dark:bg-slate-700/40 dark:border-slate-700'
+              }`}
+            >
+              <Info size={14} className="flex-shrink-0 mt-0.5" />
+              <span>{t('auth.firstLoginAdminHint')}</span>
             </div>
           </form>
 
